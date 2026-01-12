@@ -1,0 +1,24 @@
+# Node modules
+node_modules/
+
+# Build artifacts
+*.zip
+release-temp/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+npm-debug.log*
+
+# Temporary files
+*.tmp
+.cache/

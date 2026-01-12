@@ -6,6 +6,13 @@ const MODULE_ID = "investigation-board";
 const BASE_FONT_SIZE = 15;
 const PIN_COLORS = ["redPin.webp", "bluePin.webp", "yellowPin.webp", "greenPin.webp"];
 
+// v13 namespaced imports
+const Drawing = foundry.canvas.placeables.Drawing;
+const DrawingConfig = foundry.applications.sheets.DrawingConfig;
+const DrawingDocument = foundry.documents.DrawingDocument;
+const DocumentSheetConfig = foundry.applications.apps.DocumentSheetConfig;
+const FilePicker = foundry.applications.apps.FilePicker.implementation;
+
 function getBaseCharacterLimits() {
   return game.settings.get(MODULE_ID, "baseCharacterLimits") || {
     sticky: 60,
@@ -27,8 +34,18 @@ function getDynamicCharacterLimits(noteType, currentFontSize) {
 
 
 class CustomDrawingSheet extends DrawingConfig {
+  constructor(...args) {
+    super(...args);
+  }
+
+  static PARTS = {
+    form: {
+      template: "modules/investigation-board/templates/drawing-sheet.html"
+    }
+  };
+
   static get defaultOptions() {
-    return mergeObject(super.defaultOptions, {
+    return foundry.utils.mergeObject(super.defaultOptions, {
       classes: ["custom-drawing-sheet"],
       template: "modules/investigation-board/templates/drawing-sheet.html",
       width: 400,
@@ -37,58 +54,114 @@ class CustomDrawingSheet extends DrawingConfig {
     });
   }
 
+  // ApplicationV2 data preparation method
+  async _prepareContext(options) {
+    const context = await super._prepareContext(options);
+    const customData = this.getData(options);
+
+    // Merge custom data into context
+    context.noteType = customData.noteType;
+    context.text = customData.text;
+    context.image = customData.image;
+    context.identityName = customData.identityName;
+    context.boardMode = customData.boardMode;
+    context.noteTypes = customData.noteTypes;
+
+    return context;
+  }
+
   getData(options) {
-    const data = super.getData(options);
-    data.noteType = this.object.flags[MODULE_ID]?.type || "sticky";
-    data.text = this.object.flags[MODULE_ID]?.text || "Default Text";
-    data.image = this.object.flags[MODULE_ID]?.image || "modules/investigation-board/assets/placeholder.webp";
-    
-    // Pass along the extra identityName for futuristic photo notes
-    data.identityName = this.object.flags[MODULE_ID]?.identityName || "";
-    
-    // Include the board mode from settings for conditional display in the template
-    data.boardMode = game.settings.get(MODULE_ID, "boardMode");
-    
-    data.noteTypes = {
-      sticky: "Sticky Note",
-      photo: "Photo Note",
-      index: "Index Card",
+    // In v13, super.getData() doesn't exist in ApplicationV2
+    // Build the data object directly
+    const data = {
+      document: this.document,
+      noteType: this.document.flags[MODULE_ID]?.type || "sticky",
+      text: this.document.flags[MODULE_ID]?.text || "Default Text",
+      image: this.document.flags[MODULE_ID]?.image || "modules/investigation-board/assets/placeholder.webp",
+      identityName: this.document.flags[MODULE_ID]?.identityName || "",
+      boardMode: game.settings.get(MODULE_ID, "boardMode"),
+      noteTypes: {
+        sticky: "Sticky Note",
+        photo: "Photo Note",
+        index: "Index Card",
+      }
     };
     return data;
   }
   
 
-  async _updateObject(event, formData) {
-    const updates = {
-      [`flags.${MODULE_ID}.type`]: formData.noteType,
-      [`flags.${MODULE_ID}.text`]: formData.text,
-      [`flags.${MODULE_ID}.image`]: formData.image || "modules/investigation-board/assets/placeholder.webp",
-    };
-    if (formData.identityName !== undefined) {
-      updates[`flags.${MODULE_ID}.identityName`] = formData.identityName;
-    }
-    
-
-    await this.object.update(updates);
-    const drawing = canvas.drawings.get(this.object.id);
-    if (drawing) drawing.refresh();
+  // ApplicationV2 form submission handler (not used, kept for compatibility)
+  async _processFormData(event, form, formData) {
+    return formData;
   }
 
-  // Add activateListeners to hook up the file-picker button.
+  async _processSubmitData(event, form, submitData) {
+    // Not used in v13 - form handling done in _onRender
+    return;
+  }
+
+  async _updateObject(event, formData) {
+    // V1 fallback - not used in v13, form handling done in _onRender
+    return;
+  }
+
+  // ApplicationV2 lifecycle method
+  _onRender(context, options) {
+    super._onRender?.(context, options);
+
+    // Hook up file picker button
+    const filePickerButton = this.element.querySelector(".file-picker-button");
+    if (filePickerButton) {
+      filePickerButton.addEventListener("click", (ev) => {
+        ev.preventDefault();
+        const input = this.element.querySelector("input[name='image']");
+
+        new FilePicker({
+          type: "image",
+          current: "modules/investigation-board/assets/",
+          callback: (path) => {
+            input.value = path;
+          }
+        }).browse();
+      });
+    }
+
+    const form = this.element.querySelector("form");
+    if (form) {
+      form.addEventListener("submit", async (ev) => {
+        ev.preventDefault();
+        ev.stopPropagation();
+
+        const formData = new FormData(form);
+        const data = Object.fromEntries(formData.entries());
+
+        // Update the document flags
+        const updates = {
+          [`flags.${MODULE_ID}.text`]: data.text || "",
+          [`flags.${MODULE_ID}.image`]: data.image || "modules/investigation-board/assets/placeholder.webp",
+        };
+
+        if (data.identityName !== undefined) {
+          updates[`flags.${MODULE_ID}.identityName`] = data.identityName;
+        }
+
+        await this.document.update(updates);
+
+        // Refresh the drawing on canvas
+        const drawing = canvas.drawings.get(this.document.id);
+        if (drawing) {
+          await drawing.refresh();
+        }
+
+        // Close the sheet
+        await this.close();
+      }, true);
+    }
+  }
+
+  // V1 fallback - not used in v13, event binding done in _onRender
   activateListeners(html) {
     super.activateListeners(html);
-    html.find(".file-picker-button").click(ev => {
-      ev.preventDefault();
-      // Open Foundry's FilePicker for images; adjust the "current" directory if needed.
-      new FilePicker({
-        type: "image",
-        current: "modules/investigation-board/assets/",
-        callback: path => {
-          // Update the readonly input with the chosen image path.
-          html.find("input[name='image']").val(path);
-        }
-      }).browse();
-    });
   }
 
 
@@ -423,7 +496,8 @@ async function createNote(noteType) {
       shape: { width, height },
       fillColor: "#ffffff",
       fillAlpha: 1,
-      strokeColor: "transparent",
+      strokeColor: "#000000",
+      strokeWidth: 0,
       strokeAlpha: 0,
       locked: false,
       flags: {
@@ -432,9 +506,11 @@ async function createNote(noteType) {
           text: defaultText,
           ...extraFlags
         },
+        core: {
+          sheetClass: "investigation-board.CustomDrawingSheet"
+        }
       },
-      "flags.core.sheetClass": "investigation-board.CustomDrawingSheet",
-      "ownership": { default: 3 },
+      ownership: { default: 3 },
     },
   ]);
 
@@ -444,14 +520,34 @@ async function createNote(noteType) {
 
 
 Hooks.on("getSceneControlButtons", (controls) => {
-  const journalControls = controls.find((c) => c.name === "notes");
+  const journalControls = controls.notes;
   if (!journalControls) return;
 
-  journalControls.tools.push(
-    { name: "createStickyNote", title: "Create Sticky Note", icon: "fas fa-sticky-note", onClick: () => createNote("sticky"), button: true },
-    { name: "createPhotoNote", title: "Create Photo Note", icon: "fa-solid fa-camera-polaroid", onClick: () => createNote("photo"), button: true },
-    { name: "createIndexCard", title: "Create Index Card", icon: "fa-regular fa-subtitles", onClick: () => createNote("index"), button: true }
-  );
+  // v13: tools is now an object/record, not an array
+  // v13: onClick is deprecated, use onChange instead
+  journalControls.tools.createStickyNote = {
+    name: "createStickyNote",
+    title: "Create Sticky Note",
+    icon: "fas fa-sticky-note",
+    onChange: () => createNote("sticky"),
+    button: true
+  };
+
+  journalControls.tools.createPhotoNote = {
+    name: "createPhotoNote",
+    title: "Create Photo Note",
+    icon: "fa-solid fa-camera-polaroid",
+    onChange: () => createNote("photo"),
+    button: true
+  };
+
+  journalControls.tools.createIndexCard = {
+    name: "createIndexCard",
+    title: "Create Index Card",
+    icon: "fa-regular fa-subtitles",
+    onChange: () => createNote("index"),
+    button: true
+  };
 });
 
 Hooks.once("init", () => {
@@ -461,7 +557,7 @@ Hooks.once("init", () => {
   DocumentSheetConfig.registerSheet(DrawingDocument, "investigation-board", CustomDrawingSheet, {
     label: "Note Drawing Sheet",
     types: ["base"],
-    makeDefault: false,
+    makeDefault: true,
   });
 
   console.log("Investigation Board module initialized.");

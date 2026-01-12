@@ -58,6 +58,11 @@ Paste the following manifest URL into the bottom Manifest URL field: https://raw
 
 After that go to your world and enable the module in your Game Settings under Manage Modules
 
+## Compatibility
+
+- **Foundry VTT v13.x** (minimum v13.332)
+- For Foundry v12.x, please use module version 1.3.2
+
 ## Known Limitations
 
 - **Refresh on Update:** The module includes a hook to ensure notes are redrawn when updated by others. However, if something seems out of date, try selecting/deselecting notes or refreshing the page.

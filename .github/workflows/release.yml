@@ -1,0 +1,111 @@
+name: Create Release
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - 'module.json'
+
+jobs:
+  check-version:
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.get-version.outputs.version }}
+      version-changed: ${{ steps.check-version.outputs.changed }}
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 2
+
+      - name: Get current version
+        id: get-version
+        run: |
+          VERSION=$(jq -r '.version' module.json)
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+          echo "Current version: $VERSION"
+
+      - name: Check if version changed
+        id: check-version
+        run: |
+          git diff HEAD^ HEAD -- module.json > diff.txt
+          if grep -q '"version"' diff.txt; then
+            echo "changed=true" >> $GITHUB_OUTPUT
+            echo "Version changed detected"
+          else
+            echo "changed=false" >> $GITHUB_OUTPUT
+            echo "Version not changed"
+          fi
+
+  release:
+    needs: check-version
+    if: needs.check-version.outputs.version-changed == 'true'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Get module info
+        id: module-info
+        run: |
+          VERSION=$(jq -r '.version' module.json)
+          TITLE=$(jq -r '.title' module.json)
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+          echo "title=$TITLE" >> $GITHUB_OUTPUT
+          echo "Preparing release for $TITLE v$VERSION"
+
+      - name: Create module.zip
+        run: |
+          # Create the zip with only essential module files
+          zip -r module.zip \
+            module.json \
+            scripts/ \
+            styles/ \
+            templates/ \
+            assets/ \
+            LICENSE
+
+          # Verify the zip was created
+          ls -lh module.zip
+          echo "Module packaged successfully"
+
+          # Show contents
+          echo "Contents of module.zip:"
+          unzip -l module.zip
+
+      - name: Create Release
+        uses: softprops/action-gh-release@v1
+        with:
+          tag_name: v${{ steps.module-info.outputs.version }}
+          name: ${{ steps.module-info.outputs.title }} v${{ steps.module-info.outputs.version }}
+          body: |
+            ## ${{ steps.module-info.outputs.title }} v${{ steps.module-info.outputs.version }}
+
+            ### Installation
+            Install this version using the following manifest URL:
+            ```
+            https://github.com/${{ github.repository }}/releases/download/v${{ steps.module-info.outputs.version }}/module.json
+            ```
+
+            Or download `module.zip` and install manually.
+
+            ### Compatibility
+            - Foundry VTT v13.332+
+
+            See [CHANGELOG.md](https://github.com/${{ github.repository }}/blob/main/CHANGELOG.md) for details.
+          files: |
+            module.zip
+            module.json
+          draft: false
+          prerelease: false
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Update latest release links
+        run: |
+          echo "Release created successfully!"
+          echo "Download URL: https://github.com/${{ github.repository }}/releases/download/v${{ steps.module-info.outputs.version }}/module.zip"
+          echo "Manifest URL: https://github.com/${{ github.repository }}/releases/download/v${{ steps.module-info.outputs.version }}/module.json"
