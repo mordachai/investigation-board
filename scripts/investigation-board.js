@@ -11,6 +11,7 @@ const PIN_COLORS = ["redPin.webp", "bluePin.webp", "yellowPin.webp", "greenPin.w
 // Pin-click connection state variables
 let pinConnectionFirstNote = null;
 let pinConnectionHighlight = null; // PIXI.Graphics for border
+let connectionPreviewLine = null; // PIXI.Graphics for live preview line
 let connectionLinesContainer = null; // Global container for all connection lines
 let pinsContainer = null; // Global container for all pins (to render on top)
 
@@ -934,6 +935,65 @@ async function createNote(noteType) {
   }
 }
 
+// Mouse move handler for connection preview
+function onMouseMovePreview(event) {
+  if (!pinConnectionFirstNote || !connectionPreviewLine) {
+    console.log("Investigation Board: Preview handler called but state missing", {
+      hasFirstNote: !!pinConnectionFirstNote,
+      hasPreviewLine: !!connectionPreviewLine
+    });
+    return;
+  }
+
+  // Get mouse position in world coordinates from the event
+  const worldPos = event.getLocalPosition(canvas.stage);
+
+  // Get the first pin position
+  const firstPin = pinConnectionFirstNote._getPinPosition();
+
+  // Clear and redraw the preview line
+  connectionPreviewLine.clear();
+
+  // Use player's color for preview
+  const playerColor = game.user.color || game.settings.get(MODULE_ID, "connectionLineColor") || "#FF0000";
+  const width = game.settings.get(MODULE_ID, "connectionLineWidth") || 3;
+
+  // Draw yarn line from first pin to cursor
+  drawYarnLine(connectionPreviewLine, firstPin.x, firstPin.y, worldPos.x, worldPos.y, playerColor, width, false, 0);
+}
+
+// Start connection preview
+function startConnectionPreview(drawing) {
+  // Create preview line container if it doesn't exist
+  if (!connectionPreviewLine) {
+    connectionPreviewLine = new PIXI.Graphics();
+    connectionPreviewLine.zIndex = 15; // Between yarn lines and pins
+    canvas.drawings.sortableChildren = true;
+    canvas.drawings.addChild(connectionPreviewLine);
+    console.log("Investigation Board: Preview line container created");
+  }
+
+  // Add mouse move listener to canvas
+  canvas.stage.on('pointermove', onMouseMovePreview);
+  console.log("Investigation Board: Started connection preview mode");
+}
+
+// Clear connection preview
+function clearConnectionPreview() {
+  // Remove mouse move listener
+  canvas.stage.off('pointermove', onMouseMovePreview);
+
+  // Clear and remove preview line
+  if (connectionPreviewLine) {
+    connectionPreviewLine.clear();
+    if (connectionPreviewLine.parent) {
+      connectionPreviewLine.parent.removeChild(connectionPreviewLine);
+    }
+    connectionPreviewLine.destroy();
+    connectionPreviewLine = null;
+  }
+}
+
 // Pin-Click Connection Function
 function onPinClick(event, drawing) {
   event.stopPropagation(); // Prevent selection of the drawing itself
@@ -965,6 +1025,9 @@ function onPinClick(event, drawing) {
     );
     canvas.controls.addChild(pinConnectionHighlight);
 
+    // Start the preview line
+    startConnectionPreview(drawing);
+
     return;
   }
 
@@ -983,6 +1046,9 @@ function onPinClick(event, drawing) {
     pinConnectionHighlight.destroy();
     pinConnectionHighlight = null;
   }
+
+  // Clear the preview line
+  clearConnectionPreview();
 }
 
 async function createConnection(sourceDrawing, targetDrawing) {
@@ -1094,6 +1160,9 @@ function deactivateInvestigationBoardMode() {
     pinConnectionHighlight = null;
   }
 
+  // Clear the preview line
+  clearConnectionPreview();
+
   // Restore original methods
   if (canvas.drawings) {
     canvas.drawings._onClickLeft2 = originalDrawingMethods._onClickLeft2;
@@ -1192,6 +1261,8 @@ Hooks.once("init", () => {
         pinConnectionHighlight.destroy();
         pinConnectionHighlight = null;
       }
+      // Clear the preview line
+      clearConnectionPreview();
     }
   });
 
@@ -1261,6 +1332,9 @@ Hooks.on("canvasReady", () => {
     pinConnectionHighlight.destroy();
     pinConnectionHighlight = null;
   }
+
+  // Clear the preview line on canvas change
+  clearConnectionPreview();
 
   // Reapply Investigation Board mode if it was active before canvas recreation
   if (investigationBoardModeActive) {
