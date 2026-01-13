@@ -8,10 +8,9 @@ const MODULE_ID = "investigation-board";
 const BASE_FONT_SIZE = 15;
 const PIN_COLORS = ["redPin.webp", "bluePin.webp", "yellowPin.webp", "greenPin.webp"];
 
-// Connect Mode state variables
-let connectModeActive = false;
-let connectModeFirstNote = null;
-let connectModeHighlight = null; // PIXI.Graphics for border
+// Pin-click connection state variables
+let pinConnectionFirstNote = null;
+let pinConnectionHighlight = null; // PIXI.Graphics for border
 let connectionLinesContainer = null; // Global container for all connection lines
 let pinsContainer = null; // Global container for all pins (to render on top)
 
@@ -578,6 +577,12 @@ function drawAllConnectionLines() {
         drawing.pinSprite.x = drawing.document.x + width / 2 - 20;
         drawing.pinSprite.y = drawing.document.y + 3;
 
+        // Make pin interactive for connection creation
+        drawing.pinSprite.eventMode = 'static';
+        drawing.pinSprite.cursor = 'pointer';
+        drawing.pinSprite.removeAllListeners(); // Clear old listeners
+        drawing.pinSprite.on('click', (event) => onPinClick(event, drawing));
+
         // Add to global pins container
         pinsContainer.addChild(drawing.pinSprite);
       }
@@ -735,102 +740,54 @@ async function createNote(noteType) {
   }
 }
 
-// Connect Mode Functions
-function activateConnectMode() {
-  connectModeActive = true;
-  connectModeFirstNote = null;
-
-  // Add click listener
-  canvas.stage.on("click", onCanvasClickConnectMode);
-
-  // Add CSS class for cursor styling
-  document.body.classList.add("connect-mode-active");
-}
-
-function deactivateConnectMode() {
-  connectModeActive = false;
-  connectModeFirstNote = null;
-
-  // Remove highlight if exists
-  if (connectModeHighlight) {
-    canvas.controls.removeChild(connectModeHighlight);
-    connectModeHighlight.destroy();
-    connectModeHighlight = null;
-  }
-
-  // Remove click listener
-  canvas.stage.off("click", onCanvasClickConnectMode);
-
-  // Remove CSS class
-  document.body.classList.remove("connect-mode-active");
-}
-
-function onCanvasClickConnectMode(event) {
-  if (!connectModeActive) return;
+// Pin-Click Connection Function
+function onPinClick(event, drawing) {
+  event.stopPropagation(); // Prevent selection of the drawing itself
 
   // Only allow connections when in Investigation Board mode
   if (!investigationBoardModeActive) return;
 
-  // Get the position of the click
-  const position = event.data.getLocalPosition(canvas.stage);
-
-  // Find drawing at this position
-  const drawings = canvas.drawings.placeables.filter(d => {
-    const bounds = d.bounds;
-    return position.x >= bounds.x && position.x <= bounds.x + bounds.width &&
-           position.y >= bounds.y && position.y <= bounds.y + bounds.height;
-  });
-
-  if (drawings.length === 0) return;
-
-  // Get the top-most drawing
-  const drawing = drawings[drawings.length - 1];
-
   // Check if it's an investigation board note
   const noteData = drawing.document.flags[MODULE_ID];
-  if (!noteData) {
-    // ui.notifications.warn("Please click on an Investigation Board note.");
-    return;
-  }
+  if (!noteData) return;
 
   // First click: store the note
-  if (!connectModeFirstNote) {
-    connectModeFirstNote = drawing;
+  if (!pinConnectionFirstNote) {
+    pinConnectionFirstNote = drawing;
 
     // Draw green border highlight
-    if (connectModeHighlight) {
-      canvas.controls.removeChild(connectModeHighlight);
-      connectModeHighlight.destroy();
+    if (pinConnectionHighlight) {
+      canvas.controls.removeChild(pinConnectionHighlight);
+      pinConnectionHighlight.destroy();
     }
 
-    connectModeHighlight = new PIXI.Graphics();
-    connectModeHighlight.lineStyle(4, 0x00ff00, 1);
-    connectModeHighlight.drawRect(
+    pinConnectionHighlight = new PIXI.Graphics();
+    pinConnectionHighlight.lineStyle(4, 0x00ff00, 1);
+    pinConnectionHighlight.drawRect(
       drawing.document.x,
       drawing.document.y,
       drawing.document.shape.width,
       drawing.document.shape.height
     );
-    canvas.controls.addChild(connectModeHighlight);
+    canvas.controls.addChild(pinConnectionHighlight);
 
-    // ui.notifications.info("First note selected. Click second note to create connection.");
     return;
   }
 
   // Second click: create connection
-  if (drawing === connectModeFirstNote) {
+  if (drawing === pinConnectionFirstNote) {
     ui.notifications.error("Cannot connect a note to itself.");
     return;
   }
 
-  createConnection(connectModeFirstNote, drawing);
+  createConnection(pinConnectionFirstNote, drawing);
 
   // Reset state
-  connectModeFirstNote = null;
-  if (connectModeHighlight) {
-    canvas.controls.removeChild(connectModeHighlight);
-    connectModeHighlight.destroy();
-    connectModeHighlight = null;
+  pinConnectionFirstNote = null;
+  if (pinConnectionHighlight) {
+    canvas.controls.removeChild(pinConnectionHighlight);
+    pinConnectionHighlight.destroy();
+    pinConnectionHighlight = null;
   }
 }
 
@@ -1005,15 +962,12 @@ function deactivateInvestigationBoardMode() {
   console.log("Investigation Board: Deactivating mode...");
   investigationBoardModeActive = false;
 
-  // Deactivate Connect Mode if active
-  if (connectModeActive) {
-    deactivateConnectMode();
-
-    // Update button state
-    const drawingsControl = ui.controls?.controls?.drawings;
-    if (drawingsControl?.tools?.connectMode) {
-      drawingsControl.tools.connectMode.active = false;
-    }
+  // Clear pin connection state
+  pinConnectionFirstNote = null;
+  if (pinConnectionHighlight) {
+    canvas.controls.removeChild(pinConnectionHighlight);
+    pinConnectionHighlight.destroy();
+    pinConnectionHighlight = null;
   }
 
   // Restore original methods
@@ -1063,41 +1017,16 @@ Hooks.on("getSceneControlButtons", (controls) => {
       button: true
     };
 
-    controls.drawings.tools.connectMode = {
-      name: "connectMode",
-      title: "Connect Mode (1: Click a note. 2: Click another to connected them. ESC to exit connect mode)",
-      icon: "fas fa-link",
-      toggle: true,
-      active: false,
-      onChange: (active) => {
-        // Toggle the connect mode state based on the active parameter
-        if (active) {
-          activateConnectMode();
-        } else {
-          deactivateConnectMode();
-        }
-      }
-    };
+    // Connect mode removed - now done by clicking pins directly
   }
 });
 
 // Hook to handle Investigation Board mode activation/deactivation
 Hooks.on("renderSceneControls", (controls, html) => {
   const activeControl = controls.control?.name;
-  const activeTool = controls.control?.activeTool;
 
   if (activeControl === "drawings") {
     activateInvestigationBoardMode();
-
-    // Deactivate connect mode if a different tool is selected
-    if (activeTool !== "connectMode" && connectModeActive) {
-      // Manually deactivate and update button state
-      deactivateConnectMode();
-      const drawingsControl = ui.controls?.controls?.drawings;
-      if (drawingsControl?.tools?.connectMode) {
-        drawingsControl.tools.connectMode.active = false;
-      }
-    }
   } else if (investigationBoardModeActive) {
     deactivateInvestigationBoardMode();
   }
@@ -1129,16 +1058,15 @@ Hooks.once("init", () => {
     makeDefault: true,
   });
 
-  // ESC key handler to exit connect mode
+  // ESC key handler to cancel pin connection
   document.addEventListener("keydown", (event) => {
-    if (event.key === "Escape" && connectModeActive) {
-      // Deactivate connect mode and update button state
-      deactivateConnectMode();
-
-      const drawingsControl = ui.controls?.controls?.drawings;
-      if (drawingsControl?.tools?.connectMode) {
-        drawingsControl.tools.connectMode.active = false;
-        ui.controls.render();
+    if (event.key === "Escape" && pinConnectionFirstNote) {
+      // Clear pin connection state
+      pinConnectionFirstNote = null;
+      if (pinConnectionHighlight) {
+        canvas.controls.removeChild(pinConnectionHighlight);
+        pinConnectionHighlight.destroy();
+        pinConnectionHighlight = null;
       }
     }
   });
@@ -1203,14 +1131,11 @@ Hooks.on("canvasReady", () => {
     pinsContainer = null;
   }
 
-  if (connectModeActive) {
-    deactivateConnectMode();
-
-    // Update button state
-    const drawingsControl = ui.controls?.controls?.drawings;
-    if (drawingsControl?.tools?.connectMode) {
-      drawingsControl.tools.connectMode.active = false;
-    }
+  // Clear pin connection state on scene change
+  pinConnectionFirstNote = null;
+  if (pinConnectionHighlight) {
+    pinConnectionHighlight.destroy();
+    pinConnectionHighlight = null;
   }
 
   // Reapply Investigation Board mode if it was active before canvas recreation
