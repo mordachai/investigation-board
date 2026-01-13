@@ -50,7 +50,27 @@ export const registerSettings = function() {
       default: "modern",
       onChange: () => refreshAllDrawings()
     });
-    
+
+    // Connection line settings
+    game.settings.register(MODULE_ID, "connectionLineColor", {
+      name: "Connection Line Color",
+      hint: "The color of the connection lines between notes (default: #FF0000).",
+      scope: "world",
+      config: true,
+      type: String,
+      default: "#FF0000",
+      onChange: () => refreshAllDrawings()
+    });
+
+    game.settings.register(MODULE_ID, "connectionLineWidth", {
+      name: "Connection Line Width",
+      hint: "The width (in pixels) of the connection lines between notes (default: 3).",
+      scope: "world",
+      config: true,
+      type: Number,
+      default: 3,
+      onChange: () => refreshAllDrawings()
+    });
 
     // Register existing settings
     game.settings.register(MODULE_ID, "stickyNoteWidth", {

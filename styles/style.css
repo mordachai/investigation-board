@@ -132,3 +132,12 @@
 .save-button i {
   margin-right: 5px;
 } */
+
+/* Connect Mode Cursor Styles */
+body.connect-mode-active .drawing {
+  cursor: crosshair !important;
+}
+
+body.connect-mode-active .drawing:hover {
+  cursor: pointer !important;
+}

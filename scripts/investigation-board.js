@@ -6,6 +6,13 @@ const MODULE_ID = "investigation-board";
 const BASE_FONT_SIZE = 15;
 const PIN_COLORS = ["redPin.webp", "bluePin.webp", "yellowPin.webp", "greenPin.webp"];
 
+// Connect Mode state variables
+let connectModeActive = false;
+let connectModeFirstNote = null;
+let connectModeHighlight = null; // PIXI.Graphics for border
+let connectionLinesContainer = null; // Global container for all connection lines
+let pinsContainer = null; // Global container for all pins (to render on top)
+
 // v13 namespaced imports
 const Drawing = foundry.canvas.placeables.Drawing;
 const DrawingConfig = foundry.applications.sheets.DrawingConfig;
@@ -182,6 +189,8 @@ class CustomDrawing extends Drawing {
   async draw() {
     await super.draw();
     await this._updateSprites();
+    // Redraw all connections and reposition pins globally
+    drawAllConnectionLines();
     return this;
   }
 
@@ -189,6 +198,8 @@ class CustomDrawing extends Drawing {
   async refresh() {
     await super.refresh();
     await this._updateSprites();
+    // Redraw all connections and reposition pins globally
+    drawAllConnectionLines();
     return this;
   }
 
@@ -450,6 +461,157 @@ class CustomDrawing extends Drawing {
     const charLimit = limits[noteType] || 100;
     return text.length <= charLimit ? text : text.slice(0, charLimit).trim() + "...";
   }
+
+  _getPinPosition() {
+    const noteData = this.document.flags[MODULE_ID];
+    if (!noteData) return { x: this.document.x, y: this.document.y };
+
+    const isPhoto = noteData.type === "photo";
+    const isIndex = noteData.type === "index";
+
+    // Get note width based on type
+    let width;
+    if (isPhoto) {
+      width = game.settings.get(MODULE_ID, "photoNoteWidth");
+    } else if (isIndex) {
+      width = game.settings.get(MODULE_ID, "indexNoteWidth") || 600;
+    } else {
+      width = game.settings.get(MODULE_ID, "stickyNoteWidth");
+    }
+
+    // Pin center is at (width/2, 23) relative to drawing position
+    return {
+      x: this.document.x + width / 2,
+      y: this.document.y + 23
+    };
+  }
+}
+
+// Global function to draw all connection lines and pins
+function drawAllConnectionLines() {
+  if (!canvas || !canvas.drawings) return;
+
+  // Enable sortable children on the drawings layer for z-index control
+  canvas.drawings.sortableChildren = true;
+
+  // Initialize containers
+  if (!connectionLinesContainer) {
+    connectionLinesContainer = new PIXI.Graphics();
+    connectionLinesContainer.zIndex = 10; // Yarn in the middle
+    canvas.drawings.addChild(connectionLinesContainer);
+  } else {
+    connectionLinesContainer.clear();
+  }
+
+  if (!pinsContainer) {
+    pinsContainer = new PIXI.Container();
+    pinsContainer.zIndex = 20; // Pins on top
+    canvas.drawings.addChild(pinsContainer);
+  } else {
+    // Clear all pins
+    pinsContainer.removeChildren();
+  }
+
+  // Set all investigation board drawings to base zIndex
+  canvas.drawings.placeables.forEach(drawing => {
+    const noteData = drawing.document.flags[MODULE_ID];
+    if (noteData) {
+      drawing.zIndex = 0; // Base level (backgrounds render here)
+
+      // If drawing has a pin sprite, move it to the global pins container
+      if (drawing.pinSprite) {
+        // Remove from drawing if it's there
+        if (drawing.pinSprite.parent === drawing) {
+          drawing.removeChild(drawing.pinSprite);
+        }
+
+        // Position in world coordinates
+        const noteData = drawing.document.flags[MODULE_ID];
+        const isPhoto = noteData.type === "photo";
+        const isIndex = noteData.type === "index";
+
+        let width;
+        if (isPhoto) {
+          width = game.settings.get(MODULE_ID, "photoNoteWidth");
+        } else if (isIndex) {
+          width = game.settings.get(MODULE_ID, "indexNoteWidth") || 600;
+        } else {
+          width = game.settings.get(MODULE_ID, "stickyNoteWidth");
+        }
+
+        drawing.pinSprite.x = drawing.document.x + width / 2 - 20;
+        drawing.pinSprite.y = drawing.document.y + 3;
+
+        // Add to global pins container
+        pinsContainer.addChild(drawing.pinSprite);
+      }
+    }
+  });
+
+  // Draw all connections from all notes
+  canvas.drawings.placeables.forEach(drawing => {
+    const noteData = drawing.document.flags[MODULE_ID];
+    if (!noteData) return;
+
+    const connections = noteData.connections || [];
+    if (connections.length === 0) return;
+
+    // Get source pin position
+    const sourcePin = drawing._getPinPosition();
+
+    // Draw each connection
+    connections.forEach(conn => {
+      const targetDrawing = canvas.drawings.get(conn.targetId);
+      if (!targetDrawing) return;
+
+      const targetNoteData = targetDrawing.document.flags[MODULE_ID];
+      if (!targetNoteData) return;
+
+      const targetPin = targetDrawing._getPinPosition();
+
+      // Get line style
+      const lineColor = conn.color || game.settings.get(MODULE_ID, "connectionLineColor") || "#FF0000";
+      const lineWidth = conn.width || game.settings.get(MODULE_ID, "connectionLineWidth") || 3;
+      const colorNum = parseInt(lineColor.replace("#", ""), 16);
+
+      // Draw yarn line in world coordinates
+      drawYarnLine(
+        connectionLinesContainer,
+        sourcePin.x,
+        sourcePin.y,
+        targetPin.x,
+        targetPin.y,
+        colorNum,
+        lineWidth
+      );
+    });
+  });
+}
+
+// Helper function to draw a yarn line
+function drawYarnLine(graphics, x1, y1, x2, y2, color, width) {
+  const midX = (x1 + x2) / 2;
+  const midY = (y1 + y2) / 2;
+  const distance = Math.sqrt(Math.pow(x2 - x1, 2) + Math.pow(y2 - y1, 2));
+  const sagAmount = distance * 0.15;
+  const dx = x2 - x1;
+  const horizontalOffset = dx * 0.05;
+  const ctrlX = midX + horizontalOffset;
+  const ctrlY = midY + sagAmount;
+  const seed = (Math.abs(x1) + Math.abs(y1) + Math.abs(x2) + Math.abs(y2)) % 100;
+  const wobble = (seed / 100) * 20 - 10;
+
+  graphics.lineStyle(width, color, 0.9);
+  graphics.moveTo(x1, y1);
+  graphics.quadraticCurveTo(ctrlX + wobble, ctrlY, x2, y2);
+
+  graphics.lineStyle(Math.max(1, width - 1), color, 0.7);
+  graphics.moveTo(x1 + 1, y1);
+  graphics.quadraticCurveTo(ctrlX + wobble + 1, ctrlY, x2 + 1, y2);
+
+  graphics.lineStyle(Math.max(1, width - 1), color, 0.6);
+  graphics.moveTo(x1 - 1, y1);
+  graphics.quadraticCurveTo(ctrlX + wobble - 1, ctrlY, x2 - 1, y2);
 }
 
 
@@ -517,6 +679,207 @@ async function createNote(noteType) {
   canvas.drawings.activate();
 }
 
+// Connect Mode Functions
+function activateConnectMode() {
+  connectModeActive = true;
+  connectModeFirstNote = null;
+  ui.notifications.info("Connect Mode: Click first note, then second note to connect them.");
+
+  // Add click listener
+  canvas.stage.on("click", onCanvasClickConnectMode);
+
+  // Add CSS class for cursor styling
+  document.body.classList.add("connect-mode-active");
+}
+
+function deactivateConnectMode() {
+  connectModeActive = false;
+  connectModeFirstNote = null;
+
+  // Remove highlight if exists
+  if (connectModeHighlight) {
+    canvas.controls.removeChild(connectModeHighlight);
+    connectModeHighlight.destroy();
+    connectModeHighlight = null;
+  }
+
+  // Remove click listener
+  canvas.stage.off("click", onCanvasClickConnectMode);
+
+  // Remove CSS class
+  document.body.classList.remove("connect-mode-active");
+}
+
+function onCanvasClickConnectMode(event) {
+  if (!connectModeActive) return;
+
+  // Get the position of the click
+  const position = event.data.getLocalPosition(canvas.stage);
+
+  // Find drawing at this position
+  const drawings = canvas.drawings.placeables.filter(d => {
+    const bounds = d.bounds;
+    return position.x >= bounds.x && position.x <= bounds.x + bounds.width &&
+           position.y >= bounds.y && position.y <= bounds.y + bounds.height;
+  });
+
+  if (drawings.length === 0) return;
+
+  // Get the top-most drawing
+  const drawing = drawings[drawings.length - 1];
+
+  // Check if it's an investigation board note
+  const noteData = drawing.document.flags[MODULE_ID];
+  if (!noteData) {
+    ui.notifications.warn("Please click on an Investigation Board note.");
+    return;
+  }
+
+  // First click: store the note
+  if (!connectModeFirstNote) {
+    connectModeFirstNote = drawing;
+
+    // Draw green border highlight
+    if (connectModeHighlight) {
+      canvas.controls.removeChild(connectModeHighlight);
+      connectModeHighlight.destroy();
+    }
+
+    connectModeHighlight = new PIXI.Graphics();
+    connectModeHighlight.lineStyle(4, 0x00ff00, 1);
+    connectModeHighlight.drawRect(
+      drawing.document.x,
+      drawing.document.y,
+      drawing.document.shape.width,
+      drawing.document.shape.height
+    );
+    canvas.controls.addChild(connectModeHighlight);
+
+    ui.notifications.info("First note selected. Click second note to create connection.");
+    return;
+  }
+
+  // Second click: create connection
+  if (drawing === connectModeFirstNote) {
+    ui.notifications.error("Cannot connect a note to itself.");
+    return;
+  }
+
+  createConnection(connectModeFirstNote, drawing);
+
+  // Reset state
+  connectModeFirstNote = null;
+  if (connectModeHighlight) {
+    canvas.controls.removeChild(connectModeHighlight);
+    connectModeHighlight.destroy();
+    connectModeHighlight = null;
+  }
+}
+
+async function createConnection(sourceDrawing, targetDrawing) {
+  const connections = sourceDrawing.document.flags[MODULE_ID]?.connections || [];
+
+  // Check for duplicate
+  const isDuplicate = connections.some(conn => conn.targetId === targetDrawing.document.id);
+  if (isDuplicate) {
+    ui.notifications.warn("Connection already exists between these notes.");
+    return;
+  }
+
+  // Get settings
+  const color = game.settings.get(MODULE_ID, "connectionLineColor") || "#FF0000";
+  const width = game.settings.get(MODULE_ID, "connectionLineWidth") || 3;
+
+  // Add new connection
+  connections.push({
+    targetId: targetDrawing.document.id,
+    color: color,
+    width: width
+  });
+
+  // Update document
+  await sourceDrawing.document.update({
+    [`flags.${MODULE_ID}.connections`]: connections
+  });
+
+  // Immediately redraw all connection lines
+  drawAllConnectionLines();
+
+  ui.notifications.info("Connection created successfully.");
+}
+
+async function showRemoveConnectionDialog(sourceDrawing) {
+  const connections = sourceDrawing.document.flags[MODULE_ID]?.connections || [];
+  if (connections.length === 0) return;
+
+  // Build HTML for the dialog
+  let html = `<form><div class="form-group"><label>Select connections to remove:</label>`;
+
+  connections.forEach((conn, index) => {
+    const targetDrawing = canvas.drawings.get(conn.targetId);
+    let targetLabel = "Unknown Note";
+    if (targetDrawing) {
+      const targetData = targetDrawing.document.flags[MODULE_ID];
+      if (targetData) {
+        targetLabel = `${targetData.type} (${conn.targetId.substring(0, 8)}...)`;
+      }
+    } else {
+      targetLabel = `Deleted Note (${conn.targetId.substring(0, 8)}...)`;
+    }
+
+    html += `<div><input type="checkbox" name="conn-${index}" id="conn-${index}"><label for="conn-${index}">${targetLabel}</label></div>`;
+  });
+
+  html += `</div></form>`;
+
+  // Create dialog
+  new Dialog({
+    title: "Remove Connections",
+    content: html,
+    buttons: {
+      remove: {
+        icon: '<i class="fas fa-unlink"></i>',
+        label: "Remove Selected",
+        callback: async (html) => {
+          const form = html[0].querySelector("form");
+          const formData = new FormData(form);
+
+          // Collect indices to remove
+          const indicesToRemove = [];
+          for (let i = 0; i < connections.length; i++) {
+            if (formData.get(`conn-${i}`) === "on") {
+              indicesToRemove.push(i);
+            }
+          }
+
+          if (indicesToRemove.length === 0) {
+            ui.notifications.warn("No connections selected.");
+            return;
+          }
+
+          // Filter out the selected connections
+          const remainingConnections = connections.filter((_, idx) => !indicesToRemove.includes(idx));
+
+          // Update document
+          await sourceDrawing.document.update({
+            [`flags.${MODULE_ID}.connections`]: remainingConnections
+          });
+
+          // Immediately redraw all connection lines
+          drawAllConnectionLines();
+
+          ui.notifications.info(`Removed ${indicesToRemove.length} connection(s).`);
+        }
+      },
+      cancel: {
+        icon: '<i class="fas fa-times"></i>',
+        label: "Cancel"
+      }
+    },
+    default: "remove"
+  }).render(true);
+}
+
 
 
 Hooks.on("getSceneControlButtons", (controls) => {
@@ -548,6 +911,21 @@ Hooks.on("getSceneControlButtons", (controls) => {
     onChange: () => createNote("index"),
     button: true
   };
+
+  journalControls.tools.connectMode = {
+    name: "connectMode",
+    title: "Connect Mode (Click two notes to connect)",
+    icon: "fas fa-link",
+    toggle: true,
+    active: false,
+    onChange: (active) => {
+      if (active) {
+        activateConnectMode();
+      } else {
+        deactivateConnectMode();
+      }
+    }
+  };
 });
 
 Hooks.once("init", () => {
@@ -560,7 +938,93 @@ Hooks.once("init", () => {
     makeDefault: true,
   });
 
+  // ESC key handler to exit connect mode
+  document.addEventListener("keydown", (event) => {
+    if (event.key === "Escape" && connectModeActive) {
+      // Deactivate connect mode
+      deactivateConnectMode();
+
+      // Toggle off the button in the toolbar
+      const connectModeButton = ui.controls?.controls?.find(c => c.name === "notes")
+        ?.tools?.find(t => t.name === "connectMode");
+      if (connectModeButton) {
+        connectModeButton.active = false;
+        ui.controls.render();
+      }
+    }
+  });
+
   console.log("Investigation Board module initialized.");
+});
+
+// Hook to redraw lines when notes move
+Hooks.on("updateDrawing", (drawing, changes, options, userId) => {
+  // Check if this is an investigation board note
+  const noteData = drawing.flags[MODULE_ID];
+  if (!noteData) return;
+
+  // If position changed, redraw all connection lines
+  if (changes.x !== undefined || changes.y !== undefined) {
+    drawAllConnectionLines();
+  }
+});
+
+// Hook to deactivate connect mode on scene change and initialize connection lines
+Hooks.on("canvasReady", () => {
+  // Properly destroy and remove old containers before clearing references
+  if (connectionLinesContainer) {
+    if (connectionLinesContainer.parent) {
+      connectionLinesContainer.parent.removeChild(connectionLinesContainer);
+    }
+    connectionLinesContainer.destroy();
+    connectionLinesContainer = null;
+  }
+
+  if (pinsContainer) {
+    if (pinsContainer.parent) {
+      pinsContainer.parent.removeChild(pinsContainer);
+    }
+    pinsContainer.destroy();
+    pinsContainer = null;
+  }
+
+  if (connectModeActive) {
+    deactivateConnectMode();
+
+    // Toggle off the button in the toolbar
+    const connectModeButton = ui.controls?.controls?.find(c => c.name === "notes")
+      ?.tools?.find(t => t.name === "connectMode");
+    if (connectModeButton) {
+      connectModeButton.active = false;
+      ui.controls.render();
+    }
+  }
+
+  // Draw all connection lines and pins after a short delay to ensure all drawings are loaded
+  setTimeout(() => {
+    drawAllConnectionLines();
+  }, 100);
+});
+
+// Hook to add "Remove Connections" to context menu
+Hooks.on("getDrawingContextOptions", (drawing, options) => {
+  const noteData = drawing.document.flags[MODULE_ID];
+  if (!noteData) return;
+
+  const connections = noteData.connections || [];
+  if (connections.length === 0) return;
+
+  options.push({
+    name: "Remove Connections",
+    icon: '<i class="fas fa-unlink"></i>',
+    condition: () => game.user.isGM || drawing.document.testUserPermission(game.user, "OWNER"),
+    callback: () => {
+      const drawingPlaceable = canvas.drawings.get(drawing.id);
+      if (drawingPlaceable) {
+        showRemoveConnectionDialog(drawingPlaceable);
+      }
+    }
+  });
 });
 
 
