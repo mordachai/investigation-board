@@ -54,7 +54,7 @@
       <div class="connections-list">
         {{#each connections}}
           <div class="connection-item" data-index="{{@index}}">
-            <span class="connection-target">→ {{this.targetLabel}}</span>
+            <span class="connection-target">{{this.displayNumber}}: {{this.targetLabel}}</span>
             <div class="connection-controls">
               <input type="color" name="connection-color-{{@index}}" value="{{this.color}}" title="Change yarn color" />
               <button type="button" class="remove-connection-btn" data-index="{{@index}}" title="Remove connection">

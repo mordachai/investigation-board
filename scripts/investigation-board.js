@@ -24,6 +24,9 @@ let originalDrawingMethods = {}; // Store original layer methods for restoration
 let activeEditingDrawingId = null; // Which drawing's edit dialog is open
 let animationTickerId = null; // Ticker for animating connection lines
 
+// Connection number overlays
+let connectionNumberOverlays = []; // Array of PIXI.Text objects showing connection numbers
+
 // v13 namespaced imports
 const Drawing = foundry.canvas.placeables.Drawing;
 const DrawingConfig = foundry.applications.sheets.DrawingConfig;
@@ -113,6 +116,7 @@ class CustomDrawingSheet extends DrawingConfig {
       return {
         targetId: conn.targetId,
         targetLabel: targetLabel,
+        displayNumber: index + 1,
         color: conn.color || "#FF0000",
         width: conn.width || 3,
         index: index
@@ -163,6 +167,9 @@ class CustomDrawingSheet extends DrawingConfig {
 
     // Start animating connections from this note
     startConnectionAnimation(this.document.id);
+
+    // Show connection numbers on connected notes
+    showConnectionNumbers(this.document.id);
 
     // Hook up file picker button
     const filePickerButton = this.element.querySelector(".file-picker-button");
@@ -272,6 +279,7 @@ class CustomDrawingSheet extends DrawingConfig {
   // Stop animation when dialog closes
   async _onClose(options) {
     stopConnectionAnimation();
+    clearConnectionNumbers();
     return super._onClose?.(options);
   }
 
@@ -847,6 +855,78 @@ function stopConnectionAnimation() {
   drawAllConnectionLines();
 }
 
+// Show connection numbers on connected notes
+function showConnectionNumbers(sourceDrawingId) {
+  // Clear any existing overlays first
+  clearConnectionNumbers();
+
+  const sourceDrawing = canvas.drawings.get(sourceDrawingId);
+  if (!sourceDrawing) return;
+
+  const connections = sourceDrawing.document.flags[MODULE_ID]?.connections || [];
+
+  connections.forEach((conn, index) => {
+    const targetDrawing = canvas.drawings.get(conn.targetId);
+    if (!targetDrawing) return;
+
+    const noteData = targetDrawing.document.flags[MODULE_ID];
+    if (!noteData) return;
+
+    // Get note dimensions
+    const isPhoto = noteData.type === "photo";
+    const isIndex = noteData.type === "index";
+    let width, height;
+
+    if (isPhoto) {
+      width = game.settings.get(MODULE_ID, "photoNoteWidth");
+      height = Math.round(width / (225 / 290));
+    } else if (isIndex) {
+      width = game.settings.get(MODULE_ID, "indexNoteWidth") || 600;
+      height = Math.round(width / (600 / 400));
+    } else {
+      width = game.settings.get(MODULE_ID, "stickyNoteWidth");
+      height = width;
+    }
+
+    // Create text overlay
+    const numberText = new PIXI.Text(String(index + 1), {
+      fontFamily: "Arial",
+      fontSize: Math.max(48, width / 4),
+      fontWeight: "bold",
+      fill: "#FFFFFF",
+      stroke: "#000000",
+      strokeThickness: 6,
+      dropShadow: true,
+      dropShadowDistance: 3,
+      dropShadowBlur: 4,
+      dropShadowAlpha: 0.7
+    });
+
+    numberText.anchor.set(0.5);
+    numberText.position.set(
+      targetDrawing.document.x + width / 2,
+      targetDrawing.document.y + height / 2
+    );
+    numberText.zIndex = 100; // Very high, above everything
+
+    canvas.drawings.addChild(numberText);
+    connectionNumberOverlays.push(numberText);
+  });
+
+  console.log(`Investigation Board: Showing ${connectionNumberOverlays.length} connection numbers`);
+}
+
+// Clear all connection number overlays
+function clearConnectionNumbers() {
+  connectionNumberOverlays.forEach(overlay => {
+    if (overlay.parent) {
+      overlay.parent.removeChild(overlay);
+    }
+    overlay.destroy();
+  });
+  connectionNumberOverlays = [];
+}
+
 async function createNote(noteType) {
   const scene = canvas.scene;
   if (!scene) {
@@ -1163,6 +1243,9 @@ function deactivateInvestigationBoardMode() {
   // Clear the preview line
   clearConnectionPreview();
 
+  // Clear connection numbers
+  clearConnectionNumbers();
+
   // Restore original methods
   if (canvas.drawings) {
     canvas.drawings._onClickLeft2 = originalDrawingMethods._onClickLeft2;
@@ -1335,6 +1418,9 @@ Hooks.on("canvasReady", () => {
 
   // Clear the preview line on canvas change
   clearConnectionPreview();
+
+  // Clear connection numbers on canvas change
+  clearConnectionNumbers();
 
   // Reapply Investigation Board mode if it was active before canvas recreation
   if (investigationBoardModeActive) {
