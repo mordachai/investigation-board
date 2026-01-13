@@ -19,6 +19,10 @@ let investigationBoardModeActive = false;
 let originalDrawingMethods = {}; // Store original layer methods for restoration
 // let investigationBoardHUD = null; // HUD disabled - double-click to edit instead
 
+// Connection animation state
+let activeEditingDrawingId = null; // Which drawing's edit dialog is open
+let animationTickerId = null; // Ticker for animating connection lines
+
 // v13 namespaced imports
 const Drawing = foundry.canvas.placeables.Drawing;
 const DrawingConfig = foundry.applications.sheets.DrawingConfig;
@@ -79,6 +83,9 @@ class CustomDrawingSheet extends DrawingConfig {
     context.identityName = customData.identityName;
     context.boardMode = customData.boardMode;
     context.noteTypes = customData.noteTypes;
+    context.connections = customData.connections;
+    context.font = customData.font;
+    context.fontSize = customData.fontSize;
 
     return context;
   }
@@ -86,13 +93,44 @@ class CustomDrawingSheet extends DrawingConfig {
   getData(options) {
     // In v13, super.getData() doesn't exist in ApplicationV2
     // Build the data object directly
+
+    // Get connections and format them for display
+    const connections = this.document.flags[MODULE_ID]?.connections || [];
+    const formattedConnections = connections.map((conn, index) => {
+      const targetDrawing = canvas.drawings.get(conn.targetId);
+      let targetLabel = "Unknown Note";
+      if (targetDrawing) {
+        const targetData = targetDrawing.document.flags[MODULE_ID];
+        if (targetData) {
+          const typeLabels = { sticky: "Sticky Note", photo: "Photo Note", index: "Index Card" };
+          targetLabel = typeLabels[targetData.type] || "Note";
+        }
+      } else {
+        targetLabel = "Deleted Note";
+      }
+
+      return {
+        targetId: conn.targetId,
+        targetLabel: targetLabel,
+        color: conn.color || "#FF0000",
+        width: conn.width || 3,
+        index: index
+      };
+    });
+
+    const noteType = this.document.flags[MODULE_ID]?.type || "sticky";
+    const defaultFontSize = noteType === "index" ? 9 : game.settings.get(MODULE_ID, "baseFontSize");
+
     const data = {
       document: this.document,
-      noteType: this.document.flags[MODULE_ID]?.type || "sticky",
+      noteType: noteType,
       text: this.document.flags[MODULE_ID]?.text || "Default Text",
       image: this.document.flags[MODULE_ID]?.image || "modules/investigation-board/assets/placeholder.webp",
       identityName: this.document.flags[MODULE_ID]?.identityName || "",
+      font: this.document.flags[MODULE_ID]?.font || game.settings.get(MODULE_ID, "font"),
+      fontSize: this.document.flags[MODULE_ID]?.fontSize || defaultFontSize,
       boardMode: game.settings.get(MODULE_ID, "boardMode"),
+      connections: formattedConnections,
       noteTypes: {
         sticky: "Sticky Note",
         photo: "Photo Note",
@@ -122,6 +160,9 @@ class CustomDrawingSheet extends DrawingConfig {
   _onRender(context, options) {
     super._onRender?.(context, options);
 
+    // Start animating connections from this note
+    startConnectionAnimation(this.document.id);
+
     // Hook up file picker button
     const filePickerButton = this.element.querySelector(".file-picker-button");
     if (filePickerButton) {
@@ -141,6 +182,36 @@ class CustomDrawingSheet extends DrawingConfig {
 
     const form = this.element.querySelector("form");
     if (form) {
+      // Handle cancel button
+      const cancelButton = this.element.querySelector(".cancel-button");
+      if (cancelButton) {
+        cancelButton.addEventListener("click", (ev) => {
+          ev.preventDefault();
+          this.close();
+        });
+      }
+
+      // Handle remove connection buttons
+      const removeButtons = this.element.querySelectorAll(".remove-connection-btn");
+      removeButtons.forEach(btn => {
+        btn.addEventListener("click", async (ev) => {
+          ev.preventDefault();
+          const index = parseInt(btn.dataset.index);
+          const connections = this.document.flags[MODULE_ID]?.connections || [];
+          connections.splice(index, 1);
+
+          await this.document.update({
+            [`flags.${MODULE_ID}.connections`]: connections
+          });
+
+          // Redraw connection lines
+          drawAllConnectionLines();
+
+          // Re-render the sheet to update the UI
+          this.render(true);
+        });
+      });
+
       form.addEventListener("submit", async (ev) => {
         ev.preventDefault();
         ev.stopPropagation();
@@ -158,6 +229,28 @@ class CustomDrawingSheet extends DrawingConfig {
           updates[`flags.${MODULE_ID}.identityName`] = data.identityName;
         }
 
+        // Save font and fontSize to note flags
+        if (data.font !== undefined) {
+          updates[`flags.${MODULE_ID}.font`] = data.font;
+        }
+
+        if (data.fontSize !== undefined) {
+          updates[`flags.${MODULE_ID}.fontSize`] = parseInt(data.fontSize);
+        }
+
+        // Process connection color changes
+        const connections = this.document.flags[MODULE_ID]?.connections || [];
+        connections.forEach((conn, index) => {
+          const colorKey = `connection-color-${index}`;
+          if (data[colorKey]) {
+            conn.color = data[colorKey];
+          }
+        });
+
+        if (connections.length > 0) {
+          updates[`flags.${MODULE_ID}.connections`] = connections;
+        }
+
         await this.document.update(updates);
 
         // Refresh the drawing on canvas
@@ -166,10 +259,19 @@ class CustomDrawingSheet extends DrawingConfig {
           await drawing.refresh();
         }
 
+        // Redraw connection lines with new colors
+        drawAllConnectionLines();
+
         // Close the sheet
         await this.close();
       }, true);
     }
+  }
+
+  // Stop animation when dialog closes
+  async _onClose(options) {
+    stopConnectionAnimation();
+    return super._onClose?.(options);
   }
 
   // V1 fallback - not used in v13, event binding done in _onRender
@@ -269,10 +371,10 @@ class CustomDrawing extends Drawing {
           this.photoImageSprite.texture = PIXI.Texture.EMPTY;
         }
       }
-    
+
       // --- Identity Name and Additional Text (Futuristic) ---
-      const font = game.settings.get(MODULE_ID, "font");
-      const baseFontSize = game.settings.get(MODULE_ID, "baseFontSize");
+      const font = noteData.font || game.settings.get(MODULE_ID, "font");
+      const baseFontSize = noteData.fontSize || game.settings.get(MODULE_ID, "baseFontSize");
       const fontSize = (fullWidth / 200) * baseFontSize;
       const textStyle = new PIXI.TextStyle({
         fontFamily: font,
@@ -463,10 +565,11 @@ class CustomDrawing extends Drawing {
         }
       }
     }
-    
+
     // Default text layout for non-futuristic notes.
-    const font = game.settings.get(MODULE_ID, "font");
-    const baseFontSize = game.settings.get(MODULE_ID, "baseFontSize");
+    const font = noteData.font || game.settings.get(MODULE_ID, "font");
+    const defaultFontSize = isIndex ? 9 : game.settings.get(MODULE_ID, "baseFontSize");
+    const baseFontSize = noteData.fontSize || defaultFontSize;
     const fontSize = (width / 200) * baseFontSize;
     const textStyle = new PIXI.TextStyle({
       fontFamily: font,
@@ -523,7 +626,7 @@ class CustomDrawing extends Drawing {
 }
 
 // Global function to draw all connection lines and pins
-function drawAllConnectionLines() {
+function drawAllConnectionLines(animationOffset = 0) {
   if (!canvas || !canvas.drawings) return;
 
   // Enable sortable children on the drawings layer for z-index control
@@ -597,6 +700,9 @@ function drawAllConnectionLines() {
     const connections = noteData.connections || [];
     if (connections.length === 0) return;
 
+    // Check if this drawing's connections should be animated
+    const shouldAnimate = activeEditingDrawingId === drawing.document.id;
+
     // Get source pin position
     const sourcePin = drawing._getPinPosition();
 
@@ -615,7 +721,7 @@ function drawAllConnectionLines() {
       const lineWidth = conn.width || game.settings.get(MODULE_ID, "connectionLineWidth") || 6;
       const colorNum = parseInt(lineColor.replace("#", ""), 16);
 
-      // Draw yarn line in world coordinates
+      // Draw yarn line in world coordinates with animation if editing this note
       drawYarnLine(
         connectionLinesContainer,
         sourcePin.x,
@@ -623,14 +729,16 @@ function drawAllConnectionLines() {
         targetPin.x,
         targetPin.y,
         colorNum,
-        lineWidth
+        lineWidth,
+        shouldAnimate,
+        animationOffset
       );
     });
   });
 }
 
 // Helper function to draw a yarn line
-function drawYarnLine(graphics, x1, y1, x2, y2, color, width) {
+function drawYarnLine(graphics, x1, y1, x2, y2, color, width, animated = false, animationOffset = 0) {
   const midX = (x1 + x2) / 2;
   const midY = (y1 + y2) / 2;
   const distance = Math.sqrt(Math.pow(x2 - x1, 2) + Math.pow(y2 - y1, 2));
@@ -642,20 +750,101 @@ function drawYarnLine(graphics, x1, y1, x2, y2, color, width) {
   const seed = (Math.abs(x1) + Math.abs(y1) + Math.abs(x2) + Math.abs(y2)) % 100;
   const wobble = (seed / 100) * 20 - 10;
 
-  graphics.lineStyle(width, color, 0.9);
-  graphics.moveTo(x1, y1);
-  graphics.quadraticCurveTo(ctrlX + wobble, ctrlY, x2, y2);
+  if (animated) {
+    // Draw HIGHLY VISIBLE animated dashed line with marching effect
+    const dashLength = 30; // Longer dashes
+    const gapLength = 20; // Longer gaps
 
-  graphics.lineStyle(Math.max(1, width - 1), color, 0.7);
-  graphics.moveTo(x1 + 1, y1);
-  graphics.quadraticCurveTo(ctrlX + wobble + 1, ctrlY, x2 + 1, y2);
+    // Calculate points along the curve for dashed effect
+    const steps = 100; // More points for smoother animation
+    const points = [];
+    for (let i = 0; i <= steps; i++) {
+      const t = i / steps;
+      const x = (1 - t) * (1 - t) * x1 + 2 * (1 - t) * t * (ctrlX + wobble) + t * t * x2;
+      const y = (1 - t) * (1 - t) * y1 + 2 * (1 - t) * t * ctrlY + t * t * y2;
+      points.push({ x, y });
+    }
 
-  graphics.lineStyle(Math.max(1, width - 1), color, 0.6);
-  graphics.moveTo(x1 - 1, y1);
-  graphics.quadraticCurveTo(ctrlX + wobble - 1, ctrlY, x2 - 1, y2);
+    // Draw background solid line first (dimmed original)
+    graphics.lineStyle(width, color, 0.3);
+    graphics.moveTo(x1, y1);
+    graphics.quadraticCurveTo(ctrlX + wobble, ctrlY, x2, y2);
+
+    // Draw bright animated dashes on top
+    let currentDistance = -animationOffset;
+    for (let i = 0; i < points.length - 1; i++) {
+      const p1 = points[i];
+      const p2 = points[i + 1];
+      const segmentLength = Math.sqrt(Math.pow(p2.x - p1.x, 2) + Math.pow(p2.y - p1.y, 2));
+
+      const startDist = currentDistance;
+      const endDist = currentDistance + segmentLength;
+
+      // Determine if this segment should be drawn (in dash, not gap)
+      const dashCycle = dashLength + gapLength;
+      const startMod = ((startDist % dashCycle) + dashCycle) % dashCycle;
+      const endMod = ((endDist % dashCycle) + dashCycle) % dashCycle;
+
+      if (startMod < dashLength || endMod < dashLength || startMod > endMod) {
+        // Draw thick bright dash with glow
+        graphics.lineStyle(width * 2.5, 0xFFFFFF, 0.8); // White glow
+        graphics.moveTo(p1.x, p1.y);
+        graphics.lineTo(p2.x, p2.y);
+
+        // Draw colored dash on top
+        graphics.lineStyle(width * 2, color, 1); // Full opacity, thicker
+        graphics.moveTo(p1.x, p1.y);
+        graphics.lineTo(p2.x, p2.y);
+      }
+
+      currentDistance = endDist;
+    }
+  } else {
+    // Draw solid yarn line (original code)
+    graphics.lineStyle(width, color, 0.9);
+    graphics.moveTo(x1, y1);
+    graphics.quadraticCurveTo(ctrlX + wobble, ctrlY, x2, y2);
+
+    graphics.lineStyle(Math.max(1, width - 1), color, 0.7);
+    graphics.moveTo(x1 + 1, y1);
+    graphics.quadraticCurveTo(ctrlX + wobble + 1, ctrlY, x2 + 1, y2);
+
+    graphics.lineStyle(Math.max(1, width - 1), color, 0.6);
+    graphics.moveTo(x1 - 1, y1);
+    graphics.quadraticCurveTo(ctrlX + wobble - 1, ctrlY, x2 - 1, y2);
+  }
 }
 
+// Start animating connection lines for a specific drawing
+function startConnectionAnimation(drawingId) {
+  activeEditingDrawingId = drawingId;
 
+  if (animationTickerId) {
+    canvas.app.ticker.remove(animationTickerId);
+  }
+
+  let offset = 0;
+  animationTickerId = () => {
+    offset += 4; // Faster animation speed (was 2)
+    if (offset > 50) offset = 0; // Reset to create loop (matches dashLength + gapLength)
+    drawAllConnectionLines(offset);
+  };
+
+  canvas.app.ticker.add(animationTickerId);
+}
+
+// Stop animating connection lines
+function stopConnectionAnimation() {
+  activeEditingDrawingId = null;
+
+  if (animationTickerId) {
+    canvas.app.ticker.remove(animationTickerId);
+    animationTickerId = null;
+  }
+
+  // Redraw without animation
+  drawAllConnectionLines();
+}
 
 async function createNote(noteType) {
   const scene = canvas.scene;
@@ -688,6 +877,11 @@ async function createNote(noteType) {
   const extraFlags = {};
   if (noteType === "photo" && boardMode === "futuristic") {
     extraFlags.identityName = "";
+  }
+
+  // Set default font size to 9 for index cards
+  if (noteType === "index") {
+    extraFlags.fontSize = 9;
   }
 
   const created = await canvas.scene.createEmbeddedDocuments("Drawing", [
@@ -801,14 +995,14 @@ async function createConnection(sourceDrawing, targetDrawing) {
     return;
   }
 
-  // Get settings
-  const color = game.settings.get(MODULE_ID, "connectionLineColor") || "#FF0000";
+  // Use player's color by default, fallback to setting or red
+  const playerColor = game.user.color || game.settings.get(MODULE_ID, "connectionLineColor") || "#FF0000";
   const width = game.settings.get(MODULE_ID, "connectionLineWidth") || 6;
 
   // Add new connection
   connections.push({
     targetId: targetDrawing.document.id,
-    color: color,
+    color: playerColor,
     width: width
   });
 
@@ -823,77 +1017,7 @@ async function createConnection(sourceDrawing, targetDrawing) {
   // ui.notifications.info("Connection created successfully.");
 }
 
-async function showRemoveConnectionDialog(sourceDrawing) {
-  const connections = sourceDrawing.document.flags[MODULE_ID]?.connections || [];
-  if (connections.length === 0) return;
-
-  // Build HTML for the dialog
-  let html = `<form><div class="form-group"><label>Select connections to remove:</label>`;
-
-  connections.forEach((conn, index) => {
-    const targetDrawing = canvas.drawings.get(conn.targetId);
-    let targetLabel = "Unknown Note";
-    if (targetDrawing) {
-      const targetData = targetDrawing.document.flags[MODULE_ID];
-      if (targetData) {
-        targetLabel = `${targetData.type} (${conn.targetId.substring(0, 8)}...)`;
-      }
-    } else {
-      targetLabel = `Deleted Note (${conn.targetId.substring(0, 8)}...)`;
-    }
-
-    html += `<div><input type="checkbox" name="conn-${index}" id="conn-${index}"><label for="conn-${index}">${targetLabel}</label></div>`;
-  });
-
-  html += `</div></form>`;
-
-  // Create dialog
-  new Dialog({
-    title: "Remove Connections",
-    content: html,
-    buttons: {
-      remove: {
-        icon: '<i class="fas fa-unlink"></i>',
-        label: "Remove Selected",
-        callback: async (html) => {
-          const form = html[0].querySelector("form");
-          const formData = new FormData(form);
-
-          // Collect indices to remove
-          const indicesToRemove = [];
-          for (let i = 0; i < connections.length; i++) {
-            if (formData.get(`conn-${i}`) === "on") {
-              indicesToRemove.push(i);
-            }
-          }
-
-          if (indicesToRemove.length === 0) {
-            // ui.notifications.warn("No connections selected.");
-            return;
-          }
-
-          // Filter out the selected connections
-          const remainingConnections = connections.filter((_, idx) => !indicesToRemove.includes(idx));
-
-          // Update document
-          await sourceDrawing.document.update({
-            [`flags.${MODULE_ID}.connections`]: remainingConnections
-          });
-
-          // Immediately redraw all connection lines
-          drawAllConnectionLines();
-
-          // ui.notifications.info(`Removed ${indicesToRemove.length} connection(s).`);
-        }
-      },
-      cancel: {
-        icon: '<i class="fas fa-times"></i>',
-        label: "Cancel"
-      }
-    },
-    default: "remove"
-  }).render(true);
-}
+// Old context menu dialog removed - now using double-click edit dialog
 
 /**
  * Helper function to refresh interactive properties of all drawings
@@ -1151,26 +1275,7 @@ Hooks.on("canvasReady", () => {
   }, 100);
 });
 
-// Hook to add "Remove Connections" to context menu
-Hooks.on("getDrawingContextOptions", (drawing, options) => {
-  const noteData = drawing.document.flags[MODULE_ID];
-  if (!noteData) return;
-
-  const connections = noteData.connections || [];
-  if (connections.length === 0) return;
-
-  options.push({
-    name: "Remove Connections",
-    icon: '<i class="fas fa-unlink"></i>',
-    condition: () => game.user.isGM || drawing.document.testUserPermission(game.user, "OWNER"),
-    callback: () => {
-      const drawingPlaceable = canvas.drawings.get(drawing.id);
-      if (drawingPlaceable) {
-        showRemoveConnectionDialog(drawingPlaceable);
-      }
-    }
-  });
-});
+// Context menu hook removed - connections now managed in double-click edit dialog
 
 
 export { CustomDrawing, CustomDrawingSheet };

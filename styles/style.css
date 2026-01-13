@@ -135,23 +135,23 @@
 
 /* Connect Mode Cursor Styles */
 body.connect-mode-active {
-  cursor: crosshair !important;
+  cursor: alias !important;
 }
 
 body.connect-mode-active canvas {
-  cursor: crosshair !important;
+  cursor: alias !important;
 }
 
 body.connect-mode-active #board {
-  cursor: crosshair !important;
+  cursor: alias !important;
 }
 
 body.connect-mode-active .drawing {
-  cursor: crosshair !important;
+  cursor: alias !important;
 }
 
 body.connect-mode-active .drawing[data-investigation-note="true"]:hover {
-  cursor: copy !important;
+  cursor: alias !important;
 }
 
 /* ========================= */
@@ -227,4 +227,142 @@ body.investigation-board-mode .drawing:not([data-investigation-note="true"]) {
 .investigation-board-hud .control-icon:hover {
   background: #FFD700;
   color: #000;
+}
+
+/* ========================= */
+/* Connections Section       */
+/* ========================= */
+
+.connections-section {
+  display: flex;
+  flex-direction: column;
+  margin-top: 5px;
+  border-top: 2px solid #ccc;
+}
+
+.connections-header {
+  font-weight: bold;
+  display: block;
+  margin-bottom: 12px;
+  width: 100%;
+}
+
+.connections-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.connection-item {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 8px;
+  background: rgba(0, 0, 0, 0.05);
+  border-radius: 3px;
+  flex: 1;
+  min-width: 100px;
+}
+
+.connection-target {
+  font-size: 13px;
+  font-weight: 500;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.connection-controls {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+}
+
+.connection-item input[type="color"] {
+  width: 40px;
+  height: 30px;
+  border: 1px solid #ccc;
+  border-radius: 3px;
+  cursor: pointer;
+  padding: 2px;
+}
+
+.remove-connection-btn {
+  background: #d32f2f;
+  color: white;
+  border: none;
+  padding: 6px 10px;
+  border-radius: 3px;
+  cursor: pointer;
+  transition: background 0.2s;
+}
+
+.remove-connection-btn:hover {
+  background: #b71c1c;
+}
+
+.remove-connection-btn i {
+  font-size: 12px;
+}
+
+/* ========================= */
+/* Note Edit Dialog          */
+/* ========================= */
+
+/* File picker layout - keep input and button on same line */
+.file-picker {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+.file-picker input[type="text"] {
+  flex: 1;
+  min-width: 0; /* Allow input to shrink if needed */
+}
+
+.file-picker-button {
+  flex-shrink: 0; /* Prevent button from shrinking */
+  white-space: nowrap;
+}
+
+/* Button group for save and cancel */
+.button-group {
+  display: flex;
+  gap: 10px;
+  margin-top: 15px;
+}
+
+.save-button,
+.cancel-button {
+  flex: 1;
+  padding: 8px 16px;
+  border: none;
+  border-radius: 3px;
+  cursor: pointer;
+  font-size: 14px;
+  transition: background 0.2s;
+}
+
+.save-button {
+  background: #3f51b5;
+  color: white;
+}
+
+.save-button:hover {
+  background: #303f9f;
+}
+
+.cancel-button {
+  background: #757575;
+  color: white;
+}
+
+.cancel-button:hover {
+  background: #616161;
+}
+
+.save-button i,
+.cancel-button i {
+  margin-right: 5px;
 }
