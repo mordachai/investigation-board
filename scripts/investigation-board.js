@@ -1,6 +1,8 @@
 //investigation-boards.js
 
 import { registerSettings } from "./settings.js";
+// HUD disabled - double-click to edit instead
+// import { InvestigationBoardHUD } from "./investigation-board-hud.js";
 
 const MODULE_ID = "investigation-board";
 const BASE_FONT_SIZE = 15;
@@ -12,6 +14,11 @@ let connectModeFirstNote = null;
 let connectModeHighlight = null; // PIXI.Graphics for border
 let connectionLinesContainer = null; // Global container for all connection lines
 let pinsContainer = null; // Global container for all pins (to render on top)
+
+// Investigation Board Mode state variables
+let investigationBoardModeActive = false;
+let originalDrawingMethods = {}; // Store original layer methods for restoration
+// let investigationBoardHUD = null; // HUD disabled - double-click to edit instead
 
 // v13 namespaced imports
 const Drawing = foundry.canvas.placeables.Drawing;
@@ -188,6 +195,8 @@ class CustomDrawing extends Drawing {
   // Ensure sprites are created when the drawing is first rendered.
   async draw() {
     await super.draw();
+    // Mark as investigation board note for CSS filtering
+    this.element?.setAttribute("data-investigation-note", "true");
     await this._updateSprites();
     // Redraw all connections and reposition pins globally
     drawAllConnectionLines();
@@ -197,6 +206,8 @@ class CustomDrawing extends Drawing {
   // Ensure sprites update correctly on refresh.
   async refresh() {
     await super.refresh();
+    // Mark as investigation board note for CSS filtering
+    this.element?.setAttribute("data-investigation-note", "true");
     await this._updateSprites();
     // Redraw all connections and reposition pins globally
     drawAllConnectionLines();
@@ -226,32 +237,39 @@ class CustomDrawing extends Drawing {
         this.addChildAt(this.bgSprite, 0);
       }
       try {
-        // Always use the fixed photo frame image.
-        this.bgSprite.texture = PIXI.Texture.from("modules/investigation-board/assets/photoFrame.webp");
+        const texture = await PIXI.Assets.load("modules/investigation-board/assets/photoFrame.webp");
+        if (texture && this.bgSprite) {
+          this.bgSprite.texture = texture;
+          this.bgSprite.width = fullWidth;
+          this.bgSprite.height = fullHeight;
+        }
       } catch (err) {
         console.error("Failed to load photo frame texture", err);
-        this.bgSprite.texture = PIXI.Texture.EMPTY;
+        if (this.bgSprite) {
+          this.bgSprite.texture = PIXI.Texture.EMPTY;
+        }
       }
-      this.bgSprite.width = fullWidth;
-      this.bgSprite.height = fullHeight;
-    
+
       // --- Foreground (User-Assigned) Photo ---
       if (!this.photoImageSprite) {
         this.photoImageSprite = new PIXI.Sprite();
         this.addChild(this.photoImageSprite);
       }
       try {
-        // Use a fallback if no image is assigned.
         const imagePath = noteData.image || "modules/investigation-board/assets/placeholder.webp";
-        this.photoImageSprite.texture = PIXI.Texture.from(imagePath);
+        const texture = await PIXI.Assets.load(imagePath);
+        if (texture && this.photoImageSprite) {
+          this.photoImageSprite.texture = texture;
+          this.photoImageSprite.width = fullWidth * 0.9;
+          this.photoImageSprite.height = fullHeight * 0.9;
+          this.photoImageSprite.position.set(fullWidth * 0.05, fullHeight * 0.05);
+        }
       } catch (err) {
         console.error(`Failed to load user photo: ${noteData.image}`, err);
-        this.photoImageSprite.texture = PIXI.Texture.EMPTY;
+        if (this.photoImageSprite) {
+          this.photoImageSprite.texture = PIXI.Texture.EMPTY;
+        }
       }
-      // Position the user photo inside the frame.
-      this.photoImageSprite.width = fullWidth * 0.9;
-      this.photoImageSprite.height = fullHeight * 0.9;
-      this.photoImageSprite.position.set(fullWidth * 0.05, fullHeight * 0.05);
     
       // --- Identity Name and Additional Text (Futuristic) ---
       const font = game.settings.get(MODULE_ID, "font");
@@ -312,14 +330,19 @@ class CustomDrawing extends Drawing {
         }
         const pinImage = `modules/investigation-board/assets/${pinColor}`;
         try {
-          this.pinSprite.texture = PIXI.Texture.from(pinImage);
+          const texture = await PIXI.Assets.load(pinImage);
+          if (texture && this.pinSprite) {
+            this.pinSprite.texture = texture;
+            this.pinSprite.width = 40;
+            this.pinSprite.height = 40;
+            this.pinSprite.position.set(fullWidth / 2 - 20, 3);
+          }
         } catch (err) {
           console.error(`Failed to load pin texture: ${pinImage}`, err);
-          this.pinSprite.texture = PIXI.Texture.EMPTY;
+          if (this.pinSprite) {
+            this.pinSprite.texture = PIXI.Texture.EMPTY;
+          }
         }
-        this.pinSprite.width = 40;
-        this.pinSprite.height = 40;
-        this.pinSprite.position.set(fullWidth / 2 - 20, 3);
       }
       return; // End early for futuristic photo notes.
     }
@@ -360,16 +383,20 @@ class CustomDrawing extends Drawing {
       this.addChild(this.bgSprite);
     }
     try {
-      this.bgSprite.texture = PIXI.Texture.from(bgImage);
+      const texture = await PIXI.Assets.load(bgImage);
+      if (texture && this.bgSprite) {
+        this.bgSprite.texture = texture;
+        this.bgSprite.width = width;
+        this.bgSprite.height = height;
+      }
     } catch (err) {
       console.error(`Failed to load background texture: ${bgImage}`, err);
-      this.bgSprite.texture = PIXI.Texture.EMPTY;
+      if (this.bgSprite) {
+        this.bgSprite.texture = PIXI.Texture.EMPTY;
+      }
     }
-    this.bgSprite.width = width;
-    this.bgSprite.height = height;
     
     // --- Foreground (User-Assigned) Photo for Modern Mode ---
-    // (This is the code missing from your current version.)
     if (isPhoto) {
       const fgImage = noteData.image || "modules/investigation-board/assets/placeholder.webp";
       if (!this.photoImageSprite) {
@@ -377,18 +404,22 @@ class CustomDrawing extends Drawing {
         this.addChild(this.photoImageSprite);
       }
       try {
-        this.photoImageSprite.texture = PIXI.Texture.from(fgImage);
+        const texture = await PIXI.Assets.load(fgImage);
+        if (texture && this.photoImageSprite) {
+          this.photoImageSprite.texture = texture;
+          const widthOffset = width * 0.13333;
+          const heightOffset = height * 0.30246;
+          this.photoImageSprite.width = width - widthOffset;
+          this.photoImageSprite.height = height - heightOffset;
+          this.photoImageSprite.position.set(widthOffset / 2, heightOffset / 2);
+          this.photoImageSprite.visible = true;
+        }
       } catch (err) {
         console.error(`Failed to load foreground texture: ${fgImage}`, err);
-        this.photoImageSprite.texture = PIXI.Texture.EMPTY;
+        if (this.photoImageSprite) {
+          this.photoImageSprite.texture = PIXI.Texture.EMPTY;
+        }
       }
-      // Use offsets similar to your old code.
-      const widthOffset = width * 0.13333;
-      const heightOffset = height * 0.30246;
-      this.photoImageSprite.width = width - widthOffset;
-      this.photoImageSprite.height = height - heightOffset;
-      this.photoImageSprite.position.set(widthOffset / 2, heightOffset / 2);
-      this.photoImageSprite.visible = true;
     } else if (this.photoImageSprite) {
       this.photoImageSprite.visible = false;
     }
@@ -418,14 +449,19 @@ class CustomDrawing extends Drawing {
         }
         const pinImage = `modules/investigation-board/assets/${pinColor}`;
         try {
-          this.pinSprite.texture = PIXI.Texture.from(pinImage);
+          const texture = await PIXI.Assets.load(pinImage);
+          if (texture && this.pinSprite) {
+            this.pinSprite.texture = texture;
+            this.pinSprite.width = 40;
+            this.pinSprite.height = 40;
+            this.pinSprite.position.set(width / 2 - 20, 3);
+          }
         } catch (err) {
           console.error(`Failed to load pin texture: ${pinImage}`, err);
-          this.pinSprite.texture = PIXI.Texture.EMPTY;
+          if (this.pinSprite) {
+            this.pinSprite.texture = PIXI.Texture.EMPTY;
+          }
         }
-        this.pinSprite.width = 40;
-        this.pinSprite.height = 40;
-        this.pinSprite.position.set(width / 2 - 20, 3);
       }
     }
     
@@ -571,7 +607,7 @@ function drawAllConnectionLines() {
 
       // Get line style
       const lineColor = conn.color || game.settings.get(MODULE_ID, "connectionLineColor") || "#FF0000";
-      const lineWidth = conn.width || game.settings.get(MODULE_ID, "connectionLineWidth") || 3;
+      const lineWidth = conn.width || game.settings.get(MODULE_ID, "connectionLineWidth") || 6;
       const colorNum = parseInt(lineColor.replace("#", ""), 16);
 
       // Draw yarn line in world coordinates
@@ -649,7 +685,7 @@ async function createNote(noteType) {
     extraFlags.identityName = "";
   }
 
-  await canvas.scene.createEmbeddedDocuments("Drawing", [
+  const created = await canvas.scene.createEmbeddedDocuments("Drawing", [
     {
       type: "r",
       author: game.user.id,
@@ -676,14 +712,33 @@ async function createNote(noteType) {
     },
   ]);
 
-  canvas.drawings.activate();
+  // If in Investigation Board mode, ensure the new drawing is interactive
+  if (investigationBoardModeActive && created && created[0]) {
+    // Wait for rendering to complete
+    setTimeout(() => {
+      const newDrawing = canvas.drawings.get(created[0].id);
+      if (newDrawing) {
+        newDrawing.eventMode = 'auto';
+        newDrawing.interactiveChildren = true;
+        console.log("Investigation Board: New note made interactive immediately", created[0].id);
+      }
+    }, 250);
+  }
+
+  // Switch back to select tool so user can immediately manipulate the note
+  if (investigationBoardModeActive) {
+    const drawingsControl = ui.controls?.controls?.drawings;
+    if (drawingsControl) {
+      drawingsControl.activeTool = "select";
+      ui.controls.render();
+    }
+  }
 }
 
 // Connect Mode Functions
 function activateConnectMode() {
   connectModeActive = true;
   connectModeFirstNote = null;
-  ui.notifications.info("Connect Mode: Click first note, then second note to connect them.");
 
   // Add click listener
   canvas.stage.on("click", onCanvasClickConnectMode);
@@ -713,6 +768,9 @@ function deactivateConnectMode() {
 function onCanvasClickConnectMode(event) {
   if (!connectModeActive) return;
 
+  // Only allow connections when in Investigation Board mode
+  if (!investigationBoardModeActive) return;
+
   // Get the position of the click
   const position = event.data.getLocalPosition(canvas.stage);
 
@@ -731,7 +789,7 @@ function onCanvasClickConnectMode(event) {
   // Check if it's an investigation board note
   const noteData = drawing.document.flags[MODULE_ID];
   if (!noteData) {
-    ui.notifications.warn("Please click on an Investigation Board note.");
+    // ui.notifications.warn("Please click on an Investigation Board note.");
     return;
   }
 
@@ -755,7 +813,7 @@ function onCanvasClickConnectMode(event) {
     );
     canvas.controls.addChild(connectModeHighlight);
 
-    ui.notifications.info("First note selected. Click second note to create connection.");
+    // ui.notifications.info("First note selected. Click second note to create connection.");
     return;
   }
 
@@ -782,13 +840,13 @@ async function createConnection(sourceDrawing, targetDrawing) {
   // Check for duplicate
   const isDuplicate = connections.some(conn => conn.targetId === targetDrawing.document.id);
   if (isDuplicate) {
-    ui.notifications.warn("Connection already exists between these notes.");
+    // ui.notifications.warn("Connection already exists between these notes.");
     return;
   }
 
   // Get settings
   const color = game.settings.get(MODULE_ID, "connectionLineColor") || "#FF0000";
-  const width = game.settings.get(MODULE_ID, "connectionLineWidth") || 3;
+  const width = game.settings.get(MODULE_ID, "connectionLineWidth") || 6;
 
   // Add new connection
   connections.push({
@@ -805,7 +863,7 @@ async function createConnection(sourceDrawing, targetDrawing) {
   // Immediately redraw all connection lines
   drawAllConnectionLines();
 
-  ui.notifications.info("Connection created successfully.");
+  // ui.notifications.info("Connection created successfully.");
 }
 
 async function showRemoveConnectionDialog(sourceDrawing) {
@@ -853,7 +911,7 @@ async function showRemoveConnectionDialog(sourceDrawing) {
           }
 
           if (indicesToRemove.length === 0) {
-            ui.notifications.warn("No connections selected.");
+            // ui.notifications.warn("No connections selected.");
             return;
           }
 
@@ -868,7 +926,7 @@ async function showRemoveConnectionDialog(sourceDrawing) {
           // Immediately redraw all connection lines
           drawAllConnectionLines();
 
-          ui.notifications.info(`Removed ${indicesToRemove.length} connection(s).`);
+          // ui.notifications.info(`Removed ${indicesToRemove.length} connection(s).`);
         }
       },
       cancel: {
@@ -880,53 +938,186 @@ async function showRemoveConnectionDialog(sourceDrawing) {
   }).render(true);
 }
 
+/**
+ * Helper function to refresh interactive properties of all drawings
+ */
+function refreshDrawingsInteractivity() {
+  if (!canvas.drawings) return;
+
+  canvas.drawings.placeables.forEach(drawing => {
+    const isInvestigationNote = drawing.document.flags[MODULE_ID];
+    if (!isInvestigationNote) {
+      drawing.eventMode = 'none';
+      drawing.interactiveChildren = false;
+    } else {
+      // Ensure investigation notes are interactive and selectable
+      drawing.eventMode = 'static';
+      drawing.interactiveChildren = true;
+      drawing.cursor = 'pointer';
+    }
+  });
+}
+
+/**
+ * Activates Investigation Board mode - filters interactions to only investigation board notes
+ */
+function activateInvestigationBoardMode() {
+  if (investigationBoardModeActive) return;
+  if (!canvas.drawings) {
+    console.error("Investigation Board: drawings layer not available");
+    return;
+  }
+
+  console.log("Investigation Board: Activating mode...");
+  investigationBoardModeActive = true;
+
+  // Store original double-click handler only
+  originalDrawingMethods._onClickLeft2 = canvas.drawings._onClickLeft2;
+
+  // Override double-click handler to open CustomDrawingSheet
+  canvas.drawings._onClickLeft2 = async function(event) {
+    const controlled = this.controlled[0];
+    if (controlled?.document.flags[MODULE_ID]) {
+      // Open custom sheet instead of default drawing config
+      event.stopPropagation();
+      controlled.document.sheet.render(true);
+      return;
+    }
+    // Fallback to original behavior
+    return originalDrawingMethods._onClickLeft2?.call(this, event);
+  };
+
+  // Filter visible placeables using helper function
+  refreshDrawingsInteractivity();
+
+  // Add CSS class for visual styling
+  document.body.classList.add("investigation-board-mode");
+
+  console.log("Investigation Board: Mode ACTIVE");
+}
+
+/**
+ * Deactivates Investigation Board mode - restores normal drawing interactions
+ */
+function deactivateInvestigationBoardMode() {
+  if (!investigationBoardModeActive) return;
+
+  console.log("Investigation Board: Deactivating mode...");
+  investigationBoardModeActive = false;
+
+  // Deactivate Connect Mode if active
+  if (connectModeActive) {
+    deactivateConnectMode();
+
+    // Update button state
+    const drawingsControl = ui.controls?.controls?.drawings;
+    if (drawingsControl?.tools?.connectMode) {
+      drawingsControl.tools.connectMode.active = false;
+    }
+  }
+
+  // Restore original methods
+  if (canvas.drawings) {
+    canvas.drawings._onClickLeft2 = originalDrawingMethods._onClickLeft2;
+
+    // Restore default interactivity to all drawings
+    canvas.drawings.placeables.forEach(drawing => {
+      drawing.eventMode = 'auto';
+      drawing.interactiveChildren = true;
+      drawing.cursor = null;
+    });
+  }
+
+  // Remove CSS class
+  document.body.classList.remove("investigation-board-mode");
+
+  console.log("Investigation Board: Mode INACTIVE");
+}
 
 
 Hooks.on("getSceneControlButtons", (controls) => {
-  const journalControls = controls.notes;
-  if (!journalControls) return;
+  // Add Investigation Board tools to the existing drawings control
+  if (controls.drawings && controls.drawings.tools) {
+    // Add a separator for visual grouping (optional)
+    controls.drawings.tools.createStickyNote = {
+      name: "createStickyNote",
+      title: "Create Sticky Note",
+      icon: "fas fa-sticky-note",
+      onChange: () => createNote("sticky"),
+      button: true
+    };
 
-  // v13: tools is now an object/record, not an array
-  // v13: onClick is deprecated, use onChange instead
-  journalControls.tools.createStickyNote = {
-    name: "createStickyNote",
-    title: "Create Sticky Note",
-    icon: "fas fa-sticky-note",
-    onChange: () => createNote("sticky"),
-    button: true
-  };
+    controls.drawings.tools.createPhotoNote = {
+      name: "createPhotoNote",
+      title: "Create Photo Note",
+      icon: "fa-solid fa-camera-polaroid",
+      onChange: () => createNote("photo"),
+      button: true
+    };
 
-  journalControls.tools.createPhotoNote = {
-    name: "createPhotoNote",
-    title: "Create Photo Note",
-    icon: "fa-solid fa-camera-polaroid",
-    onChange: () => createNote("photo"),
-    button: true
-  };
+    controls.drawings.tools.createIndexCard = {
+      name: "createIndexCard",
+      title: "Create Index Card",
+      icon: "fa-regular fa-subtitles",
+      onChange: () => createNote("index"),
+      button: true
+    };
 
-  journalControls.tools.createIndexCard = {
-    name: "createIndexCard",
-    title: "Create Index Card",
-    icon: "fa-regular fa-subtitles",
-    onChange: () => createNote("index"),
-    button: true
-  };
+    controls.drawings.tools.connectMode = {
+      name: "connectMode",
+      title: "Connect Mode (1: Click a note. 2: Click another to connected them. ESC to exit connect mode)",
+      icon: "fas fa-link",
+      toggle: true,
+      active: false,
+      onChange: (active) => {
+        // Toggle the connect mode state based on the active parameter
+        if (active) {
+          activateConnectMode();
+        } else {
+          deactivateConnectMode();
+        }
+      }
+    };
+  }
+});
 
-  journalControls.tools.connectMode = {
-    name: "connectMode",
-    title: "Connect Mode (Click two notes to connect)",
-    icon: "fas fa-link",
-    toggle: true,
-    active: false,
-    onChange: (active) => {
-      if (active) {
-        activateConnectMode();
-      } else {
-        deactivateConnectMode();
+// Hook to handle Investigation Board mode activation/deactivation
+Hooks.on("renderSceneControls", (controls, html) => {
+  const activeControl = controls.control?.name;
+  const activeTool = controls.control?.activeTool;
+
+  if (activeControl === "drawings") {
+    activateInvestigationBoardMode();
+
+    // Deactivate connect mode if a different tool is selected
+    if (activeTool !== "connectMode" && connectModeActive) {
+      // Manually deactivate and update button state
+      deactivateConnectMode();
+      const drawingsControl = ui.controls?.controls?.drawings;
+      if (drawingsControl?.tools?.connectMode) {
+        drawingsControl.tools.connectMode.active = false;
       }
     }
-  };
+  } else if (investigationBoardModeActive) {
+    deactivateInvestigationBoardMode();
+  }
 });
+
+// HUD disabled - double-click to edit notes instead
+// Hooks.on("controlDrawing", (drawing, controlled) => {
+//   if (!investigationBoardModeActive) return;
+//   const isInvestigationNote = drawing.document.flags[MODULE_ID];
+//   if (!isInvestigationNote) return;
+//   if (controlled) {
+//     if (!investigationBoardHUD) {
+//       investigationBoardHUD = new InvestigationBoardHUD();
+//     }
+//     investigationBoardHUD.bind(drawing);
+//     investigationBoardHUD.render(true);
+//   } else if (investigationBoardHUD?.object === drawing) {
+//     investigationBoardHUD.clear();
+//   }
+// });
 
 Hooks.once("init", () => {
   registerSettings();
@@ -941,20 +1132,34 @@ Hooks.once("init", () => {
   // ESC key handler to exit connect mode
   document.addEventListener("keydown", (event) => {
     if (event.key === "Escape" && connectModeActive) {
-      // Deactivate connect mode
+      // Deactivate connect mode and update button state
       deactivateConnectMode();
 
-      // Toggle off the button in the toolbar
-      const connectModeButton = ui.controls?.controls?.find(c => c.name === "notes")
-        ?.tools?.find(t => t.name === "connectMode");
-      if (connectModeButton) {
-        connectModeButton.active = false;
+      const drawingsControl = ui.controls?.controls?.drawings;
+      if (drawingsControl?.tools?.connectMode) {
+        drawingsControl.tools.connectMode.active = false;
         ui.controls.render();
       }
     }
   });
 
   console.log("Investigation Board module initialized.");
+});
+
+// Hook to ensure newly created notes are interactive in Investigation Board mode
+Hooks.on("createDrawing", (drawing, options, userId) => {
+  // Check if this is an investigation board note
+  const noteData = drawing.flags[MODULE_ID];
+  if (!noteData) return;
+
+  // If we're in Investigation Board mode, refresh interactivity after the drawing is rendered
+  if (investigationBoardModeActive) {
+    // Wait for the drawing to be fully rendered on canvas
+    setTimeout(() => {
+      refreshDrawingsInteractivity();
+      console.log("Investigation Board: Refreshed interactivity for new note", drawing.id);
+    }, 300);
+  }
 });
 
 // Hook to redraw lines when notes move
@@ -967,6 +1172,16 @@ Hooks.on("updateDrawing", (drawing, changes, options, userId) => {
   if (changes.x !== undefined || changes.y !== undefined) {
     drawAllConnectionLines();
   }
+});
+
+// Hook to redraw lines when notes are deleted
+Hooks.on("deleteDrawing", (drawing, options, userId) => {
+  // Check if this is an investigation board note
+  const noteData = drawing.flags[MODULE_ID];
+  if (!noteData) return;
+
+  // Redraw all connection lines to remove orphaned connections
+  drawAllConnectionLines();
 });
 
 // Hook to deactivate connect mode on scene change and initialize connection lines
@@ -991,13 +1206,18 @@ Hooks.on("canvasReady", () => {
   if (connectModeActive) {
     deactivateConnectMode();
 
-    // Toggle off the button in the toolbar
-    const connectModeButton = ui.controls?.controls?.find(c => c.name === "notes")
-      ?.tools?.find(t => t.name === "connectMode");
-    if (connectModeButton) {
-      connectModeButton.active = false;
-      ui.controls.render();
+    // Update button state
+    const drawingsControl = ui.controls?.controls?.drawings;
+    if (drawingsControl?.tools?.connectMode) {
+      drawingsControl.tools.connectMode.active = false;
     }
+  }
+
+  // Reapply Investigation Board mode if it was active before canvas recreation
+  if (investigationBoardModeActive) {
+    console.log("Investigation Board: Canvas recreated, reapplying mode...");
+    deactivateInvestigationBoardMode();
+    activateInvestigationBoardMode();
   }
 
   // Draw all connection lines and pins after a short delay to ensure all drawings are loaded

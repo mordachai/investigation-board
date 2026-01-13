@@ -68,7 +68,7 @@ export const registerSettings = function() {
       scope: "world",
       config: true,
       type: Number,
-      default: 3,
+      default: 6,
       onChange: () => refreshAllDrawings()
     });
 

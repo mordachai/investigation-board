@@ -134,10 +134,97 @@
 } */
 
 /* Connect Mode Cursor Styles */
+body.connect-mode-active {
+  cursor: crosshair !important;
+}
+
+body.connect-mode-active canvas {
+  cursor: crosshair !important;
+}
+
+body.connect-mode-active #board {
+  cursor: crosshair !important;
+}
+
 body.connect-mode-active .drawing {
   cursor: crosshair !important;
 }
 
-body.connect-mode-active .drawing:hover {
-  cursor: pointer !important;
+body.connect-mode-active .drawing[data-investigation-note="true"]:hover {
+  cursor: copy !important;
+}
+
+/* ========================= */
+/* Investigation Board Mode  */
+/* ========================= */
+
+/* Highlight investigation notes when in Investigation Board mode */
+body.investigation-board-mode .drawing[data-investigation-note="true"] {
+  filter: drop-shadow(0 0 5px rgba(255, 215, 0, 0.5));
+}
+
+/* Dim non-investigation drawings when in Investigation Board mode */
+body.investigation-board-mode .drawing:not([data-investigation-note="true"]) {
+  opacity: 0.3;
+  pointer-events: none;
+}
+
+/* ========================= */
+/* Investigation Board HUD   */
+/* ========================= */
+
+.investigation-board-hud {
+  background: rgba(0, 0, 0, 0.9);
+  border: 2px solid #FFD700;
+  border-radius: 5px;
+  padding: 10px;
+  box-shadow: 0 0 15px rgba(0, 0, 0, 0.7);
+  min-width: 200px;
+}
+
+.investigation-board-hud .hud-header {
+  text-align: center;
+  color: #FFD700;
+  font-weight: bold;
+  margin-bottom: 8px;
+  text-transform: uppercase;
+  font-size: 12px;
+}
+
+.investigation-board-hud .hud-body {
+  margin-bottom: 8px;
+}
+
+.investigation-board-hud textarea {
+  width: 100%;
+  background: rgba(255, 255, 255, 0.95);
+  border: 1px solid #ccc;
+  padding: 5px;
+  font-family: inherit;
+  font-size: 12px;
+  resize: vertical;
+  box-sizing: border-box;
+}
+
+.investigation-board-hud .hud-controls {
+  display: flex;
+  gap: 5px;
+  justify-content: space-around;
+  margin-top: 10px;
+}
+
+.investigation-board-hud .control-icon {
+  background: transparent;
+  border: 1px solid #FFD700;
+  color: #FFD700;
+  padding: 5px 10px;
+  cursor: pointer;
+  transition: all 0.2s;
+  flex: 1;
+  text-align: center;
+}
+
+.investigation-board-hud .control-icon:hover {
+  background: #FFD700;
+  color: #000;
 }

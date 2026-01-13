@@ -1,0 +1,31 @@
+<div class="investigation-board-hud-content">
+  <div class="hud-header">
+    <span class="note-type">{{noteType}}</span>
+  </div>
+
+  {{#if canEdit}}
+  <div class="hud-body">
+    <textarea name="quickText" rows="3" placeholder="Quick edit...">{{text}}</textarea>
+  </div>
+
+  <div class="hud-controls">
+    <button class="control-icon edit-note" title="Open Full Editor">
+      <i class="fas fa-edit"></i>
+    </button>
+
+    {{#if hasConnections}}
+    <button class="control-icon remove-connections" title="Manage Connections">
+      <i class="fas fa-unlink"></i>
+    </button>
+    {{/if}}
+
+    <button class="control-icon delete-note" title="Delete Note">
+      <i class="fas fa-trash"></i>
+    </button>
+  </div>
+  {{else}}
+  <div class="hud-body">
+    <p>No edit permissions</p>
+  </div>
+  {{/if}}
+</div>
