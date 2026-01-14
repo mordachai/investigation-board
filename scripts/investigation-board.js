@@ -2054,6 +2054,13 @@ Hooks.on("createDrawing", (drawing, options, userId) => {
   const noteData = drawing.flags[MODULE_ID];
   if (!noteData) return;
 
+  // If this is the user who created the note, open the edit dialog
+  if (userId === game.user.id) {
+    setTimeout(() => {
+      drawing.sheet.render(true);
+    }, 150);
+  }
+
   // If we're in Investigation Board mode, refresh interactivity after the drawing is rendered
   if (investigationBoardModeActive) {
     // Wait for the drawing to be fully rendered on canvas
