@@ -58,6 +58,24 @@ function getDynamicCharacterLimits(noteType, currentFontSize) {
 }
 
 /**
+ * Helper to resolve actor display name based on characterNameKey setting.
+ */
+function getActorDisplayName(actor) {
+  const keyPath = game.settings.get(MODULE_ID, "characterNameKey") || "prototypeToken.name";
+
+  // Navigate the key path (e.g., "prototypeToken.name" or "system.alias")
+  const keys = keyPath.split(".");
+  let value = actor;
+  for (const key of keys) {
+    value = value?.[key];
+    if (value === undefined) break;
+  }
+
+  // Fallback to actor name if path doesn't resolve
+  return value || actor.name || "Unknown";
+}
+
+/**
  * Updates a drawing document, using socket communication if the user doesn't have permission.
  * This enables collaborative editing where any user can modify any investigation board note.
  * @param {string} drawingId - The ID of the drawing to update
@@ -1464,6 +1482,148 @@ async function createNote(noteType) {
   }
 }
 
+/**
+ * Creates a Photo Note from an Actor document.
+ * @param {Actor} actor - The Actor document to use
+ * @param {boolean} isUnknown - Whether to use "????" as the name
+ */
+async function createPhotoNoteFromActor(actor, isUnknown = false) {
+  console.log("Investigation Board: Creating photo note from actor", actor.name, "isUnknown:", isUnknown);
+  const scene = canvas.scene;
+  if (!scene) {
+    ui.notifications.error("Cannot create note: No active scene.");
+    return;
+  }
+
+  const photoW = game.settings.get(MODULE_ID, "photoNoteWidth") || 225;
+  const height = Math.round(photoW / (225 / 290));
+
+  const dims = canvas.dimensions;
+  const x = dims.width / 2;
+  const y = dims.height / 2;
+
+  const displayName = isUnknown ? "????" : getActorDisplayName(actor);
+  const imagePath = actor.img || "modules/investigation-board/assets/placeholder.webp";
+
+  const boardMode = game.settings.get(MODULE_ID, "boardMode");
+  const extraFlags = { image: imagePath };
+
+  if (boardMode === "futuristic") {
+    extraFlags.identityName = displayName;
+  }
+
+  console.log("Investigation Board: Creating drawing document with flags:", {
+    type: "photo",
+    text: displayName,
+    ...extraFlags
+  });
+
+  const created = await canvas.scene.createEmbeddedDocuments("Drawing", [{
+    type: "r",
+    author: game.user.id,
+    x, y,
+    shape: { width: photoW, height },
+    fillColor: "#ffffff",
+    fillAlpha: 1,
+    strokeColor: "#000000",
+    strokeWidth: 0,
+    strokeAlpha: 0,
+    locked: false,
+    flags: {
+      [MODULE_ID]: {
+        type: "photo",
+        text: displayName,
+        ...extraFlags
+      },
+      core: { sheetClass: "investigation-board.CustomDrawingSheet" }
+    },
+    ownership: { default: 3 }
+  }]);
+
+  console.log("Investigation Board: Drawing created:", created?.[0]?.id);
+
+  // Handle interactivity in Investigation Board mode
+  if (investigationBoardModeActive && created?.[0]) {
+    setTimeout(() => {
+      const newDrawing = canvas.drawings.get(created[0].id);
+      if (newDrawing) {
+        newDrawing.eventMode = 'auto';
+        newDrawing.interactiveChildren = true;
+      }
+    }, 250);
+  }
+}
+
+/**
+ * Creates a Photo Note from a Scene document.
+ * @param {Scene} targetScene - The Scene document to use
+ */
+async function createPhotoNoteFromScene(targetScene) {
+  console.log("Investigation Board: Creating photo note from scene", targetScene.name);
+  const scene = canvas.scene;
+  if (!scene) {
+    ui.notifications.error("Cannot create note: No active scene.");
+    return;
+  }
+
+  const photoW = game.settings.get(MODULE_ID, "photoNoteWidth") || 225;
+  const height = Math.round(photoW / (225 / 290));
+
+  const dims = canvas.dimensions;
+  const x = dims.width / 2;
+  const y = dims.height / 2;
+
+  const displayName = targetScene.navName || targetScene.name || "Unknown Location";
+  const imagePath = targetScene.background?.src || "modules/investigation-board/assets/placeholder.webp";
+
+  const boardMode = game.settings.get(MODULE_ID, "boardMode");
+  const extraFlags = { image: imagePath };
+
+  if (boardMode === "futuristic") {
+    extraFlags.identityName = displayName;
+  }
+
+  console.log("Investigation Board: Creating drawing document with flags:", {
+    type: "photo",
+    text: displayName,
+    ...extraFlags
+  });
+
+  const created = await canvas.scene.createEmbeddedDocuments("Drawing", [{
+    type: "r",
+    author: game.user.id,
+    x, y,
+    shape: { width: photoW, height },
+    fillColor: "#ffffff",
+    fillAlpha: 1,
+    strokeColor: "#000000",
+    strokeWidth: 0,
+    strokeAlpha: 0,
+    locked: false,
+    flags: {
+      [MODULE_ID]: {
+        type: "photo",
+        text: displayName,
+        ...extraFlags
+      },
+      core: { sheetClass: "investigation-board.CustomDrawingSheet" }
+    },
+    ownership: { default: 3 }
+  }]);
+
+  console.log("Investigation Board: Drawing created:", created?.[0]?.id);
+
+  if (investigationBoardModeActive && created?.[0]) {
+    setTimeout(() => {
+      const newDrawing = canvas.drawings.get(created[0].id);
+      if (newDrawing) {
+        newDrawing.eventMode = 'auto';
+        newDrawing.interactiveChildren = true;
+      }
+    }, 250);
+  }
+}
+
 // Mouse move handler for connection preview
 function onMouseMovePreview(event) {
   if (!pinConnectionFirstNote || !connectionPreviewLine) {
@@ -1921,6 +2081,73 @@ Hooks.on("deleteDrawing", (drawing, options, userId) => {
 
   // Redraw all connection lines to remove orphaned connections
   drawAllConnectionLines();
+});
+
+// Context menu hook for Actor directory
+Hooks.on("getActorContextOptions", (html, entryOptions) => {
+  console.log("Investigation Board: Actor context menu hook triggered");
+  entryOptions.push(
+    {
+      name: "Photo Note from Actor",
+      icon: '<i class="fa-solid fa-camera-polaroid"></i>',
+      callback: async (li) => {
+        console.log("Investigation Board: Actor context menu callback triggered", li);
+        // Handle both native HTMLElement and jQuery objects, and check both documentId and entryId
+        const actorId = li.dataset?.documentId || 
+                        li.getAttribute?.("data-document-id") || 
+                        li.dataset?.entryId || 
+                        li.getAttribute?.("data-entry-id") ||
+                        (typeof li.data === "function" ? (li.data("documentId") || li.data("entryId")) : null);
+        
+        console.log("Investigation Board: Resolved actorId:", actorId);
+        const actor = game.actors.get(actorId);
+        if (actor) await createPhotoNoteFromActor(actor, false);
+        else console.error("Investigation Board: Actor not found for ID:", actorId);
+      },
+      condition: () => game.user.isGM
+    },
+    {
+      name: "Unknown Photo Note from Actor",
+      icon: '<i class="fa-solid fa-camera-polaroid"></i>',
+      callback: async (li) => {
+        console.log("Investigation Board: Unknown Actor context menu callback triggered", li);
+        const actorId = li.dataset?.documentId || 
+                        li.getAttribute?.("data-document-id") || 
+                        li.dataset?.entryId || 
+                        li.getAttribute?.("data-entry-id") ||
+                        (typeof li.data === "function" ? (li.data("documentId") || li.data("entryId")) : null);
+        
+        console.log("Investigation Board: Resolved actorId:", actorId);
+        const actor = game.actors.get(actorId);
+        if (actor) await createPhotoNoteFromActor(actor, true);
+        else console.error("Investigation Board: Actor not found for ID:", actorId);
+      },
+      condition: () => game.user.isGM
+    }
+  );
+});
+
+// Context menu hook for Scene directory
+Hooks.on("getSceneDirectoryEntryContext", (html, entryOptions) => {
+  console.log("Investigation Board: Scene context menu hook triggered");
+  entryOptions.push({
+    name: "Photo Note from Scene",
+    icon: '<i class="fa-solid fa-camera-polaroid"></i>',
+    callback: async (li) => {
+      console.log("Investigation Board: Scene context menu callback triggered", li);
+      const sceneId = li.dataset?.documentId || 
+                      li.getAttribute?.("data-document-id") || 
+                      li.dataset?.entryId || 
+                      li.getAttribute?.("data-entry-id") ||
+                      (typeof li.data === "function" ? (li.data("documentId") || li.data("entryId")) : null);
+      
+      console.log("Investigation Board: Resolved sceneId:", sceneId);
+      const scene = game.scenes.get(sceneId);
+      if (scene) await createPhotoNoteFromScene(scene);
+      else console.error("Investigation Board: Scene not found for ID:", sceneId);
+    },
+    condition: () => game.user.isGM
+  });
 });
 
 // Hook to deactivate connect mode on scene change and initialize connection lines
