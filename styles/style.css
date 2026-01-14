@@ -752,6 +752,59 @@ body.investigation-board-mode .drawing:not([data-investigation-note="true"]) {
   padding: 10px;
 }
 
+.cassette-wrapper {
+  position: relative;
+  display: inline-block;
+}
+
+.cassette-image {
+  width: 400px !important;
+  max-width: 100%;
+  height: auto !important;
+  box-shadow: 0 10px 25px rgba(0,0,0,0.5) !important;
+  border-radius: 10px;
+  position: relative;
+  z-index: 1;
+}
+
+.cassette-reels {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+  z-index: 2;
+  display: none; /* Only show when playing */
+}
+
+.cassette-wrapper.playing .cassette-reels {
+  display: block;
+}
+
+.reel {
+  position: absolute;
+  width: 50px;
+  height: 50px;
+  border: 4px dashed rgba(255, 255, 255, 0.4);
+  border-radius: 50%;
+  top: 41%;
+  animation: spin 3s linear infinite;
+}
+
+.reel.left {
+  left: 31%;
+}
+
+.reel.right {
+  right: 31%;
+}
+
+@keyframes spin {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+
 .media-interface {
   width: 100%;
   display: flex;

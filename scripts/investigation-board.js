@@ -1000,8 +1000,8 @@ class CustomDrawing extends Drawing {
 
     // MEDIA NOTE LAYOUT (Cassette tape)
     if (isMedia) {
-      const drawingWidth = this.document.shape.width || 180;
-      const drawingHeight = this.document.shape.height || 117;
+      const drawingWidth = this.document.shape.width || 400;
+      const drawingHeight = this.document.shape.height || Math.round(drawingWidth * 0.74);
 
       // No background sprite for media (we use photoImageSprite for the cassette)
       if (this.bgSprite) {
@@ -1064,6 +1064,7 @@ class CustomDrawing extends Drawing {
             this.pinSprite.texture = texture;
             this.pinSprite.width = 40;
             this.pinSprite.height = 40;
+            // Center horizontally based on the actual drawing width
             this.pinSprite.position.set(drawingWidth / 2 - 20, 3);
           }
         } catch (err) {
@@ -1572,6 +1573,15 @@ class CustomDrawing extends Drawing {
       };
     }
 
+    // Media notes (cassettes) center horizontally based on actual width
+    if (noteData.type === "media") {
+      const width = this.document.shape.width || 400;
+      return {
+        x: this.document.x + width / 2,
+        y: this.document.y + 23
+      };
+    }
+
     const isPhoto = noteData.type === "photo";
     const isIndex = noteData.type === "index";
 
@@ -1909,7 +1919,7 @@ async function createNote(noteType) {
   const indexW = game.settings.get(MODULE_ID, "indexNoteWidth") || 600;
   const handoutW = game.settings.get(MODULE_ID, "handoutNoteWidth") || 400;
   const handoutH = game.settings.get(MODULE_ID, "handoutNoteHeight") || 400;
-  const mediaW = 180;
+  const mediaW = 400;
 
   const width = noteType === "photo" ? photoW
                 : noteType === "index" ? indexW
@@ -1919,7 +1929,7 @@ async function createNote(noteType) {
   const height = noteType === "photo" ? Math.round(photoW / (225 / 290))
                  : noteType === "index" ? Math.round(indexW / (600 / 400))
                  : noteType === "handout" ? handoutH
-                 : noteType === "media" ? Math.round(mediaW * 0.65)
+                 : noteType === "media" ? Math.round(mediaW * 0.74)
                  : stickyW;
 
   const dims = canvas.dimensions;
@@ -2825,8 +2835,8 @@ async function createMediaNoteFromSound(sound) {
     return;
   }
 
-  const mediaW = 180;
-  const height = Math.round(mediaW * 0.65);
+  const mediaW = 400;
+  const height = Math.round(mediaW * 0.74);
 
   const dims = canvas.dimensions;
   const x = dims.width / 2;
