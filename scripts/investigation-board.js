@@ -146,6 +146,21 @@ class CustomDrawingSheet extends DrawingConfig {
     super(...args);
   }
 
+  /**
+   * Override _canRender to allow all users to open this sheet for investigation board notes.
+   * This bypasses Foundry's default permission check.
+   */
+  _canRender(options) {
+    // Check if this is an investigation board note
+    const noteData = this.document.flags?.[MODULE_ID];
+    if (noteData?.type) {
+      // Allow all users to render the sheet for investigation board notes
+      return true;
+    }
+    // Fall back to default behavior
+    return super._canRender(options);
+  }
+
   static PARTS = {
     form: {
       template: "modules/investigation-board/templates/drawing-sheet.html"
@@ -484,6 +499,21 @@ class CustomDrawing extends Drawing {
     }
     // Fall back to default behavior for regular drawings
     return super._canDrag(user, event);
+  }
+
+  /**
+   * Override _canView to allow all users to view/edit investigation board notes.
+   * This enables opening the edit dialog regardless of who created the note.
+   */
+  _canView(user, event) {
+    // Check if this is an investigation board note
+    const noteData = this.document.flags?.[MODULE_ID];
+    if (noteData?.type) {
+      // Allow all users to view investigation board notes
+      return true;
+    }
+    // Fall back to default behavior for regular drawings
+    return super._canView?.(user, event) ?? true;
   }
 
   // Ensure sprites are created when the drawing is first rendered.
@@ -1572,11 +1602,22 @@ function activateInvestigationBoardMode() {
 
   // Override double-click handler to open CustomDrawingSheet
   canvas.drawings._onClickLeft2 = async function(event) {
-    const controlled = this.controlled[0];
-    if (controlled?.document.flags[MODULE_ID]) {
+    // First check controlled drawings
+    let drawing = this.controlled[0];
+
+    // If no controlled drawing, try to find from event target
+    if (!drawing) {
+      const interactionData = event.interactionData;
+      if (interactionData?.object) {
+        drawing = interactionData.object;
+      }
+    }
+
+    // Check if it's an investigation board note
+    if (drawing?.document?.flags?.[MODULE_ID]) {
       // Open custom sheet instead of default drawing config
       event.stopPropagation();
-      controlled.document.sheet.render(true);
+      drawing.document.sheet.render(true);
       return;
     }
     // Fallback to original behavior

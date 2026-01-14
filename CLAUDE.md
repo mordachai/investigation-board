@@ -7,11 +7,12 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 Investigation Board is a Foundry VTT v13 module that enables collaborative investigation gameplay by allowing all users to create, edit, and move sticky notes, photo notes, and index cards on the scene canvas. These notes are implemented as Foundry Drawing objects with custom rendering using PIXI.js sprites.
 
 **Key Features:**
-- Three note types (sticky notes, photo notes, index cards)
+- Four note types (sticky notes, photo notes, index cards, handout notes)
 - Visual connection lines between notes (yarn-like strings)
 - Collaborative editing with full permissions for all users
 - Multiple visual themes (modern, futuristic, custom)
 - Pins that render on top of connections
+- Resizable handout notes with auto-resize on image selection
 
 ## Architecture
 
@@ -27,16 +28,17 @@ Investigation Board is a Foundry VTT v13 module that enables collaborative inves
 
 ### Note Types and Rendering
 
-The module supports three note types stored in drawing flags:
+The module supports four note types stored in drawing flags:
 - **Sticky Notes** - Square notes with text content (200x200, default font size from global setting)
 - **Photo Notes** - Polaroid-style notes with an image and caption (225x290, default font size from global setting)
 - **Index Cards** - Wide rectangular notes for longer text (600x400, **default font size 9**)
+- **Handout Notes** - Image-only notes with transparent background (400x400 default, resizable via handles or auto-resize on image selection)
 
 Each note type has:
 - Different default dimensions and font sizes
-- Per-note font and font size customization (overrides global defaults)
-- Dynamic text truncation based on font size and note type
-- Configurable background images based on board mode (modern/futuristic/custom)
+- Per-note font and font size customization (overrides global defaults, not applicable to handouts)
+- Dynamic text truncation based on font size and note type (not applicable to handouts)
+- Configurable background images based on board mode (modern/futuristic/custom, handouts use transparent background)
 
 ### Connection Lines Feature
 
@@ -146,13 +148,13 @@ Three visual themes affect background sprites:
 Notes store data in `drawing.flags['investigation-board']`:
 ```javascript
 {
-  type: "sticky" | "photo" | "index",
-  text: "note content",
-  image: "path/to/image.webp",  // photo notes only
+  type: "sticky" | "photo" | "index" | "handout",
+  text: "note content",          // not used for handout notes
+  image: "path/to/image.webp",   // photo notes and handout notes only
   pinColor: "redPin.webp",       // assigned randomly or by setting
   identityName: "Character Name", // futuristic photo notes only
-  font: "Arial",                 // per-note font (optional, falls back to global setting)
-  fontSize: 16,                  // per-note font size (optional, index cards default to 9, others use global)
+  font: "Arial",                 // per-note font (optional, falls back to global setting, not used for handouts)
+  fontSize: 16,                  // per-note font size (optional, index cards default to 9, others use global, not used for handouts)
   connections: [                 // outgoing connections (optional)
     {
       targetId: "drawingId",
@@ -163,6 +165,12 @@ Notes store data in `drawing.flags['investigation-board']`:
 }
 ```
 
+**Handout-Specific Behavior:**
+- Handout notes have `fillAlpha: 0` (transparent background) to show only the image and pin
+- Dimensions stored in `drawing.shape.width` and `drawing.shape.height` (resizable)
+- Auto-resize feature: When image selected via FilePicker, dimensions update to match image (capped at 1000px height, 2000px width, maintaining aspect ratio)
+- Pin positioned at 5% from top edge (dynamic based on current height)
+
 ### Scene Control Integration
 
 The module integrates into Foundry's **Drawing Tools** control (left sidebar) via the `getSceneControlButtons` hook. All Investigation Board tools appear alongside default drawing tools.
@@ -171,8 +179,9 @@ The module integrates into Foundry's **Drawing Tools** control (left sidebar) vi
 - **Create Sticky Note** (fas fa-sticky-note) - Creates a 200x200 square note with global font settings
 - **Create Photo Note** (fa-solid fa-camera-polaroid) - Creates a 225x290 polaroid-style note with global font settings
 - **Create Index Card** (fa-regular fa-subtitles) - Creates a 600x400 wide note with **font size 9** by default
+- **Create Handout Note** (fas fa-file-image) - Creates a 400x400 transparent image-only note (resizable)
 
-All creation buttons call `createNote(noteType)` which creates a Drawing document at canvas center with default ownership level 3 (full permissions for all users). After creation, the Select tool is automatically activated so users can immediately move the note.
+All creation buttons call `createNote(noteType)` which creates a Drawing document at canvas center with default ownership level 3 (full permissions for all users) and sets `flags.core.sheetClass` to "investigation-board.CustomDrawingSheet". After creation, the Select tool is automatically activated so users can immediately move the note.
 
 **Important:** Investigation Board tools are integrated into the existing Drawing control, NOT a separate control. This allows users to access both Investigation Board notes and standard Foundry drawing tools from the same control panel.
 
@@ -183,10 +192,13 @@ All creation buttons call `createNote(noteType)` which creates a Drawing documen
 Double-clicking any investigation note opens the `CustomDrawingSheet` dialog with these features:
 
 **Content Editing:**
-- Text area for note content (with dynamic character limits based on font size)
-- Font selector (Rock Salt, Courier New, Times New Roman, Signika, Arial)
-- Font size input (8-48px, per-note setting that overrides global default)
-- Image path picker for photo notes (with Browse button using FilePicker)
+- Text area for note content (with dynamic character limits based on font size) - **hidden for handout notes**
+- Font selector (Rock Salt, Courier New, Times New Roman, Signika, Arial) - **hidden for handout notes**
+- Font size input (8-48px, per-note setting that overrides global default) - **hidden for handout notes**
+- Image path picker for photo notes and handout notes (with Browse button using FilePicker)
+  - FilePicker starts at root directory (empty path) for easy access to world assets
+  - Image updates immediately when selected (no need to click Save first)
+  - For handouts: Auto-resizes drawing to match image dimensions (capped at 1000px height, 2000px width)
 - Identity Name field for futuristic photo notes
 
 **Connection Management:**
@@ -212,18 +224,24 @@ Double-clicking any investigation note opens the `CustomDrawingSheet` dialog wit
 ### PIXI.js Sprite Management
 
 `CustomDrawing._updateSprites()` rebuilds sprites on draw/refresh:
-1. Background sprite (note paper texture)
-2. Photo image sprite (for photo notes only, positioned with offsets)
+1. Background sprite (note paper texture) - **not rendered for handout notes**
+2. Photo image sprite (for photo notes and handout notes, positioned with offsets)
+   - For handouts: Scaled to fit drawing bounds while maintaining aspect ratio, centered within bounds
 3. Pin sprite (optional, positioned at top center, with click handler for connections)
-4. Text sprites (PIXI.Text with word wrapping and truncation, using per-note font/fontSize)
+   - For handouts: Positioned at 5% from top edge (dynamic based on current height)
+4. Text sprites (PIXI.Text with word wrapping and truncation, using per-note font/fontSize) - **hidden for handout notes**
 
 **Font Handling:**
 - Text rendering uses `noteData.font` and `noteData.fontSize` if set
 - Falls back to global settings if note-specific values not present
 - Index cards specifically default to fontSize 9 (not global setting)
 - Font and fontSize scale the text, which affects character truncation limits
+- Not applicable to handout notes (no text)
 
-**Important:** Futuristic photo notes use completely different sprite layout and positioning logic than other note types. Always check `mode === "futuristic"` early in `_updateSprites()`.
+**Important Rendering Order:**
+1. Check for handout type FIRST in `_updateSprites()` - handouts use completely different sprite layout (transparent background, image-only)
+2. Then check for futuristic photo notes - use different sprite layout than other note types
+3. All other note types use shared layout logic
 
 ### Text Truncation System
 
@@ -233,9 +251,47 @@ Dynamic character limits scale inversely with font size:
 - Longer text gets "..." appended when truncated
 - Different limits for each note type (sticky: ~90-250, photo: ~20-30, index: ~210-800 chars depending on font)
 
-### Permission Model
+### Permission Model & Collaborative Editing
 
 All notes are created with `"ownership": { default: 3 }` to allow all users to edit and move them. This is core to the collaborative investigation workflow.
+
+**Socket-Based Collaboration:**
+Since Foundry's default Drawing permission system restricts non-owners from modifying drawings, the module uses a socket-based approach to enable true collaborative editing:
+
+1. **module.json** - Must have `"socket": true` to enable socket communication
+2. **Permission Overrides in CustomDrawing class:**
+   - `_canControl(user, event)` - Returns `true` for all investigation board notes (allows selection)
+   - `_canDrag(user, event)` - Returns `true` for all investigation board notes (allows dragging)
+   - `_canView(user, event)` - Returns `true` for all investigation board notes (allows viewing)
+3. **Permission Override in CustomDrawingSheet class:**
+   - `_canRender(options)` - Returns `true` for investigation board notes (allows opening edit dialog)
+
+**Socket Communication Flow:**
+```
+Player Action → preUpdateDrawing Hook → Permission Check
+                                            ↓
+                              [Has Permission?]
+                                    ↓           ↓
+                                  YES          NO
+                                    ↓           ↓
+                            Direct Update   Socket Emit
+                                              ↓
+                                    GM Client Receives
+                                              ↓
+                                    GM Performs Update
+                                              ↓
+                                    updateDrawing Hook
+                                              ↓
+                                 All Clients Refresh Visuals
+```
+
+**Key Socket Components:**
+- `SOCKET_NAME` - `module.investigation-board` (socket channel identifier)
+- `collaborativeUpdate(drawingId, updateData)` - Helper function that routes updates through socket if user lacks permission
+- `handleSocketMessage(data)` - GM-side handler that processes socket requests
+- `preUpdateDrawing` hook - Intercepts updates from non-owners and routes through socket
+
+**Important:** The GM must be logged in for socket-based updates to work. The GM's client processes all socket requests from players.
 
 ### CSS Auto-Build
 
@@ -252,11 +308,24 @@ CSS files in `styles/` are automatically compiled by Foundry. Do not manually pr
 ## Foundry VTT Integration
 
 ### Hooks Used
-- `Hooks.once("init")` - Register settings, set `CONFIG.Drawing.objectClass`, register custom sheet, add ESC key handler for canceling connections
+- `Hooks.once("init")` - Register settings, set `CONFIG.Drawing.objectClass`, register custom sheet (with `makeDefault: false`), add ESC key handler for canceling connections
+- `Hooks.once("ready")` - Initialize socket listener for collaborative editing (`game.socket.on(SOCKET_NAME, handleSocketMessage)`)
 - `Hooks.on("getSceneControlButtons")` - Integrate Investigation Board tools into Drawings control
-- `Hooks.on("updateDrawing")` - Redraw connection lines and numbers when notes move (x/y changes)
+- `Hooks.on("preUpdateDrawing")` - **Collaborative editing interceptor:**
+  - Checks if current user initiated the update
+  - If user lacks permission, routes update through socket to GM
+  - Returns `false` to prevent direct update (socket handles it)
+  - Returns `true` for GM or owners to allow normal update
+- `Hooks.on("updateDrawing")` - Multiple responsibilities:
+  - Redraw connection lines and numbers when notes move (x/y changes)
+  - **Refresh visuals on ALL clients** when flags change (text, image, connections, etc.)
+  - **Auto-refresh handout sprites when dimensions mismatch** - Critical fix for resize handles
+    - Checks if handout sprite dimensions differ from document dimensions (tolerance: 5px)
+    - If mismatch detected, calls `placeable.refresh()` to update sprites
+    - This ensures resize handles work properly without requiring page refresh
 - `Hooks.on("canvasReady")` - Clean up containers (lines, preview, numbers, pins), clear connection state, initialize connection lines
 - `Hooks.on("createDrawing")` - Ensure new notes are interactive in Investigation Board mode
+- `Hooks.on("deleteDrawing")` - Redraw connection lines when notes are deleted (removes orphaned connections visually)
 
 ### API Usage
 - **Template Loading:** Use `foundry.applications.handlebars.loadTemplates()` (namespaced function), NOT the deprecated global `loadTemplates()`
@@ -269,23 +338,29 @@ CSS files in `styles/` are automatically compiled by Foundry. Do not manually pr
 DocumentSheetConfig.registerSheet(DrawingDocument, "investigation-board", CustomDrawingSheet, {
   label: "Note Drawing Sheet",
   types: ["base"],
-  makeDefault: false,
+  makeDefault: false,  // CRITICAL: Must be false to avoid affecting standard Foundry drawings
 });
 ```
 
-The custom sheet is assigned via `"flags.core.sheetClass": "investigation-board.CustomDrawingSheet"` when creating drawings.
+**Important:** `makeDefault: false` is critical - if set to `true`, ALL drawings (including standard Foundry drawing tools) will use the custom sheet, which breaks normal drawing functionality.
+
+The custom sheet is assigned explicitly via `"flags.core.sheetClass": "investigation-board.CustomDrawingSheet"` when creating Investigation Board notes through the four creation buttons. This ensures:
+- Investigation Board notes → Use CustomDrawingSheet
+- Standard Foundry drawings → Use default DrawingConfig sheet
 
 ## Settings
 
 World-level settings control:
 
 **Note Appearance:**
-- Note dimensions (width in pixels for each type)
-- Font family (Rock Salt, Courier New, Times New Roman, Signika, Arial) - **Default for new notes, can be overridden per-note**
-- Base font size (scales with note width) - **Default for new notes (except index cards use 9), can be overridden per-note**
+- Note dimensions (width in pixels for sticky/photo/index, width AND height for handouts)
+  - `handoutNoteWidth` (default: 400px) - Initial width for new handout notes
+  - `handoutNoteHeight` (default: 400px) - Initial height for new handout notes
+- Font family (Rock Salt, Courier New, Times New Roman, Signika, Arial) - **Default for new notes, can be overridden per-note, not applicable to handouts**
+- Base font size (scales with note width) - **Default for new notes (except index cards use 9), can be overridden per-note, not applicable to handouts**
 - Pin color (random, red, blue, yellow, green, none)
-- Board mode (modern, futuristic, custom)
-- Default text for new notes
+- Board mode (modern, futuristic, custom) - **handouts always use transparent background**
+- Default text for new notes (sticky, photo, index only)
 
 **Connection Lines:**
 - Connection Line Color - Hex color string (default: "#FF0000") - **Used as fallback, new connections use player's color**
@@ -338,7 +413,7 @@ investigation-board/
 
 ## Known Limitations
 
-- Notes need occasional manual refresh (select/deselect or page refresh) if updates from other users don't appear
+- **GM must be online** for collaborative editing to work (GM's client processes socket requests from players)
 - Only GM can assign images to photo notes by default (requires browser file permissions for players)
 - Deleting all drawings via the Drawing tools delete button will remove ALL notes and connections
 - Notes are Drawing objects, so they can only be edited/moved in drawing mode
@@ -353,7 +428,243 @@ Right-click context menus on Actors and Scenes include "Create Photo Note from..
 - **Scenes:** Navigation name or scene name
 - **Actors:** Value from `characterNameKey` setting path (default: `prototypeToken.name`)
 
+## Troubleshooting Common Issues
+
+### Issue: Resize Handles Don't Update Handout Visuals
+
+**Problem:** When using Foundry's resize handles to resize a handout note, the yellow selection outline shows the new size but the image sprite stays at the old size until page refresh or moving the drawing.
+
+**Root Cause:** Foundry's resize interaction updates the document dimensions but does NOT automatically call `refresh()` on the drawing placeable. During drag, continuous refresh calls happen (that's why it looks correct while dragging), but after release, only the document updates.
+
+**Solution:** Implemented in `updateDrawing` hook (investigation-board.js ~line 1710):
+```javascript
+// For handouts, check if sprite dimensions differ from document dimensions
+if (noteData.type === "handout") {
+  const placeable = canvas.drawings.get(drawing.id);
+  if (placeable && placeable.photoImageSprite) {
+    const docW = drawing.shape.width;
+    const docH = drawing.shape.height;
+    const spriteW = placeable.photoImageSprite.width || 0;
+    const spriteH = placeable.photoImageSprite.height || 0;
+
+    // Check if sprite dimensions don't match document (tolerance: 5px)
+    const tolerance = 5;
+    const widthMismatch = Math.abs(spriteW - docW) > tolerance;
+    const heightMismatch = Math.abs(spriteH - docH) > tolerance;
+
+    if (widthMismatch || heightMismatch) {
+      await placeable.refresh();  // Force sprite update
+    }
+  }
+}
+```
+
+This approach:
+- Detects when document dimensions change but sprites haven't updated
+- Forces refresh automatically without user intervention
+- Uses 5px tolerance to account for aspect ratio scaling differences
+- Works on EVERY updateDrawing event (not just shape changes) to catch all resize scenarios
+
+### Issue: Custom Sheet Applied to All Drawings
+
+**Problem:** All drawings (including standard Foundry drawing tools like rectangles, polygons, etc.) use the Investigation Board custom sheet instead of the default Foundry sheet.
+
+**Root Cause:** `makeDefault: true` in the sheet registration makes the custom sheet the default for ALL DrawingDocument instances.
+
+**Solution:** Set `makeDefault: false` in sheet registration (investigation-board.js ~line 1579):
+```javascript
+DocumentSheetConfig.registerSheet(DrawingDocument, "investigation-board", CustomDrawingSheet, {
+  label: "Note Drawing Sheet",
+  types: ["base"],
+  makeDefault: false,  // CRITICAL: Must be false
+});
+```
+
+Investigation Board notes explicitly set their sheet via `flags.core.sheetClass` when created (investigation-board.js ~line 1225):
+```javascript
+flags: {
+  [MODULE_ID]: { type: noteType, text: defaultText, ... },
+  core: { sheetClass: "investigation-board.CustomDrawingSheet" }
+}
+```
+
+This ensures:
+- Only Investigation Board notes (created via the 4 creation buttons) use CustomDrawingSheet
+- Standard Foundry drawings use default DrawingConfig sheet
+- Module doesn't interfere with other drawing functionality
+
+### Issue: Image Not Displaying After First Browse
+
+**Problem:** When creating a handout note and browsing for an image:
+1. First browse: Size updates but image stays as placeholder
+2. Second browse (selecting same image): Image finally displays
+
+**Root Cause:** The auto-resize logic in FilePicker callback was updating document dimensions but NOT saving the image path. Only the input field value was updated.
+
+**Solution:** Save both dimensions AND image path in single update (investigation-board.js ~line 213):
+```javascript
+// For handouts
+await this.document.update({
+  'shape.width': targetWidth,
+  'shape.height': targetHeight,
+  [`flags.${MODULE_ID}.image`]: path  // Save image path immediately
+});
+
+// For photo notes
+await this.document.update({
+  [`flags.${MODULE_ID}.image`]: path  // Save image path immediately
+});
+```
+
+This ensures:
+- Image displays immediately when selected
+- Auto-resize happens simultaneously with image save
+- No need to click Save button or browse twice
+- Works for both handouts (with auto-resize) and photo notes (without auto-resize)
+
+### Issue: FilePicker Starts in Module Folder
+
+**Problem:** When browsing for images, FilePicker opens in `modules/investigation-board/assets/` which is counter-intuitive since users typically store images in their world's data folder or other locations.
+
+**Root Cause:** FilePicker `current` parameter was hardcoded to module assets folder.
+
+**Solution:** Set FilePicker `current` parameter to empty string (investigation-board.js ~line 184):
+```javascript
+new FilePicker({
+  type: "image",
+  current: "",  // Start at root, not module folder
+  callback: async (path) => { ... }
+})
+```
+
+Benefits:
+- Opens at Foundry root directory
+- Easy access to world's data/assets folder
+- Users can navigate to any location they prefer
+- More intuitive UX for finding user-uploaded images
+
+### Issue: Players Cannot Edit/Move GM-Created Notes
+
+**Problem:** Players can see notes created by the GM but cannot select, move, edit, or connect them.
+
+**Root Cause:** Foundry's default Drawing permission system only allows the author (creator) to modify drawings.
+
+**Solution:** Implemented socket-based collaborative editing with permission overrides:
+
+1. **module.json** - Add `"socket": true`:
+```json
+{
+  "id": "investigation-board",
+  "socket": true,
+  ...
+}
+```
+
+2. **CustomDrawing class** - Add permission overrides:
+```javascript
+_canControl(user, event) {
+  const noteData = this.document.flags?.[MODULE_ID];
+  if (noteData?.type) return true;
+  return super._canControl(user, event);
+}
+
+_canDrag(user, event) {
+  const noteData = this.document.flags?.[MODULE_ID];
+  if (noteData?.type) return !this.document.locked;
+  return super._canDrag(user, event);
+}
+
+_canView(user, event) {
+  const noteData = this.document.flags?.[MODULE_ID];
+  if (noteData?.type) return true;
+  return super._canView?.(user, event) ?? true;
+}
+```
+
+3. **CustomDrawingSheet class** - Add render permission override:
+```javascript
+_canRender(options) {
+  const noteData = this.document.flags?.[MODULE_ID];
+  if (noteData?.type) return true;
+  return super._canRender(options);
+}
+```
+
+4. **preUpdateDrawing hook** - Intercept and route non-owner updates:
+```javascript
+Hooks.on("preUpdateDrawing", (drawing, changes, options, userId) => {
+  if (userId !== game.user.id) return true;
+  const noteData = drawing.flags?.[MODULE_ID];
+  if (!noteData?.type) return true;
+  if (game.user.isGM || drawing.testUserPermission(game.user, "OWNER")) return true;
+
+  // Route through socket
+  socket.emit(SOCKET_NAME, {
+    action: "updateDrawing",
+    sceneId: canvas.scene.id,
+    drawingId: drawing.id,
+    updateData: changes,
+    requestingUser: game.user.id
+  });
+  return false; // Prevent direct update
+});
+```
+
+5. **Socket handler** - GM processes requests:
+```javascript
+function handleSocketMessage(data) {
+  if (!game.user.isGM) return;
+  if (data.action === "updateDrawing") {
+    const scene = game.scenes.get(data.sceneId);
+    const drawing = scene?.drawings.get(data.drawingId);
+    if (drawing?.flags?.[MODULE_ID]) {
+      drawing.update(data.updateData);
+    }
+  }
+}
+```
+
+**Important:** GM must be logged in for this to work.
+
+### Development Tips
+
+**When Adding New Note Types:**
+1. Add to flag structure with appropriate fields
+2. Update `noteTypes` object in `CustomDrawingSheet.getData()`
+3. Add rendering logic in `CustomDrawing._updateSprites()` - check note type EARLY in function
+4. Update `_getPinPosition()` if pin positioning differs
+5. Update template conditionals in `drawing-sheet.html`
+6. Add creation button in `getSceneControlButtons` hook
+7. Add default dimensions in settings if needed
+8. Set `flags.core.sheetClass` in `createNote()` function
+
+**When Debugging Sprite Issues:**
+- Check if `_updateSprites()` is being called (add temp console.log)
+- Verify sprite properties are being set (width, height, position, texture)
+- Check if sprites have valid parent before setting properties
+- Remember: Setting sprite properties doesn't automatically trigger render
+- Use `placeable.refresh()` to force sprite rebuild
+
+**When Working with Resize:**
+- Foundry's resize handles update `drawing.shape.width/height`
+- Resize does NOT automatically call `refresh()`
+- Use `updateDrawing` hook to detect dimension changes
+- Check if sprites match document dimensions, force refresh if mismatch
+
 ## Recent Feature Updates
+
+### Collaborative Editing via Sockets (v3.0.1)
+- **True Multi-User Collaboration** - Any user can now edit, move, resize, and connect ANY note regardless of who created it
+- **Socket-Based Updates** - Player changes are routed through the GM's client when they lack direct permission
+- **Permission Overrides** - Custom `_canControl`, `_canDrag`, `_canView`, and `_canRender` methods bypass Foundry's default restrictions
+- **Real-Time Sync** - All clients automatically refresh visuals when notes are updated (text, connections, position, etc.)
+- **Seamless Experience** - Players interact with notes normally; socket routing is transparent
+
+**Technical Requirements:**
+- `module.json` must include `"socket": true`
+- GM must be logged in for player edits to work
+- `preUpdateDrawing` hook intercepts and routes non-owner updates
+- `updateDrawing` hook refreshes visuals on all clients
 
 ### Connection Creation Improvements
 - **Live Preview Line** - Yarn line follows cursor after clicking first pin, shows exact path before committing
@@ -379,3 +690,18 @@ Right-click context menus on Actors and Scenes include "Create Photo Note from..
 - **Flexbox Layout** - Connection list shows 4 items per row before wrapping
 - **Two-Column Controls** - Color picker and remove button side-by-side for each connection
 - **Integrated Tools** - All Investigation Board tools appear in Drawing control (not separate control)
+
+### Handout Note Feature (New Note Type)
+- **Image-Only Notes** - Display user-uploaded images without text, perfect for evidence photos, maps, documents
+- **Transparent Background** - Only image and pin visible, no note frame or background
+- **Auto-Resize on Image Selection** - Handouts automatically resize to match selected image dimensions
+  - Capped at 1000px height and 2000px width
+  - Maintains aspect ratio
+  - Immediate visual update when browsing for images
+- **Manual Resize Support** - Use Foundry's native resize handles to adjust dimensions freely
+  - Auto-refresh mechanism ensures visual updates without page reload
+  - Aspect ratio preserved when scaling image sprite
+- **Dynamic Pin Positioning** - Pin positioned at 5% from top edge, adjusts automatically with resize
+- **Default 400x400** - New handouts start as squares, easily customizable
+- **Full Connection Support** - Create connections from/to handouts just like other note types
+- **FilePicker Improvements** - Browse button opens at root directory for easy access to world assets
