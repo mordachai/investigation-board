@@ -612,3 +612,187 @@ body.investigation-board-mode .drawing:not([data-investigation-note="true"]) {
 .linked-object-container input {
   width: 100%;
 }
+
+/* ========================= */
+/* Note Previewer            */
+/* ========================= */
+
+.note-preview-app .window-content {
+  padding: 0;
+  overflow: hidden;
+  background: #fdfaf0; /* Slightly aged paper color */
+}
+
+.ib-note-preview {
+  display: flex;
+  flex-direction: column;
+  padding: 20px;
+  max-height: 85vh;
+  overflow-y: auto;
+  color: #222;
+}
+
+.preview-image-container {
+  width: 100%;
+  margin-bottom: 20px;
+  text-align: center;
+  position: relative;
+}
+
+.preview-image-container img {
+  max-width: 100%;
+  max-height: 60vh;
+  display: block;
+  margin: 0 auto;
+}
+
+/* Photo Frame Styles */
+.photo-frame-wrapper {
+  position: relative;
+  display: inline-block;
+  max-width: 100%;
+}
+
+.photo-frame {
+  display: block;
+  max-width: 100%;
+  height: auto;
+  border: none !important;
+  box-shadow: 0 4px 15px rgba(0,0,0,0.3) !important;
+}
+
+.photo-content {
+  position: absolute;
+  top: 15.1%;    /* heightOffset / 2 */
+  left: 6.66%;   /* widthOffset / 2 */
+  width: 86.66%; /* frameWidth / width */
+  height: 69.75%;/* frameHeight / height */
+  overflow: hidden;
+  background: #000;
+}
+
+.user-photo {
+  width: 100% !important;
+  height: 100% !important;
+  object-fit: cover;
+  object-position: top;
+  border: none !important;
+  box-shadow: none !important;
+}
+
+.photo-frame-text {
+  position: absolute;
+  bottom: 5%;
+  left: 10%;
+  right: 10%;
+  height: 12%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  font-size: 1.4em;
+  color: #111;
+  overflow: hidden;
+  line-height: 1.1;
+}
+
+/* Font variants for frame text */
+.photo-frame-text.rock-salt { font-family: 'Rock Salt', cursive; }
+.photo-frame-text.courier-new { font-family: 'Courier New', monospace; }
+.photo-frame-text.times-new-roman { font-family: 'Times New Roman', serif; }
+.photo-frame-text.signika { font-family: 'Signika', sans-serif; }
+.photo-frame-text.arial { font-family: 'Arial', sans-serif; }
+
+/* Futuristic mode overrides for preview */
+.futuristic-mode.photo-preview {
+  flex-direction: row;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  gap: 20px;
+}
+
+.futuristic-mode.photo-preview .preview-image-container {
+  flex: 0 0 300px;
+  margin-bottom: 0;
+}
+
+.futuristic-mode.photo-preview .preview-text-container {
+  flex: 1;
+  margin-bottom: 0;
+  height: 100%;
+}
+
+.futuristic-mode .photo-content {
+  top: 5%;
+  left: 5%;
+  width: 90%;
+  height: 90%;
+}
+
+.preview-identity-name {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  background: rgba(0, 0, 0, 0.7);
+  color: #00ffff;
+  padding: 8px;
+  font-family: "Courier New", monospace;
+  font-weight: bold;
+  text-align: center;
+  font-size: 1.1em;
+}
+
+.preview-text-container {
+  padding: 20px;
+  background: rgba(255, 255, 255, 0.5);
+  border-radius: 8px;
+  border: 1px solid rgba(0,0,0,0.1);
+  margin-bottom: 20px;
+}
+
+.preview-text {
+  line-height: 1.5;
+  white-space: pre-wrap;
+  word-wrap: break-word;
+}
+
+.preview-footer {
+  margin-top: 10px;
+  padding-top: 15px;
+  border-top: 1px solid #ccc;
+}
+
+.preview-link-label {
+  font-size: 12px;
+  font-weight: bold;
+  color: #666;
+  margin-bottom: 5px;
+}
+
+.preview-controls {
+  margin-top: 20px;
+  text-align: center;
+}
+
+.close-preview-btn {
+  padding: 10px 30px;
+  background: #3f51b5;
+  color: white;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+  font-weight: bold;
+}
+
+.close-preview-btn:hover {
+  background: #303f9f;
+}
+
+/* Font variants for preview */
+.preview-text-container.rock-salt { font-family: 'Rock Salt', cursive; }
+.preview-text-container.courier-new { font-family: 'Courier New', monospace; }
+.preview-text-container.times-new-roman { font-family: 'Times New Roman', serif; }
+.preview-text-container.signika { font-family: 'Signika', sans-serif; }
+.preview-text-container.arial { font-family: 'Arial', sans-serif; }
+

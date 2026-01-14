@@ -36,6 +36,8 @@ const DrawingConfig = foundry.applications.sheets.DrawingConfig;
 const DrawingDocument = foundry.documents.DrawingDocument;
 const DocumentSheetConfig = foundry.applications.apps.DocumentSheetConfig;
 const FilePicker = foundry.applications.apps.FilePicker.implementation;
+const ApplicationV2 = foundry.applications.api.ApplicationV2;
+const HandlebarsApplicationMixin = foundry.applications.api.HandlebarsApplicationMixin;
 
 function getBaseCharacterLimits() {
   return game.settings.get(MODULE_ID, "baseCharacterLimits") || {
@@ -387,7 +389,11 @@ class CustomDrawingSheet extends DrawingConfig {
             const doc = await fromUuid(finalUuid);
             console.log("Investigation Board: Resolved document", doc);
             if (doc) {
-              doc.sheet.render(true);
+              if (doc.testUserPermission(game.user, "LIMITED")) {
+                doc.sheet.render(true);
+              } else {
+                ui.notifications.warn(`You do not have permission to view ${doc.name}.`);
+              }
             } else {
               ui.notifications.warn(`Could not find document for ${finalUuid}`);
             }
@@ -590,6 +596,108 @@ class CustomDrawingSheet extends DrawingConfig {
 
 }
 
+/**
+ * Application for viewing notes in a larger format.
+ */
+class NotePreviewer extends HandlebarsApplicationMixin(ApplicationV2) {
+  constructor(document, options = {}) {
+    super(options);
+    this.document = document;
+  }
+
+  static DEFAULT_OPTIONS = {
+    tag: "div",
+    classes: ["note-preview-app"],
+    window: {
+      title: "Note Preview",
+      resizable: true,
+      minimizable: true,
+      icon: "fas fa-search-plus"
+    },
+    position: {
+      width: 600,
+      height: "auto"
+    }
+  };
+
+  static PARTS = {
+    content: {
+      template: "modules/investigation-board/templates/note-preview.html"
+    }
+  };
+
+  async _prepareContext(options) {
+    const noteData = this.document.flags[MODULE_ID];
+    const noteType = noteData?.type || "sticky";
+    
+    // Use the note's font or fall back to Rock Salt
+    const font = noteData?.font || "Rock Salt";
+    const fontClass = font.toLowerCase().replace(/\s+/g, '-');
+
+    // Determine the frame path for photo notes
+    let framePath = "";
+    const boardMode = game.settings.get(MODULE_ID, "boardMode");
+    if (noteType === "photo") {
+      if (boardMode === "futuristic") framePath = "modules/investigation-board/assets/futuristic_photoFrame.webp";
+      else if (boardMode === "custom") framePath = "modules/investigation-board/assets/custom_photoFrame.webp";
+      else framePath = "modules/investigation-board/assets/photoFrame.webp";
+    }
+
+    // Determine if we should show a separate text container
+    // We DON'T show it for handouts (no text) or for standard photo notes (text is on the frame)
+    const showSeparateText = noteType !== "handout" && !(noteType === "photo" && boardMode !== "futuristic");
+
+    return {
+      noteType: noteType,
+      text: noteData?.text || "",
+      image: noteData?.image || "",
+      framePath: framePath,
+      identityName: noteData?.identityName || "",
+      boardMode: boardMode,
+      fontClass: fontClass,
+      previewFontSize: (noteData?.fontSize || 15) * 1.5,
+      showSeparateText: showSeparateText,
+      linkedObject: noteData?.linkedObject || "",
+      enrichedLinkedObject: noteData?.linkedObject ? await TextEditor.enrichHTML(noteData.linkedObject, { async: true }) : ""
+    };
+  }
+
+  _onRender(context, options) {
+    super._onRender(context, options);
+    
+    const html = this.element;
+    
+    // Close button
+    html.querySelector(".close-preview-btn")?.addEventListener("click", () => this.close());
+
+    // Handle clicking on enriched links in preview
+    html.querySelectorAll(".preview-link a.content-link").forEach(link => {
+      link.addEventListener("click", async (ev) => {
+        ev.preventDefault();
+        const uuid = link.dataset.uuid || 
+                     link.getAttribute("data-uuid") || 
+                     link.dataset.id || 
+                     link.getAttribute("data-id");
+        
+        if (uuid) {
+          try {
+            const doc = await fromUuid(uuid);
+            if (doc) {
+              if (doc.testUserPermission(game.user, "LIMITED")) {
+                doc.sheet.render(true);
+              } else {
+                ui.notifications.warn(`You do not have permission to view ${doc.name}.`);
+              }
+            }
+          } catch (err) {
+            console.error("Investigation Board: Error opening linked document", err);
+          }
+        }
+      });
+    });
+  }
+}
+
 class CustomDrawing extends Drawing {
   constructor(...args) {
     super(...args);
@@ -645,6 +753,19 @@ class CustomDrawing extends Drawing {
     }
     // Fall back to default behavior for regular drawings
     return super._canView?.(user, event) ?? true;
+  }
+
+  /**
+   * Override double-click to open the larger preview instead of the edit sheet.
+   */
+  _onClickLeft2(event) {
+    const noteData = this.document.flags?.[MODULE_ID];
+    if (noteData?.type) {
+      // Open the detail view previewer
+      new NotePreviewer(this.document).render(true);
+      return;
+    }
+    return super._onClickLeft2(event);
   }
 
   /**
