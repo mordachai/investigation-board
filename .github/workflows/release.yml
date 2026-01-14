@@ -66,6 +66,7 @@ jobs:
             styles/ \
             templates/ \
             assets/ \
+            packs/ \
             LICENSE
 
           # Verify the zip was created
