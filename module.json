@@ -1,14 +1,14 @@
 {
   "id": "investigation-board",
   "title": "Investigation Board",
-  "description": "A Foundry VTT module that lets everyone create, edit, and move sticky and photo notes on the scene as collaborative investigation tools.",
-  "version": "3.0.1",
+  "description": "<p>A Foundry VTT module that lets everyone create, edit, and move sticky and photo notes on the scene as collaborative investigation tools.</p>",
+  "version": "3.0.2",
   "socket": true,
   "authors": [
     {
       "name": "Gus",
-      "url": "",
-      "email": ""
+      "discord": "gus4294",
+      "flags": {}
     }
   ],
   "compatibility": {
@@ -21,10 +21,34 @@
     "scripts/investigation-board.js"
   ],
   "styles": [
-    "styles/style.css"
+    {
+      "src": "styles/style.css"
+    }
   ],
-  "packs": [],
+  "packs": [
+    {
+      "name": "ib-scenes",
+      "label": "Investigation Board Scenes",
+      "path": "packs/ib-scenes",
+      "type": "Scene",
+      "ownership": {
+        "PLAYER": "OBSERVER",
+        "ASSISTANT": "OWNER"
+      }
+    }
+  ],
+  "packFolders": [
+    {
+      "name": "Investigation Board",
+      "sorting": "m",
+      "color": "#061f6a",
+      "packs": [
+        "ib-scenes"
+      ]
+    }
+  ],
   "url": "https://github.com/mordachai/investigation-board",
   "manifest": "https://github.com/mordachai/investigation-board/releases/latest/download/module.json",
-  "download": "https://github.com/mordachai/investigation-board/releases/latest/download/module.zip"
+  "download": "https://github.com/mordachai/investigation-board/releases/latest/download/module.zip",
+  "flags": {}
 }
