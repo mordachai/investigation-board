@@ -344,68 +344,6 @@ class CustomDrawingSheet extends DrawingConfig {
       });
     }
 
-    // Handle clicking on enriched links
-    this.element.querySelectorAll(".enriched-link a.content-link").forEach(link => {
-      link.addEventListener("click", async (ev) => {
-        ev.preventDefault();
-        ev.stopPropagation();
-
-        // Debug info
-        console.log("Investigation Board: Link clicked", link);
-        console.log("Investigation Board: Dataset", link.dataset);
-        console.log("Investigation Board: OuterHTML", link.outerHTML);
-
-        // Try to find an identifier in various possible attributes
-        let uuid = link.dataset.uuid || 
-                     link.getAttribute("data-uuid") || 
-                     link.dataset.id || 
-                     link.getAttribute("data-id") ||
-                     link.dataset.documentId ||
-                     link.dataset.entryId;
-        
-        // FALLBACK: If link attributes are missing (e.g. broken link), try to extract from the flag itself
-        if (!uuid) {
-          const flagValue = this.document.flags[MODULE_ID]?.linkedObject;
-          if (flagValue) {
-            const match = flagValue.match(/\[([^\]]+)\]/);
-            if (match) {
-              uuid = match[1];
-              console.log("Investigation Board: Extracted UUID from flag as fallback", uuid);
-            }
-          }
-        }
-        
-        console.log("Investigation Board: Detected identifier", uuid);
-
-        if (uuid) {
-          try {
-            // If it's not a full UUID (no dots), try to construct it from type
-            let finalUuid = uuid;
-            if (!uuid.includes(".") && link.dataset.type) {
-              finalUuid = `${link.dataset.type}.${uuid}`;
-              console.log("Investigation Board: Constructed UUID from type", finalUuid);
-            }
-
-            const doc = await fromUuid(finalUuid);
-            console.log("Investigation Board: Resolved document", doc);
-            if (doc) {
-              if (doc.testUserPermission(game.user, "LIMITED")) {
-                doc.sheet.render(true);
-              } else {
-                ui.notifications.warn(`You do not have permission to view ${doc.name}.`);
-              }
-            } else {
-              ui.notifications.warn(`Could not find document for ${finalUuid}`);
-            }
-          } catch (err) {
-            console.error("Investigation Board: Error opening linked document", err);
-          }
-        } else {
-          console.warn("Investigation Board: No UUID or ID found on clicked link");
-        }
-      });
-    });
-
     // Hook up file picker button
     const filePickerButton = this.element.querySelector(".file-picker-button");
     if (filePickerButton) {
@@ -674,6 +612,8 @@ class NotePreviewer extends HandlebarsApplicationMixin(ApplicationV2) {
     html.querySelectorAll(".preview-link a.content-link").forEach(link => {
       link.addEventListener("click", async (ev) => {
         ev.preventDefault();
+        ev.stopPropagation(); // Stop Foundry's global listener from also firing
+
         const uuid = link.dataset.uuid || 
                      link.getAttribute("data-uuid") || 
                      link.dataset.id || 
