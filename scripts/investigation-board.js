@@ -29,6 +29,7 @@ let connectionNumberOverlays = []; // Array of PIXI.Text objects showing connect
 // Socket for collaborative editing
 let socket = null;
 const SOCKET_NAME = `module.${MODULE_ID}`;
+let activeGlobalSounds = new Map(); // Track sounds played via socket
 
 // v13 namespaced imports
 const Drawing = foundry.canvas.placeables.Drawing;
@@ -126,11 +127,42 @@ async function collaborativeUpdate(drawingId, updateData, sceneId = null) {
 }
 
 /**
- * Handles incoming socket messages for collaborative updates.
- * Only GM clients process these requests.
+ * Handles incoming socket messages for collaborative updates and global audio.
  */
 function handleSocketMessage(data) {
-  // Only GM processes socket requests
+  // Global actions for all users
+  if (data.action === "playAudio") {
+    if (data.audioPath) {
+      console.log("Investigation Board: Playing global audio", data.audioPath);
+      (async () => {
+        const sound = await game.audio.play(data.audioPath, { volume: 0.8 });
+        if (sound) {
+          activeGlobalSounds.set(data.audioPath, sound);
+          // Clean up reference when sound ends
+          setTimeout(() => {
+            if (activeGlobalSounds.get(data.audioPath) === sound && !sound.playing) {
+              activeGlobalSounds.delete(data.audioPath);
+            }
+          }, sound.duration * 1000 + 500 || 5000);
+        }
+      })();
+    }
+    return;
+  }
+
+  if (data.action === "stopAudio") {
+    if (data.audioPath) {
+      const sound = activeGlobalSounds.get(data.audioPath);
+      if (sound) {
+        sound.stop();
+        activeGlobalSounds.delete(data.audioPath);
+        console.log("Investigation Board: Stopped global audio", data.audioPath);
+      }
+    }
+    return;
+  }
+
+  // Admin actions - only GM processes socket requests
   if (!game.user.isGM) return;
 
   if (data.action === "updateDrawing") {
@@ -163,6 +195,7 @@ function handleSocketMessage(data) {
 class CustomDrawingSheet extends DrawingConfig {
   constructor(...args) {
     super(...args);
+    this.previewSound = null;
   }
 
   /**
@@ -205,6 +238,7 @@ class CustomDrawingSheet extends DrawingConfig {
     context.noteType = customData.noteType;
     context.text = customData.text;
     context.image = customData.image;
+    context.audioPath = customData.audioPath;
     context.linkedObject = customData.linkedObject;
     context.identityName = customData.identityName;
     context.boardMode = customData.boardMode;
@@ -231,7 +265,7 @@ class CustomDrawingSheet extends DrawingConfig {
       if (targetDrawing) {
         const targetData = targetDrawing.document.flags[MODULE_ID];
         if (targetData) {
-          const typeLabels = { sticky: "Sticky Note", photo: "Photo Note", index: "Index Card", handout: "Handout" };
+          const typeLabels = { sticky: "Sticky Note", photo: "Photo Note", index: "Index Card", handout: "Handout", media: "Media Note" };
           targetLabel = typeLabels[targetData.type] || "Note";
         }
       } else {
@@ -255,6 +289,7 @@ class CustomDrawingSheet extends DrawingConfig {
       document: this.document,
       noteType: noteType,
       text: this.document.flags[MODULE_ID]?.text || "Default Text",
+      audioPath: this.document.flags[MODULE_ID]?.audioPath || "",
       linkedObject: this.document.flags[MODULE_ID]?.linkedObject || "",
       image: this.document.flags[MODULE_ID]?.image || (noteType === "handout" ? "modules/investigation-board/assets/newhandout.webp" : "modules/investigation-board/assets/placeholder.webp"),
       identityName: this.document.flags[MODULE_ID]?.identityName || "",
@@ -341,6 +376,66 @@ class CustomDrawingSheet extends DrawingConfig {
           [`flags.${MODULE_ID}.linkedObject`]: ""
         });
         this.render(true);
+      });
+    }
+
+    // Audio picker handling
+    const audioPickerButton = this.element.querySelector(".audio-picker-button");
+    if (audioPickerButton) {
+      audioPickerButton.addEventListener("click", (ev) => {
+        ev.preventDefault();
+        const input = this.element.querySelector("input[name='audioPath']");
+        new FilePicker({
+          type: "audio",
+          current: "",
+          callback: async (path) => {
+            input.value = path;
+            // Enable preview button if a path is selected
+            const previewBtn = this.element.querySelector(".preview-audio-btn");
+            if (previewBtn) previewBtn.disabled = !path;
+          }
+        }).browse();
+      });
+    }
+
+    // Audio preview handling
+    const previewAudioBtn = this.element.querySelector(".preview-audio-btn");
+    if (previewAudioBtn) {
+      previewAudioBtn.addEventListener("click", async (ev) => {
+        ev.preventDefault();
+        
+        // If already playing, stop it
+        if (this.previewSound && this.previewSound.playing) {
+          this.previewSound.stop();
+          this.previewSound = null;
+          previewAudioBtn.innerHTML = '<i class="fas fa-play"></i> Preview Audio';
+          return;
+        }
+
+        const audioPath = this.element.querySelector("input[name='audioPath']")?.value;
+        if (audioPath) {
+          this.previewSound = await game.audio.play(audioPath, { volume: 0.8 });
+          previewAudioBtn.innerHTML = '<i class="fas fa-stop"></i> Stop Preview';
+          
+          // Reset button when sound ends
+          const sound = this.previewSound;
+          setTimeout(() => {
+            if (this.previewSound === sound && !sound.playing) {
+               previewAudioBtn.innerHTML = '<i class="fas fa-play"></i> Preview Audio';
+            }
+          }, 100); // Small delay to let it start
+          
+          // Monitor for end
+          const checkEnd = setInterval(() => {
+            if (!this.previewSound || this.previewSound !== sound || !sound.playing) {
+              if (this.previewSound === sound) {
+                previewAudioBtn.innerHTML = '<i class="fas fa-play"></i> Preview Audio';
+                this.previewSound = null;
+              }
+              clearInterval(checkEnd);
+            }
+          }, 500);
+        }
       });
     }
 
@@ -469,6 +564,10 @@ class CustomDrawingSheet extends DrawingConfig {
           updates[`flags.${MODULE_ID}.image`] = data.image || (noteType === "handout" ? "modules/investigation-board/assets/newhandout.webp" : "modules/investigation-board/assets/placeholder.webp");
         }
 
+        if (data.audioPath !== undefined) {
+          updates[`flags.${MODULE_ID}.audioPath`] = data.audioPath;
+        }
+
         if (data.linkedObject !== undefined) {
           updates[`flags.${MODULE_ID}.linkedObject`] = data.linkedObject;
         }
@@ -521,6 +620,10 @@ class CustomDrawingSheet extends DrawingConfig {
 
   // Stop animation when dialog closes
   async _onClose(options) {
+    if (this.previewSound) {
+      this.previewSound.stop();
+      this.previewSound = null;
+    }
     stopConnectionAnimation();
     clearConnectionNumbers();
     return super._onClose?.(options);
@@ -541,6 +644,8 @@ class NotePreviewer extends HandlebarsApplicationMixin(ApplicationV2) {
   constructor(document, options = {}) {
     super(options);
     this.document = document;
+    this.localSound = null;
+    this.globalSoundActive = false;
   }
 
   static DEFAULT_OPTIONS = {
@@ -582,19 +687,21 @@ class NotePreviewer extends HandlebarsApplicationMixin(ApplicationV2) {
     }
 
     // Determine if we should show a separate text container
-    // We DON'T show it for handouts (no text) or for standard photo notes (text is on the frame)
-    const showSeparateText = noteType !== "handout" && !(noteType === "photo" && boardMode !== "futuristic");
+    // We DON'T show it for handouts/media (no text) or for standard photo notes (text is on the frame)
+    const showSeparateText = !["handout", "media"].includes(noteType) && !(noteType === "photo" && boardMode !== "futuristic");
 
     return {
       noteType: noteType,
       text: noteData?.text || "",
       image: noteData?.image || "",
+      audioPath: noteData?.audioPath || "",
       framePath: framePath,
       identityName: noteData?.identityName || "",
       boardMode: boardMode,
       fontClass: fontClass,
       previewFontSize: (noteData?.fontSize || 15) * 1.5,
       showSeparateText: showSeparateText,
+      isGM: game.user.isGM,
       linkedObject: noteData?.linkedObject || "",
       enrichedLinkedObject: noteData?.linkedObject ? await TextEditor.enrichHTML(noteData.linkedObject, { async: true }) : ""
     };
@@ -607,6 +714,74 @@ class NotePreviewer extends HandlebarsApplicationMixin(ApplicationV2) {
     
     // Close button
     html.querySelector(".close-preview-btn")?.addEventListener("click", () => this.close());
+
+    // Local Audio Player Logic
+    const localAudio = html.querySelector(".local-audio-player");
+    const cassette = html.querySelector(".cassette-wrapper");
+    
+    if (localAudio && cassette) {
+      localAudio.addEventListener("play", () => {
+        cassette.classList.add("playing");
+      });
+      localAudio.addEventListener("pause", () => {
+        if (!this.globalSoundActive) cassette.classList.remove("playing");
+      });
+      localAudio.addEventListener("ended", () => {
+        if (!this.globalSoundActive) cassette.classList.remove("playing");
+      });
+    }
+
+    // Global Play Button (GM only)
+    const playGlobalBtn = html.querySelector(".global-toggle");
+    if (playGlobalBtn) {
+      playGlobalBtn.addEventListener("click", async (ev) => {
+        ev.preventDefault();
+        const audioPath = this.document.flags[MODULE_ID]?.audioPath;
+        if (!audioPath || !socket) return;
+
+        const icon = playGlobalBtn.querySelector("i");
+        const span = playGlobalBtn.querySelector("span");
+
+        if (this.globalSoundActive) {
+          socket.emit(SOCKET_NAME, { action: "stopAudio", audioPath: audioPath });
+          const localGlobal = activeGlobalSounds.get(audioPath);
+          if (localGlobal) {
+            localGlobal.stop();
+            activeGlobalSounds.delete(audioPath);
+          }
+          this.globalSoundActive = false;
+          icon.className = "fas fa-broadcast-tower";
+          span.innerText = "Play for All";
+          playGlobalBtn.classList.remove("active");
+          if (localAudio?.paused) cassette.classList.remove("playing");
+          return;
+        }
+
+        socket.emit(SOCKET_NAME, { action: "playAudio", audioPath: audioPath });
+        
+        const sound = await game.audio.play(audioPath, { volume: 0.8 });
+        if (sound) {
+          activeGlobalSounds.set(audioPath, sound);
+          this.globalSoundActive = true;
+          icon.className = "fas fa-stop";
+          span.innerText = "Stop for All";
+          playGlobalBtn.classList.add("active");
+          cassette.classList.add("playing");
+
+          const checkEnd = setInterval(() => {
+            if (!sound.playing) {
+              this.globalSoundActive = false;
+              icon.className = "fas fa-broadcast-tower";
+              span.innerText = "Play for All";
+              playGlobalBtn.classList.remove("active");
+              activeGlobalSounds.delete(audioPath);
+              if (localAudio?.paused) cassette.classList.remove("playing");
+              clearInterval(checkEnd);
+            }
+          }, 1000);
+        }
+      });
+    }
 
     // Handle clicking on enriched links in preview
     html.querySelectorAll(".preview-link a.content-link").forEach(link => {
@@ -635,6 +810,14 @@ class NotePreviewer extends HandlebarsApplicationMixin(ApplicationV2) {
         }
       });
     });
+  }
+
+  async _onClose(options) {
+    if (this.localSound) {
+      this.localSound.stop();
+      this.localSound = null;
+    }
+    return super._onClose?.(options);
   }
 }
 
@@ -812,7 +995,89 @@ class CustomDrawing extends Drawing {
     const isPhoto = noteData.type === "photo";
     const isIndex = noteData.type === "index";
     const isHandout = noteData.type === "handout";
+    const isMedia = noteData.type === "media";
     const mode = game.settings.get(MODULE_ID, "boardMode");
+
+    // MEDIA NOTE LAYOUT (Cassette tape)
+    if (isMedia) {
+      const drawingWidth = this.document.shape.width || 180;
+      const drawingHeight = this.document.shape.height || 117;
+
+      // No background sprite for media (we use photoImageSprite for the cassette)
+      if (this.bgSprite) {
+        this.removeChild(this.bgSprite);
+        this.bgSprite.destroy();
+        this.bgSprite = null;
+      }
+
+      if (!this.photoImageSprite || !this.photoImageSprite.parent) {
+        if (this.photoImageSprite) this.photoImageSprite.destroy();
+        this.photoImageSprite = new PIXI.Sprite();
+        this.addChild(this.photoImageSprite);
+      }
+
+      const imagePath = noteData.image || "modules/investigation-board/assets/cassette1.webp";
+      try {
+        const texture = await PIXI.Assets.load(imagePath);
+        if (texture && this.photoImageSprite && this.photoImageSprite.parent) {
+          this.photoImageSprite.texture = texture;
+          this.photoImageSprite.width = drawingWidth;
+          this.photoImageSprite.height = drawingHeight;
+          this.photoImageSprite.position.set(0, 0);
+          
+          this.photoImageSprite.mask = null;
+          if (this.photoMask) this.photoMask.visible = false;
+          this.photoImageSprite.visible = true;
+          this.photoImageSprite.alpha = 1;
+        }
+      } catch (err) {
+        console.error(`Failed to load media image: ${imagePath}`, err);
+      }
+
+      // --- Pin Sprite ---
+      const pinSetting = game.settings.get(MODULE_ID, "pinColor");
+      if (pinSetting === "none") {
+        if (this.pinSprite) {
+          this.removeChild(this.pinSprite);
+          this.pinSprite.destroy();
+          this.pinSprite = null;
+        }
+      } else {
+        if (!this.pinSprite || !this.pinSprite.parent) {
+          if (this.pinSprite) this.pinSprite.destroy();
+          this.pinSprite = new PIXI.Sprite();
+          this.addChild(this.pinSprite);
+        }
+
+        let pinColor = noteData.pinColor;
+        if (!pinColor) {
+          pinColor = (pinSetting === "random")
+            ? PIN_COLORS[Math.floor(Math.random() * PIN_COLORS.length)]
+            : `${pinSetting}Pin.webp`;
+          await collaborativeUpdate(this.document.id, { [`flags.${MODULE_ID}.pinColor`]: pinColor });
+        }
+
+        const pinImage = `modules/investigation-board/assets/${pinColor}`;
+        try {
+          const texture = await PIXI.Assets.load(pinImage);
+          if (texture && this.pinSprite && this.pinSprite.parent) {
+            this.pinSprite.texture = texture;
+            this.pinSprite.width = 40;
+            this.pinSprite.height = 40;
+            this.pinSprite.position.set(drawingWidth / 2 - 20, 3);
+          }
+        } catch (err) {
+          console.error(`Failed to load pin texture: ${pinImage}`, err);
+        }
+      }
+
+      // Hide text for media notes on canvas
+      if (this.noteText) this.noteText.visible = false;
+      if (this.identityNameText) this.identityNameText.visible = false;
+      if (this.futuristicText) this.futuristicText.visible = false;
+
+      return; // Early exit for media notes
+    }
 
     // HANDOUT NOTE LAYOUT (Image-only, transparent background)
     if (isHandout) {
@@ -1644,14 +1909,17 @@ async function createNote(noteType) {
   const indexW = game.settings.get(MODULE_ID, "indexNoteWidth") || 600;
   const handoutW = game.settings.get(MODULE_ID, "handoutNoteWidth") || 400;
   const handoutH = game.settings.get(MODULE_ID, "handoutNoteHeight") || 400;
+  const mediaW = 180;
 
   const width = noteType === "photo" ? photoW
                 : noteType === "index" ? indexW
                 : noteType === "handout" ? handoutW
+                : noteType === "media" ? mediaW
                 : stickyW;
   const height = noteType === "photo" ? Math.round(photoW / (225 / 290))
                  : noteType === "index" ? Math.round(indexW / (600 / 400))
                  : noteType === "handout" ? handoutH
+                 : noteType === "media" ? Math.round(mediaW * 0.65)
                  : stickyW;
 
   const dims = canvas.dimensions;
@@ -1680,6 +1948,14 @@ async function createNote(noteType) {
     extraFlags.image = "modules/investigation-board/assets/newhandout.webp";
   }
 
+  // Set default image and audio for media notes
+  if (noteType === "media") {
+    const cassettes = ["cassette1.webp", "cassette2.webp"];
+    const randomCassette = cassettes[Math.floor(Math.random() * cassettes.length)];
+    extraFlags.image = `modules/investigation-board/assets/${randomCassette}`;
+    extraFlags.audioPath = "";
+  }
+
   const created = await canvas.scene.createEmbeddedDocuments("Drawing", [
     {
       type: "r",
@@ -1687,8 +1963,8 @@ async function createNote(noteType) {
       x,
       y,
       shape: { width, height },
-      fillColor: noteType === "handout" ? "#000000" : "#ffffff",
-      fillAlpha: noteType === "handout" ? 0 : 1,
+      fillColor: noteType === "handout" || noteType === "media" ? "#000000" : "#ffffff",
+      fillAlpha: noteType === "handout" || noteType === "media" ? 0 : 1,
       strokeColor: "#000000",
       strokeWidth: 0,
       strokeAlpha: 0,
@@ -2193,6 +2469,14 @@ Hooks.on("getSceneControlButtons", (controls) => {
       button: true
     };
 
+    controls.drawings.tools.createMediaNote = {
+      name: "createMediaNote",
+      title: "Create Media Note",
+      icon: "fas fa-file-audio",
+      onChange: () => createNote("media"),
+      button: true
+    };
+
     // Connect mode removed - now done by clicking pins directly
   }
 });
@@ -2495,6 +2779,97 @@ Hooks.on("getJournalEntryPageContextOptions", (html, entryOptions) => {
     }
   });
 });
+
+/**
+ * Robust helper to find a playlist sound from the context menu element
+ */
+function _getPlaylistSoundFromLi(li) {
+  const el = li instanceof HTMLElement ? li : li[0];
+  if (!el) return null;
+
+  const soundId = el.dataset.soundId;
+  const playlistId = el.closest(".playlist")?.dataset.documentId;
+  
+  if (!soundId || !playlistId) return null;
+  
+  const playlist = game.playlists.get(playlistId);
+  return playlist?.sounds.get(soundId);
+}
+
+// Context menu hook for Playlist sounds
+Hooks.on("getPlaylistDirectoryEntryContext", (html, entryOptions) => {
+  entryOptions.push({
+    name: "Create Media Note",
+    icon: '<i class="fas fa-file-audio"></i>',
+    callback: async (li) => {
+      const sound = _getPlaylistSoundFromLi(li);
+      if (sound) {
+        await createMediaNoteFromSound(sound);
+      }
+    },
+    condition: (li) => {
+      if (!game.user.isGM) return false;
+      return !!li[0].dataset.soundId;
+    }
+  });
+});
+
+/**
+ * Creates a Media Note from a PlaylistSound.
+ * @param {PlaylistSound} sound - The sound document
+ */
+async function createMediaNoteFromSound(sound) {
+  const scene = canvas.scene;
+  if (!scene) {
+    ui.notifications.error("Cannot create note: No active scene.");
+    return;
+  }
+
+  const mediaW = 180;
+  const height = Math.round(mediaW * 0.65);
+
+  const dims = canvas.dimensions;
+  const x = dims.width / 2;
+  const y = dims.height / 2;
+
+  const cassettes = ["cassette1.webp", "cassette2.webp"];
+  const randomCassette = cassettes[Math.floor(Math.random() * cassettes.length)];
+  const imagePath = `modules/investigation-board/assets/${randomCassette}`;
+
+  const created = await canvas.scene.createEmbeddedDocuments("Drawing", [{
+    type: "r",
+    author: game.user.id,
+    x, y,
+    shape: { width: mediaW, height },
+    fillColor: "#000000",
+    fillAlpha: 0,
+    strokeColor: "#000000",
+    strokeWidth: 0,
+    strokeAlpha: 0,
+    locked: false,
+    flags: {
+      [MODULE_ID]: {
+        type: "media",
+        text: sound.name,
+        image: imagePath,
+        audioPath: sound.src,
+        linkedObject: `@UUID[${sound.uuid}]{${sound.name}}`
+      },
+      core: { sheetClass: "investigation-board.CustomDrawingSheet" }
+    },
+    ownership: { default: 3 }
+  }]);
+
+  if (investigationBoardModeActive && created?.[0]) {
+    setTimeout(() => {
+      const newDrawing = canvas.drawings.get(created[0].id);
+      if (newDrawing) {
+        newDrawing.eventMode = 'auto';
+        newDrawing.interactiveChildren = true;
+      }
+    }, 250);
+  }
+}
 
 
 // Hook to deactivate connect mode on scene change and initialize connection lines

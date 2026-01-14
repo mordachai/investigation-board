@@ -189,6 +189,16 @@ export const registerSettings = function() {
         onChange: () => refreshAllDrawings()
     });
 
+    game.settings.register(MODULE_ID, "mediaNoteDefaultText", {
+        name: "Default Media Note Text",
+        hint: "The default text to use for new media notes.",
+        scope: "world",
+        config: true,
+        type: String,
+        default: "Audio Recording",
+        onChange: () => refreshAllDrawings()
+    });
+
     // Register base font size and character limits
     game.settings.register(MODULE_ID, "baseCharacterLimits", {
         name: "Base Character Limits",

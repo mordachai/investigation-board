@@ -1,5 +1,5 @@
 <form class="ib-note-config-form">
-  {{#unless (eq noteType "handout")}}
+  {{#unless (or (eq noteType "handout") (eq noteType "media"))}}
     <div class="form-group">
       <label for="text">Note Text:</label>
       <textarea name="text" rows="4" placeholder="Enter note text...">{{text}}</textarea>
@@ -45,6 +45,24 @@
       {{/if}}
     </div>
   </div>
+
+  {{!-- Media Audio Path --}}
+  {{#if (eq noteType "media")}}
+    <div class="form-group">
+      <label for="audioPath">Audio File:</label>
+      <div class="file-picker">
+        <input type="text" name="audioPath" value="{{audioPath}}" placeholder="Select audio file..." readonly />
+        <button type="button" class="audio-picker-button" title="Browse Audio">
+          <i class="fas fa-music"></i>
+        </button>
+      </div>
+    </div>
+    <div class="form-group">
+      <button type="button" class="preview-audio-btn" {{#unless audioPath}}disabled{{/unless}}>
+        <i class="fas fa-play"></i> Preview Audio
+      </button>
+    </div>
+  {{/if}}
 
   {{!-- Show Image Path field for photo notes and handouts --}}
   {{#if (or (eq noteType "photo") (eq noteType "handout"))}}

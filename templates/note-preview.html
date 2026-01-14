@@ -1,5 +1,5 @@
 <div class="ib-note-preview {{noteType}}-preview {{boardMode}}-mode">
-    {{#if (or (eq noteType "photo") (eq noteType "handout"))}}
+    {{#if (or (eq noteType "photo") (eq noteType "handout") (eq noteType "media"))}}
         <div class="preview-image-container">
             {{#if (eq noteType "photo")}}
                 <div class="photo-frame-wrapper">
@@ -8,26 +8,49 @@
                         <img src="{{image}}" class="user-photo" alt="Note Image" />
                     </div>
                     
-                    {{!-- Name/Text inside the frame for non-futuristic photo notes --}}
                     {{#if (ne boardMode "futuristic")}}
                         <div class="photo-frame-text {{fontClass}}">
                             {{text}}
                         </div>
                     {{/if}}
 
-                    {{!-- Identity Name for futuristic mode --}}
                     {{#if (and (eq boardMode "futuristic") identityName)}}
                         <div class="preview-identity-name futuristic">{{identityName}}</div>
                     {{/if}}
                 </div>
+            {{else if (eq noteType "media")}}
+                <div class="media-preview-container">
+                    <div class="cassette-wrapper">
+                        <img src="{{image}}" class="cassette-image" alt="Cassette" />
+                        <div class="cassette-reels">
+                            <div class="reel left"></div>
+                            <div class="reel right"></div>
+                        </div>
+                    </div>
+                    {{#if audioPath}}
+                        <div class="media-interface">
+                            <div class="audio-player-container">
+                                <audio class="local-audio-player" controls src="{{audioPath}}"></audio>
+                            </div>
+                            
+                            {{#if isGM}}
+                                <div class="gm-broadcast-section">
+                                    <button type="button" class="play-btn global-toggle" data-type="global" title="Play for all players">
+                                        <i class="fas fa-broadcast-tower"></i> <span>Play for All</span>
+                                    </button>
+                                </div>
+                            {{/if}}
+                        </div>
+                    {{else}}
+                        <div class="no-audio-msg">No audio file linked to this note.</div>
+                    {{/if}}
+                </div>
             {{else}}
-                {{!-- Handout mode --}}
                 <img src="{{image}}" class="handout-image" alt="Handout Image" />
             {{/if}}
         </div>
     {{/if}}
 
-    {{!-- Show text container for everything EXCEPT non-futuristic photo notes (where it's on the frame) and handouts --}}
     {{#if showSeparateText}}
         <div class="preview-text-container {{fontClass}}">
             <div class="preview-text" style="font-size: {{previewFontSize}}px;">
