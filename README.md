@@ -6,25 +6,19 @@ A Foundry VTT module that lets everyone create, edit, and move sticky and photo 
 
 ![image](https://github.com/user-attachments/assets/aa6ac7ea-6051-4c10-b88f-c4dcc8a3bd62)
 
-## New Feature (v1.2)
+## New Feature (v1.7): Connecting Notes!
 
-![image](https://github.com/user-attachments/assets/c9205949-ff92-4afa-abc0-1380bd152b18)
-
-Create photo notes from Actors and Scenes effortlessly. Right-click on the desired actor or scene, then choose "Create Photo Note from..." in the context menu.
-
-- **For Scenes:** The note will show the navigation name and if there isn't one it will default to the scene name.
-- **For Actors:** The note will feature the Token name (prototypeToken.name) or any key you configure in the settings, such as system.alias for FitD games. If left blank, it will simply display the actor's name.
+[Grabación 2026-01-13 214416.webm](https://github.com/user-attachments/assets/2f290c09-b59f-42cd-93ba-5c76cb0dc1d6)
 
 ## How to Use
 
-![image](https://github.com/user-attachments/assets/c922e8d5-b168-4155-a5e3-229c06a54aa0)
+<img width="353" height="597" alt="image" src="https://github.com/user-attachments/assets/2281093f-3567-485b-97be-5653ccddddb0" />
 
-Open the Journal Notes Toolbar:
+Open the Drawing Tools Toolbar, the buttons to create the notes are there:
 
-On the left sidebar of the scene, select the Journal Notes tools.
-You’ll see two new buttons:
-Create Sticky Note (a sticky note icon)
-Create Photo Note (a Polaroid camera icon)
+- 3 types of notes: Sticky, Photo, and Index Card
+- Double click on a note let you edit the content
+- Delete key: delete selected note
 
 ### Create and Edit a Note
 
