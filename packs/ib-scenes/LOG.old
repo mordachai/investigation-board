@@ -1,5 +1,3 @@
-2026/01/14-15:05:18.150 aee4 Recovering log #14
-2026/01/14-15:05:18.150 aee4 Level-0 table #16: started
-2026/01/14-15:05:18.158 aee4 Level-0 table #16: 1338 bytes OK
-2026/01/14-15:05:18.161 aee4 Delete type=0 #14
-2026/01/14-15:05:18.161 aee4 Delete type=3 #12
+2026/01/14-15:06:00.145 e580 Recovering log #17
+2026/01/14-15:06:00.147 e580 Delete type=0 #17
+2026/01/14-15:06:00.148 e580 Delete type=3 #15
