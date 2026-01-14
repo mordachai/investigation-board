@@ -2226,30 +2226,26 @@ function _getJournalPageFromLi(li) {
   return journal.pages.get(pageId);
 }
 
-// Register both potential hook names for Journal pages in v13
-const journalPageHooks = ["getJournalEntryPageContextOptions", "getJournalPageContextOptions"];
-for (const hookName of journalPageHooks) {
-  Hooks.on(hookName, (html, entryOptions) => {
-    console.log(`Investigation Board: Page context menu hook triggered (${hookName})`);
-    entryOptions.push({
-      name: "Create Handout Note",
-      icon: '<i class="fas fa-file-image"></i>',
-      callback: async (li) => {
-        const page = _getJournalPageFromLi(li);
-        if (page?.type === "image") {
-          await createHandoutNoteFromPage(page);
-        } else {
-          ui.notifications.warn("Only image-type journal pages can be turned into handouts.");
-        }
-      },
-      condition: (li) => {
-        if (!game.user.isGM) return false;
-        const page = _getJournalPageFromLi(li);
-        return page?.type === "image";
+// Context menu hook for Journal pages
+Hooks.on("getJournalEntryPageContextOptions", (html, entryOptions) => {
+  entryOptions.push({
+    name: "Create Handout Note",
+    icon: '<i class="fas fa-file-image"></i>',
+    callback: async (li) => {
+      const page = _getJournalPageFromLi(li);
+      if (page?.type === "image") {
+        await createHandoutNoteFromPage(page);
+      } else {
+        ui.notifications.warn("Only image-type journal pages can be turned into handouts.");
       }
-    });
+    },
+    condition: (li) => {
+      if (!game.user.isGM) return false;
+      const page = _getJournalPageFromLi(li);
+      return page?.type === "image";
+    }
   });
-}
+});
 
 
 // Hook to deactivate connect mode on scene change and initialize connection lines
