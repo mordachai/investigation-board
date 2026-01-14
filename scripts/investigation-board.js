@@ -2128,8 +2128,8 @@ Hooks.on("getActorContextOptions", (html, entryOptions) => {
 });
 
 // Context menu hook for Scene directory
-Hooks.on("getSceneDirectoryEntryContext", (html, entryOptions) => {
-  console.log("Investigation Board: Scene context menu hook triggered");
+Hooks.on("getSceneContextOptions", (html, entryOptions) => {
+  console.log("Investigation Board: Scene context menu hook triggered (getSceneContextOptions)");
   entryOptions.push({
     name: "Photo Note from Scene",
     icon: '<i class="fa-solid fa-camera-polaroid"></i>',
@@ -2145,6 +2145,21 @@ Hooks.on("getSceneDirectoryEntryContext", (html, entryOptions) => {
       const scene = game.scenes.get(sceneId);
       if (scene) await createPhotoNoteFromScene(scene);
       else console.error("Investigation Board: Scene not found for ID:", sceneId);
+    },
+    condition: () => game.user.isGM
+  });
+});
+
+// Also add hook for Scene Navigation at the top
+Hooks.on("getSceneNavigationContext", (html, entryOptions) => {
+  console.log("Investigation Board: Scene navigation context menu hook triggered");
+  entryOptions.push({
+    name: "Photo Note from Scene",
+    icon: '<i class="fa-solid fa-camera-polaroid"></i>',
+    callback: async (li) => {
+      const sceneId = li.dataset?.documentId || li.getAttribute?.("data-document-id") || li.data?.("sceneId");
+      const scene = game.scenes.get(sceneId);
+      if (scene) await createPhotoNoteFromScene(scene);
     },
     condition: () => game.user.isGM
   });
