@@ -1488,7 +1488,6 @@ async function createNote(noteType) {
  * @param {boolean} isUnknown - Whether to use "????" as the name
  */
 async function createPhotoNoteFromActor(actor, isUnknown = false) {
-  console.log("Investigation Board: Creating photo note from actor", actor.name, "isUnknown:", isUnknown);
   const scene = canvas.scene;
   if (!scene) {
     ui.notifications.error("Cannot create note: No active scene.");
@@ -1512,12 +1511,6 @@ async function createPhotoNoteFromActor(actor, isUnknown = false) {
     extraFlags.identityName = displayName;
   }
 
-  console.log("Investigation Board: Creating drawing document with flags:", {
-    type: "photo",
-    text: displayName,
-    ...extraFlags
-  });
-
   const created = await canvas.scene.createEmbeddedDocuments("Drawing", [{
     type: "r",
     author: game.user.id,
@@ -1540,8 +1533,6 @@ async function createPhotoNoteFromActor(actor, isUnknown = false) {
     ownership: { default: 3 }
   }]);
 
-  console.log("Investigation Board: Drawing created:", created?.[0]?.id);
-
   // Handle interactivity in Investigation Board mode
   if (investigationBoardModeActive && created?.[0]) {
     setTimeout(() => {
@@ -1559,7 +1550,6 @@ async function createPhotoNoteFromActor(actor, isUnknown = false) {
  * @param {Scene} targetScene - The Scene document to use
  */
 async function createPhotoNoteFromScene(targetScene) {
-  console.log("Investigation Board: Creating photo note from scene", targetScene.name);
   const scene = canvas.scene;
   if (!scene) {
     ui.notifications.error("Cannot create note: No active scene.");
@@ -1583,12 +1573,6 @@ async function createPhotoNoteFromScene(targetScene) {
     extraFlags.identityName = displayName;
   }
 
-  console.log("Investigation Board: Creating drawing document with flags:", {
-    type: "photo",
-    text: displayName,
-    ...extraFlags
-  });
-
   const created = await canvas.scene.createEmbeddedDocuments("Drawing", [{
     type: "r",
     author: game.user.id,
@@ -1611,7 +1595,83 @@ async function createPhotoNoteFromScene(targetScene) {
     ownership: { default: 3 }
   }]);
 
-  console.log("Investigation Board: Drawing created:", created?.[0]?.id);
+  if (investigationBoardModeActive && created?.[0]) {
+    setTimeout(() => {
+      const newDrawing = canvas.drawings.get(created[0].id);
+      if (newDrawing) {
+        newDrawing.eventMode = 'auto';
+        newDrawing.interactiveChildren = true;
+      }
+    }, 250);
+  }
+}
+
+/**
+ * Creates a Handout Note from a Journal Page.
+ * @param {JournalEntryPage} page - The Journal Page document
+ */
+async function createHandoutNoteFromPage(page) {
+  const scene = canvas.scene;
+  if (!scene) {
+    ui.notifications.error("Cannot create note: No active scene.");
+    return;
+  }
+
+  const handoutW = game.settings.get(MODULE_ID, "handoutNoteWidth") || 400;
+  const handoutH = game.settings.get(MODULE_ID, "handoutNoteHeight") || 400;
+
+  const dims = canvas.dimensions;
+  const x = dims.width / 2;
+  const y = dims.height / 2;
+
+  const imagePath = page.src || "modules/investigation-board/assets/newhandout.webp";
+
+  // Attempt to get natural dimensions for better initial sizing
+  let finalWidth = handoutW;
+  let finalHeight = handoutH;
+  try {
+    const texture = await PIXI.Assets.load(imagePath);
+    if (texture) {
+      finalWidth = texture.width;
+      finalHeight = texture.height;
+
+      // Apply caps similar to FilePicker callback in CustomDrawingSheet
+      if (finalHeight > 1000) {
+        const scale = 1000 / finalHeight;
+        finalWidth = Math.round(finalWidth * scale);
+        finalHeight = 1000;
+      }
+      if (finalWidth > 2000) {
+        const scale = 2000 / finalWidth;
+        finalHeight = Math.round(finalHeight * scale);
+        finalWidth = 2000;
+      }
+    }
+  } catch (err) {
+    console.error("Investigation Board: Failed to get image dimensions for handout", err);
+  }
+
+  const created = await canvas.scene.createEmbeddedDocuments("Drawing", [{
+    type: "r",
+    author: game.user.id,
+    x, y,
+    shape: { width: finalWidth, height: finalHeight },
+    fillColor: "#000000",
+    fillAlpha: 0,
+    strokeColor: "#000000",
+    strokeWidth: 0,
+    strokeAlpha: 0,
+    locked: false,
+    flags: {
+      [MODULE_ID]: {
+        type: "handout",
+        text: "",
+        image: imagePath
+      },
+      core: { sheetClass: "investigation-board.CustomDrawingSheet" }
+    },
+    ownership: { default: 3 }
+  }]);
 
   if (investigationBoardModeActive && created?.[0]) {
     setTimeout(() => {
@@ -2085,24 +2145,15 @@ Hooks.on("deleteDrawing", (drawing, options, userId) => {
 
 // Context menu hook for Actor directory
 Hooks.on("getActorContextOptions", (html, entryOptions) => {
-  console.log("Investigation Board: Actor context menu hook triggered");
   entryOptions.push(
     {
       name: "Photo Note from Actor",
       icon: '<i class="fa-solid fa-camera-polaroid"></i>',
       callback: async (li) => {
-        console.log("Investigation Board: Actor context menu callback triggered", li);
-        // Handle both native HTMLElement and jQuery objects, and check both documentId and entryId
-        const actorId = li.dataset?.documentId || 
-                        li.getAttribute?.("data-document-id") || 
-                        li.dataset?.entryId || 
-                        li.getAttribute?.("data-entry-id") ||
-                        (typeof li.data === "function" ? (li.data("documentId") || li.data("entryId")) : null);
-        
-        console.log("Investigation Board: Resolved actorId:", actorId);
+        const el = li instanceof HTMLElement ? li : li[0];
+        const actorId = el?.dataset?.documentId || el?.dataset?.entryId || el?.getAttribute?.("data-document-id") || el?.getAttribute?.("data-entry-id");
         const actor = game.actors.get(actorId);
         if (actor) await createPhotoNoteFromActor(actor, false);
-        else console.error("Investigation Board: Actor not found for ID:", actorId);
       },
       condition: () => game.user.isGM
     },
@@ -2110,17 +2161,10 @@ Hooks.on("getActorContextOptions", (html, entryOptions) => {
       name: "Unknown Photo Note from Actor",
       icon: '<i class="fa-solid fa-camera-polaroid"></i>',
       callback: async (li) => {
-        console.log("Investigation Board: Unknown Actor context menu callback triggered", li);
-        const actorId = li.dataset?.documentId || 
-                        li.getAttribute?.("data-document-id") || 
-                        li.dataset?.entryId || 
-                        li.getAttribute?.("data-entry-id") ||
-                        (typeof li.data === "function" ? (li.data("documentId") || li.data("entryId")) : null);
-        
-        console.log("Investigation Board: Resolved actorId:", actorId);
+        const el = li instanceof HTMLElement ? li : li[0];
+        const actorId = el?.dataset?.documentId || el?.dataset?.entryId || el?.getAttribute?.("data-document-id") || el?.getAttribute?.("data-entry-id");
         const actor = game.actors.get(actorId);
         if (actor) await createPhotoNoteFromActor(actor, true);
-        else console.error("Investigation Board: Actor not found for ID:", actorId);
       },
       condition: () => game.user.isGM
     }
@@ -2129,22 +2173,14 @@ Hooks.on("getActorContextOptions", (html, entryOptions) => {
 
 // Context menu hook for Scene directory
 Hooks.on("getSceneContextOptions", (html, entryOptions) => {
-  console.log("Investigation Board: Scene context menu hook triggered (getSceneContextOptions)");
   entryOptions.push({
     name: "Photo Note from Scene",
     icon: '<i class="fa-solid fa-camera-polaroid"></i>',
     callback: async (li) => {
-      console.log("Investigation Board: Scene context menu callback triggered", li);
-      const sceneId = li.dataset?.documentId || 
-                      li.getAttribute?.("data-document-id") || 
-                      li.dataset?.entryId || 
-                      li.getAttribute?.("data-entry-id") ||
-                      (typeof li.data === "function" ? (li.data("documentId") || li.data("entryId")) : null);
-      
-      console.log("Investigation Board: Resolved sceneId:", sceneId);
+      const el = li instanceof HTMLElement ? li : li[0];
+      const sceneId = el?.dataset?.documentId || el?.dataset?.entryId || el?.getAttribute?.("data-document-id") || el?.getAttribute?.("data-entry-id");
       const scene = game.scenes.get(sceneId);
       if (scene) await createPhotoNoteFromScene(scene);
-      else console.error("Investigation Board: Scene not found for ID:", sceneId);
     },
     condition: () => game.user.isGM
   });
@@ -2152,18 +2188,69 @@ Hooks.on("getSceneContextOptions", (html, entryOptions) => {
 
 // Also add hook for Scene Navigation at the top
 Hooks.on("getSceneNavigationContext", (html, entryOptions) => {
-  console.log("Investigation Board: Scene navigation context menu hook triggered");
   entryOptions.push({
     name: "Photo Note from Scene",
     icon: '<i class="fa-solid fa-camera-polaroid"></i>',
     callback: async (li) => {
-      const sceneId = li.dataset?.documentId || li.getAttribute?.("data-document-id") || li.data?.("sceneId");
+      const el = li instanceof HTMLElement ? li : li[0];
+      const sceneId = el?.dataset?.documentId || el?.getAttribute?.("data-document-id") || (typeof li.data === "function" ? li.data("sceneId") : null);
       const scene = game.scenes.get(sceneId);
       if (scene) await createPhotoNoteFromScene(scene);
     },
     condition: () => game.user.isGM
   });
 });
+
+/**
+ * Robust helper to find a page and its journal from the context menu element
+ */
+function _getJournalPageFromLi(li) {
+  const el = li instanceof HTMLElement ? li : li[0];
+  if (!el) return null;
+
+  // Try every possible ID attribute used in Foundry lists
+  const pageId = el.dataset?.pageId || 
+                 el.dataset?.documentId || 
+                 el.dataset?.entryId || 
+                 el.dataset?.id ||
+                 el.getAttribute?.("data-page-id") ||
+                 el.getAttribute?.("data-document-id") ||
+                 el.getAttribute?.("data-id");
+                 
+  if (!pageId) return null;
+
+  // Search through all journal entries for this page - most reliable way
+  const journal = game.journal.find(j => j.pages.has(pageId));
+  if (!journal) return null;
+
+  return journal.pages.get(pageId);
+}
+
+// Register both potential hook names for Journal pages in v13
+const journalPageHooks = ["getJournalEntryPageContextOptions", "getJournalPageContextOptions"];
+for (const hookName of journalPageHooks) {
+  Hooks.on(hookName, (html, entryOptions) => {
+    console.log(`Investigation Board: Page context menu hook triggered (${hookName})`);
+    entryOptions.push({
+      name: "Create Handout Note",
+      icon: '<i class="fas fa-file-image"></i>',
+      callback: async (li) => {
+        const page = _getJournalPageFromLi(li);
+        if (page?.type === "image") {
+          await createHandoutNoteFromPage(page);
+        } else {
+          ui.notifications.warn("Only image-type journal pages can be turned into handouts.");
+        }
+      },
+      condition: (li) => {
+        if (!game.user.isGM) return false;
+        const page = _getJournalPageFromLi(li);
+        return page?.type === "image";
+      }
+    });
+  });
+}
+
 
 // Hook to deactivate connect mode on scene change and initialize connection lines
 Hooks.on("canvasReady", () => {
