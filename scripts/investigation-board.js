@@ -27,6 +27,10 @@ let animationTickerId = null; // Ticker for animating connection lines
 // Connection number overlays
 let connectionNumberOverlays = []; // Array of PIXI.Text objects showing connection numbers
 
+// Socket for collaborative editing
+let socket = null;
+const SOCKET_NAME = `module.${MODULE_ID}`;
+
 // v13 namespaced imports
 const Drawing = foundry.canvas.placeables.Drawing;
 const DrawingConfig = foundry.applications.sheets.DrawingConfig;
@@ -51,6 +55,89 @@ function getDynamicCharacterLimits(noteType, currentFontSize) {
     photo: Math.round(limits.photo * scaleFactor),
     index: Math.round(limits.index * scaleFactor),
   };
+}
+
+/**
+ * Updates a drawing document, using socket communication if the user doesn't have permission.
+ * This enables collaborative editing where any user can modify any investigation board note.
+ * @param {string} drawingId - The ID of the drawing to update
+ * @param {object} updateData - The update data to apply
+ * @param {string} sceneId - Optional scene ID (defaults to current scene)
+ * @returns {Promise<void>}
+ */
+async function collaborativeUpdate(drawingId, updateData, sceneId = null) {
+  const scene = sceneId ? game.scenes.get(sceneId) : canvas.scene;
+  if (!scene) {
+    console.error("Investigation Board: No scene found for collaborative update");
+    return;
+  }
+
+  const drawing = scene.drawings.get(drawingId);
+  if (!drawing) {
+    console.error("Investigation Board: Drawing not found for collaborative update", drawingId);
+    return;
+  }
+
+  // Check if the drawing is an investigation board note
+  const noteData = drawing.flags?.[MODULE_ID];
+  if (!noteData) {
+    console.warn("Investigation Board: Not an investigation board note, skipping collaborative update");
+    return;
+  }
+
+  // If user is GM or has owner permission, update directly
+  if (game.user.isGM || drawing.testUserPermission(game.user, "OWNER")) {
+    await drawing.update(updateData);
+    return;
+  }
+
+  // Otherwise, request update via socket (GM will perform it)
+  if (socket) {
+    socket.emit(SOCKET_NAME, {
+      action: "updateDrawing",
+      sceneId: scene.id,
+      drawingId: drawingId,
+      updateData: updateData,
+      requestingUser: game.user.id
+    });
+    console.log("Investigation Board: Sent socket request to update drawing", drawingId);
+  } else {
+    console.error("Investigation Board: Socket not available for collaborative update");
+  }
+}
+
+/**
+ * Handles incoming socket messages for collaborative updates.
+ * Only GM clients process these requests.
+ */
+function handleSocketMessage(data) {
+  // Only GM processes socket requests
+  if (!game.user.isGM) return;
+
+  if (data.action === "updateDrawing") {
+    const scene = game.scenes.get(data.sceneId);
+    if (!scene) {
+      console.error("Investigation Board: Scene not found for socket update", data.sceneId);
+      return;
+    }
+
+    const drawing = scene.drawings.get(data.drawingId);
+    if (!drawing) {
+      console.error("Investigation Board: Drawing not found for socket update", data.drawingId);
+      return;
+    }
+
+    // Verify this is an investigation board note
+    const noteData = drawing.flags?.[MODULE_ID];
+    if (!noteData) {
+      console.warn("Investigation Board: Socket update rejected - not an investigation board note");
+      return;
+    }
+
+    // Perform the update on behalf of the requesting user
+    console.log("Investigation Board: GM processing socket update for drawing", data.drawingId, "requested by", data.requestingUser);
+    drawing.update(data.updateData);
+  }
 }
 
 
@@ -210,8 +297,8 @@ class CustomDrawingSheet extends DrawingConfig {
                     targetWidth = 2000;
                   }
 
-                  // Update the drawing document dimensions AND image path
-                  await this.document.update({
+                  // Update the drawing document dimensions AND image path (collaborative)
+                  await collaborativeUpdate(this.document.id, {
                     'shape.width': targetWidth,
                     'shape.height': targetHeight,
                     [`flags.${MODULE_ID}.image`]: path
@@ -227,8 +314,8 @@ class CustomDrawingSheet extends DrawingConfig {
                 console.error("Failed to auto-resize handout:", err);
               }
             } else if (noteType === "photo") {
-              // Update photo note image immediately (no resize)
-              await this.document.update({
+              // Update photo note image immediately (no resize) - collaborative
+              await collaborativeUpdate(this.document.id, {
                 [`flags.${MODULE_ID}.image`]: path
               });
 
@@ -263,7 +350,8 @@ class CustomDrawingSheet extends DrawingConfig {
           const connections = this.document.flags[MODULE_ID]?.connections || [];
           connections.splice(index, 1);
 
-          await this.document.update({
+          // Use collaborative update to remove connections (works for all users)
+          await collaborativeUpdate(this.document.id, {
             [`flags.${MODULE_ID}.connections`]: connections
           });
 
@@ -324,7 +412,8 @@ class CustomDrawingSheet extends DrawingConfig {
           updates[`flags.${MODULE_ID}.connections`] = connections;
         }
 
-        await this.document.update(updates);
+        // Use collaborative update to save all changes (works for all users)
+        await collaborativeUpdate(this.document.id, updates);
 
         // Refresh the drawing on canvas
         const drawing = canvas.drawings.get(this.document.id);
@@ -365,6 +454,36 @@ class CustomDrawing extends Drawing {
     this.photoImageSprite = null;
     this.identityNameText = null;
     this.futuristicText = null;
+  }
+
+  /**
+   * Override _canControl to allow all users to select investigation board notes.
+   * This enables collaborative selection regardless of who created the note.
+   */
+  _canControl(user, event) {
+    // Check if this is an investigation board note
+    const noteData = this.document.flags?.[MODULE_ID];
+    if (noteData?.type) {
+      // Allow all users to control investigation board notes
+      return true;
+    }
+    // Fall back to default behavior for regular drawings
+    return super._canControl(user, event);
+  }
+
+  /**
+   * Override _canDrag to allow all users to drag investigation board notes.
+   * This enables collaborative movement regardless of who created the note.
+   */
+  _canDrag(user, event) {
+    // Check if this is an investigation board note
+    const noteData = this.document.flags?.[MODULE_ID];
+    if (noteData?.type) {
+      // Allow all users to drag investigation board notes (unless locked)
+      return !this.document.locked;
+    }
+    // Fall back to default behavior for regular drawings
+    return super._canDrag(user, event);
   }
 
   // Ensure sprites are created when the drawing is first rendered.
@@ -483,9 +602,8 @@ class CustomDrawing extends Drawing {
           pinColor = (pinSetting === "random")
             ? PIN_COLORS[Math.floor(Math.random() * PIN_COLORS.length)]
             : `${pinSetting}Pin.webp`;
-          if (this.document.isOwner) {
-            await this.document.update({ [`flags.${MODULE_ID}.pinColor`]: pinColor });
-          }
+          // Use collaborative update to save pin color (works for all users)
+          await collaborativeUpdate(this.document.id, { [`flags.${MODULE_ID}.pinColor`]: pinColor });
         }
 
         const pinImage = `modules/investigation-board/assets/${pinColor}`;
@@ -656,9 +774,8 @@ class CustomDrawing extends Drawing {
           pinColor = (pinSetting === "random")
             ? PIN_COLORS[Math.floor(Math.random() * PIN_COLORS.length)]
             : `${pinSetting}Pin.webp`;
-          if (this.document.isOwner) {
-            await this.document.update({ [`flags.${MODULE_ID}.pinColor`]: pinColor });
-          }
+          // Use collaborative update to save pin color (works for all users)
+          await collaborativeUpdate(this.document.id, { [`flags.${MODULE_ID}.pinColor`]: pinColor });
         }
         const pinImage = `modules/investigation-board/assets/${pinColor}`;
         try {
@@ -775,9 +892,8 @@ class CustomDrawing extends Drawing {
           pinColor = (pinSetting === "random")
             ? PIN_COLORS[Math.floor(Math.random() * PIN_COLORS.length)]
             : `${pinSetting}Pin.webp`;
-	  if (this.document.isOwner) {
-            await this.document.update({ [`flags.${MODULE_ID}.pinColor`]: pinColor });
-          }
+          // Use collaborative update to save pin color (works for all users)
+          await collaborativeUpdate(this.document.id, { [`flags.${MODULE_ID}.pinColor`]: pinColor });
         }
         const pinImage = `modules/investigation-board/assets/${pinColor}`;
         try {
@@ -1405,8 +1521,8 @@ async function createConnection(sourceDrawing, targetDrawing) {
     width: width
   });
 
-  // Update document
-  await sourceDrawing.document.update({
+  // Update document using collaborative update (works for all users)
+  await collaborativeUpdate(sourceDrawing.document.id, {
     [`flags.${MODULE_ID}.connections`]: connections
   });
 
@@ -1613,6 +1729,14 @@ Hooks.once("init", () => {
   console.log("Investigation Board module initialized.");
 });
 
+// Hook to initialize socket for collaborative editing
+Hooks.once("ready", () => {
+  // Set up socket listener for collaborative updates
+  socket = game.socket;
+  socket.on(SOCKET_NAME, handleSocketMessage);
+  console.log("Investigation Board: Socket listener registered for collaborative editing.");
+});
+
 // Hook to ensure newly created notes are interactive in Investigation Board mode
 Hooks.on("createDrawing", (drawing, options, userId) => {
   // Check if this is an investigation board note
@@ -1629,34 +1753,71 @@ Hooks.on("createDrawing", (drawing, options, userId) => {
   }
 });
 
-// Hook to redraw lines when notes move
+// Hook to intercept drawing updates and route through socket if user lacks permission
+Hooks.on("preUpdateDrawing", (drawing, changes, options, userId) => {
+  // Only intercept if this is the current user's action
+  if (userId !== game.user.id) return true;
+
+  // Check if this is an investigation board note
+  const noteData = drawing.flags?.[MODULE_ID];
+  if (!noteData?.type) return true;
+
+  // If user is GM or has owner permission, allow normal update
+  if (game.user.isGM || drawing.testUserPermission(game.user, "OWNER")) {
+    return true;
+  }
+
+  // User doesn't have permission - route through socket
+  if (socket) {
+    socket.emit(SOCKET_NAME, {
+      action: "updateDrawing",
+      sceneId: canvas.scene.id,
+      drawingId: drawing.id,
+      updateData: changes,
+      requestingUser: game.user.id
+    });
+    console.log("Investigation Board: Routed update through socket for", drawing.id);
+  }
+
+  // Return false to prevent the normal update (socket will handle it)
+  return false;
+});
+
+// Hook to redraw lines and refresh visuals when notes change
 Hooks.on("updateDrawing", async (drawing, changes, options, userId) => {
   // Check if this is an investigation board note
   const noteData = drawing.flags[MODULE_ID];
   if (!noteData) return;
 
-  // For handouts, always check if actual dimensions differ from sprite dimensions
-  if (noteData.type === "handout") {
-    const placeable = canvas.drawings.get(drawing.id);
-    if (placeable && placeable.photoImageSprite) {
-      const docW = drawing.shape.width;
-      const docH = drawing.shape.height;
-      const spriteW = placeable.photoImageSprite.width || 0;
-      const spriteH = placeable.photoImageSprite.height || 0;
+  const placeable = canvas.drawings.get(drawing.id);
 
-      // Check if sprite dimensions don't match document (allowing for aspect ratio differences)
-      const tolerance = 5; // pixels
-      const widthMismatch = Math.abs(spriteW - docW) > tolerance;
-      const heightMismatch = Math.abs(spriteH - docH) > tolerance;
+  // For handouts, check if actual dimensions differ from sprite dimensions
+  if (noteData.type === "handout" && placeable && placeable.photoImageSprite) {
+    const docW = drawing.shape.width;
+    const docH = drawing.shape.height;
+    const spriteW = placeable.photoImageSprite.width || 0;
+    const spriteH = placeable.photoImageSprite.height || 0;
 
-      if (widthMismatch || heightMismatch) {
-        await placeable.refresh();
-      }
+    // Check if sprite dimensions don't match document (allowing for aspect ratio differences)
+    const tolerance = 5; // pixels
+    const widthMismatch = Math.abs(spriteW - docW) > tolerance;
+    const heightMismatch = Math.abs(spriteH - docH) > tolerance;
+
+    if (widthMismatch || heightMismatch) {
+      await placeable.refresh();
     }
   }
 
-  // If position changed, redraw all connection lines
-  if (changes.x !== undefined || changes.y !== undefined) {
+  // Check if flags changed (text, image, connections, font, etc.)
+  const flagsChanged = changes.flags?.[MODULE_ID] !== undefined;
+
+  // If flags changed, refresh the drawing to update visuals on ALL clients
+  if (flagsChanged && placeable) {
+    await placeable.refresh();
+  }
+
+  // Redraw connection lines when position OR connections change
+  if (changes.x !== undefined || changes.y !== undefined || flagsChanged) {
     drawAllConnectionLines();
   }
 });
