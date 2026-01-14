@@ -467,6 +467,7 @@ class CustomDrawing extends Drawing {
     this.pinSprite = null;
     this.noteText = null;
     this.photoImageSprite = null;
+    this.photoMask = null;
     this.identityNameText = null;
     this.futuristicText = null;
   }
@@ -595,6 +596,10 @@ class CustomDrawing extends Drawing {
             (drawingWidth - this.photoImageSprite.width) / 2,
             (drawingHeight - this.photoImageSprite.height) / 2
           );
+
+          // Ensure mask is disabled for handouts
+          this.photoImageSprite.mask = null;
+          if (this.photoMask) this.photoMask.visible = false;
 
           // Ensure sprite is visible and has correct properties
           this.photoImageSprite.visible = true;
@@ -743,6 +748,10 @@ class CustomDrawing extends Drawing {
           this.photoImageSprite.width = fullWidth * 0.9;
           this.photoImageSprite.height = fullHeight * 0.9;
           this.photoImageSprite.position.set(fullWidth * 0.05, fullHeight * 0.05);
+          
+          // Ensure mask is disabled for futuristic mode
+          this.photoImageSprite.mask = null;
+          if (this.photoMask) this.photoMask.visible = false;
         }
       } catch (err) {
         console.error(`Failed to load user photo: ${noteData.image}`, err);
@@ -886,11 +895,51 @@ class CustomDrawing extends Drawing {
         const texture = await PIXI.Assets.load(fgImage);
         if (texture && this.photoImageSprite) {
           this.photoImageSprite.texture = texture;
+          
+          // Calculate available frame space inside the polaroid
           const widthOffset = width * 0.13333;
           const heightOffset = height * 0.30246;
-          this.photoImageSprite.width = width - widthOffset;
-          this.photoImageSprite.height = height - heightOffset;
-          this.photoImageSprite.position.set(widthOffset / 2, heightOffset / 2);
+          const frameWidth = width - widthOffset;
+          const frameHeight = height - heightOffset;
+
+          // Use center-top positioning logic
+          const textureRatio = texture.width / texture.height;
+          const frameRatio = frameWidth / frameHeight;
+
+          let spriteWidth, spriteHeight, offsetX, offsetY;
+
+          if (textureRatio > frameRatio) {
+            // Case 1: Image is wider than frame
+            // Fit by height, center horizontally
+            spriteHeight = frameHeight;
+            spriteWidth = frameHeight * textureRatio;
+            offsetX = (frameWidth - spriteWidth) / 2; // Center horizontally
+            offsetY = 0; // Top aligned
+          } else {
+            // Case 2: Image is taller than frame (Standard Portrait)
+            // Fit by width, crop from bottom
+            spriteWidth = frameWidth;
+            spriteHeight = frameWidth / textureRatio;
+            offsetX = 0; 
+            offsetY = 0; // Top aligned - KEEPS HEAD VISIBLE
+          }
+
+          // Apply size and position
+          this.photoImageSprite.width = spriteWidth;
+          this.photoImageSprite.height = spriteHeight;
+          this.photoImageSprite.position.set(widthOffset / 2 + offsetX, heightOffset / 2 + offsetY);
+
+          // Apply Mask to clip overflow
+          if (!this.photoMask) {
+            this.photoMask = new PIXI.Graphics();
+            this.addChild(this.photoMask);
+          }
+          this.photoMask.clear();
+          this.photoMask.beginFill(0xffffff);
+          this.photoMask.drawRect(widthOffset / 2, heightOffset / 2, frameWidth, frameHeight);
+          this.photoMask.endFill();
+          this.photoImageSprite.mask = this.photoMask;
+          this.photoMask.visible = true;
           this.photoImageSprite.visible = true;
         }
       } catch (err) {
@@ -901,6 +950,7 @@ class CustomDrawing extends Drawing {
       }
     } else if (this.photoImageSprite) {
       this.photoImageSprite.visible = false;
+      if (this.photoMask) this.photoMask.visible = false;
     }
     
     // --- Pin Handling (Standard) ---
