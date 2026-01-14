@@ -130,7 +130,7 @@ class CustomDrawingSheet extends DrawingConfig {
       document: this.document,
       noteType: noteType,
       text: this.document.flags[MODULE_ID]?.text || "Default Text",
-      image: this.document.flags[MODULE_ID]?.image || "modules/investigation-board/assets/placeholder.webp",
+      image: this.document.flags[MODULE_ID]?.image || (noteType === "handout" ? "modules/investigation-board/assets/newhandout.webp" : "modules/investigation-board/assets/placeholder.webp"),
       identityName: this.document.flags[MODULE_ID]?.identityName || "",
       font: this.document.flags[MODULE_ID]?.font || game.settings.get(MODULE_ID, "font"),
       fontSize: this.document.flags[MODULE_ID]?.fontSize || defaultFontSize,
@@ -293,7 +293,7 @@ class CustomDrawingSheet extends DrawingConfig {
 
         // Save image for photo and handout notes
         if (noteType === "photo" || noteType === "handout") {
-          updates[`flags.${MODULE_ID}.image`] = data.image || "modules/investigation-board/assets/placeholder.webp";
+          updates[`flags.${MODULE_ID}.image`] = data.image || (noteType === "handout" ? "modules/investigation-board/assets/newhandout.webp" : "modules/investigation-board/assets/placeholder.webp");
         }
 
         if (data.identityName !== undefined) {
@@ -421,7 +421,7 @@ class CustomDrawing extends Drawing {
         this.addChild(this.photoImageSprite);
       }
 
-      const imagePath = noteData.image || "modules/investigation-board/assets/placeholder.webp";
+      const imagePath = noteData.image || "modules/investigation-board/assets/newhandout.webp";
       try {
         const texture = await PIXI.Assets.load(imagePath);
         if (texture && this.photoImageSprite && this.photoImageSprite.parent) {
@@ -1211,6 +1211,11 @@ async function createNote(noteType) {
   // Set default font size to 9 for index cards
   if (noteType === "index") {
     extraFlags.fontSize = 9;
+  }
+
+  // Set default image for handout notes
+  if (noteType === "handout") {
+    extraFlags.image = "modules/investigation-board/assets/newhandout.webp";
   }
 
   const created = await canvas.scene.createEmbeddedDocuments("Drawing", [
