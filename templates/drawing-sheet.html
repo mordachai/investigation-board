@@ -1,8 +1,8 @@
-<form>
+<form class="ib-note-config-form">
   {{#unless (eq noteType "handout")}}
     <div class="form-group">
       <label for="text">Note Text:</label>
-      <textarea name="text" rows="4">{{text}}</textarea>
+      <textarea name="text" rows="4" placeholder="Enter note text...">{{text}}</textarea>
     </div>
 
     {{!-- Font Settings --}}
@@ -23,6 +23,28 @@
       </div>
     </div>
   {{/unless}}
+
+  {{!-- Linked Object field --}}
+  <div class="form-group ib-drop-zone">
+    <label for="linkedObject">Linked Object:</label>
+    <div class="linked-object-row">
+      <div class="linked-object-display">
+        {{#if linkedObject}}
+          <div class="enriched-link">
+            {{{enrichedLinkedObject}}}
+          </div>
+        {{else}}
+          <span class="no-link">No object linked. Drag and drop here to link.</span>
+        {{/if}}
+        <input type="hidden" name="linkedObject" value="{{linkedObject}}" />
+      </div>
+      {{#if linkedObject}}
+        <button type="button" class="remove-link-btn" title="Remove link">
+          <i class="fas fa-trash"></i>
+        </button>
+      {{/if}}
+    </div>
+  </div>
 
   {{!-- Show Image Path field for photo notes and handouts --}}
   {{#if (or (eq noteType "photo") (eq noteType "handout"))}}

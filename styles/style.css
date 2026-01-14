@@ -476,3 +476,139 @@ body.investigation-board-mode .drawing:not([data-investigation-note="true"]) {
   border-radius: 3px;
   font-size: 14px;
 }
+
+/* ========================= */
+/* Context Menu              */
+/* ========================= */
+
+.ib-context-menu {
+  background: #1a1c1e;
+  border: 1px solid #4b4a44;
+  border-radius: 3px;
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.7);
+  padding: 4px 0;
+  min-width: 140px;
+  font-family: "Signika", sans-serif;
+  font-size: 14px;
+  color: #f0f0e0;
+  pointer-events: auto;
+}
+
+.ib-context-menu-item {
+  padding: 8px 16px;
+  cursor: pointer;
+  transition: background 0.1s;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.ib-context-menu-item i {
+  width: 16px;
+  text-align: center;
+  color: #7a7971;
+}
+
+.ib-context-menu-item:hover {
+  background: #4b4a44;
+  color: #ff6400;
+}
+
+.ib-context-menu-item:hover i {
+  color: #ff6400;
+}
+
+.ib-context-menu-item.disabled {
+  color: #7a7971;
+  cursor: default;
+}
+
+.ib-context-menu-item.disabled:hover {
+  background: transparent;
+  color: #7a7971;
+}
+
+.ib-context-menu-item.disabled:hover i {
+  color: #7a7971;
+}
+
+/* ========================= */
+/* Linked Object & Drop Zone */
+/* ========================= */
+
+.linked-object-container {
+  position: relative;
+  width: 100%;
+}
+
+.ib-drop-zone {
+  border: 2px dashed transparent;
+  transition: all 0.2s;
+  padding: 5px;
+  border-radius: 5px;
+  background: rgba(0, 0, 0, 0.03);
+}
+
+.ib-drop-zone.drag-over {
+  border-color: #ff6400;
+  background: rgba(255, 100, 0, 0.1);
+}
+
+.drop-hint {
+  font-size: 10px;
+  color: #666;
+  margin-top: 2px;
+  font-style: italic;
+}
+
+.linked-object-row {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  margin-top: 5px;
+}
+
+.linked-object-display {
+  flex: 1;
+  background: rgba(0, 0, 0, 0.05);
+  padding: 8px;
+  border-radius: 4px;
+  border: 1px solid #ccc;
+  min-height: 38px;
+  display: flex;
+  align-items: center;
+}
+
+.no-link {
+  color: #777;
+  font-size: 13px;
+  font-style: italic;
+}
+
+.remove-link-btn {
+  background: #d32f2f;
+  color: white;
+  border: none;
+  width: 34px;
+  height: 34px;
+  border-radius: 4px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: background 0.2s;
+}
+
+.remove-link-btn:hover {
+  background: #b71c1c;
+}
+
+.enriched-link a.content-link {
+  margin: 0;
+  background: #ddd;
+  border: 1px solid #999;
+}
+
+.linked-object-container input {
+  width: 100%;
+}

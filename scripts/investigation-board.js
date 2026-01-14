@@ -17,7 +17,6 @@ let pinsContainer = null; // Global container for all pins (to render on top)
 
 // Investigation Board Mode state variables
 let investigationBoardModeActive = false;
-let originalDrawingMethods = {}; // Store original layer methods for restoration
 // let investigationBoardHUD = null; // HUD disabled - double-click to edit instead
 
 // Connection animation state
@@ -204,12 +203,16 @@ class CustomDrawingSheet extends DrawingConfig {
     context.noteType = customData.noteType;
     context.text = customData.text;
     context.image = customData.image;
+    context.linkedObject = customData.linkedObject;
     context.identityName = customData.identityName;
     context.boardMode = customData.boardMode;
     context.noteTypes = customData.noteTypes;
     context.connections = customData.connections;
     context.font = customData.font;
     context.fontSize = customData.fontSize;
+
+    // Enrich the linked object for display
+    context.enrichedLinkedObject = context.linkedObject ? await TextEditor.enrichHTML(context.linkedObject, { async: true }) : "";
 
     return context;
   }
@@ -250,6 +253,7 @@ class CustomDrawingSheet extends DrawingConfig {
       document: this.document,
       noteType: noteType,
       text: this.document.flags[MODULE_ID]?.text || "Default Text",
+      linkedObject: this.document.flags[MODULE_ID]?.linkedObject || "",
       image: this.document.flags[MODULE_ID]?.image || (noteType === "handout" ? "modules/investigation-board/assets/newhandout.webp" : "modules/investigation-board/assets/placeholder.webp"),
       identityName: this.document.flags[MODULE_ID]?.identityName || "",
       font: this.document.flags[MODULE_ID]?.font || game.settings.get(MODULE_ID, "font"),
@@ -291,6 +295,110 @@ class CustomDrawingSheet extends DrawingConfig {
 
     // Show connection numbers on connected notes
     showConnectionNumbers(this.document.id);
+
+    // Drop zone handling
+    const dropZone = this.element.querySelector(".ib-drop-zone");
+    if (dropZone) {
+      dropZone.addEventListener("dragover", (ev) => {
+        ev.preventDefault();
+        dropZone.classList.add("drag-over");
+      });
+
+      dropZone.addEventListener("dragleave", () => {
+        dropZone.classList.remove("drag-over");
+      });
+
+      dropZone.addEventListener("drop", async (ev) => {
+        ev.preventDefault();
+        dropZone.classList.remove("drag-over");
+        
+        try {
+          const data = JSON.parse(ev.dataTransfer.getData("text/plain"));
+          if (data.uuid) {
+            const doc = await fromUuid(data.uuid);
+            const link = doc ? `@UUID[${doc.uuid}]{${doc.name}}` : `@UUID[${data.uuid}]`;
+            
+            // Update immediately and re-render for enrichment
+            await collaborativeUpdate(this.document.id, {
+              [`flags.${MODULE_ID}.linkedObject`]: link
+            });
+            this.render(true);
+          }
+        } catch (err) {
+          console.error("Investigation Board: Failed to process drop in sheet", err);
+        }
+      });
+    }
+
+    // Handle remove link button
+    const removeLinkBtn = this.element.querySelector(".remove-link-btn");
+    if (removeLinkBtn) {
+      removeLinkBtn.addEventListener("click", async (ev) => {
+        ev.preventDefault();
+        await collaborativeUpdate(this.document.id, {
+          [`flags.${MODULE_ID}.linkedObject`]: ""
+        });
+        this.render(true);
+      });
+    }
+
+    // Handle clicking on enriched links
+    this.element.querySelectorAll(".enriched-link a.content-link").forEach(link => {
+      link.addEventListener("click", async (ev) => {
+        ev.preventDefault();
+        ev.stopPropagation();
+
+        // Debug info
+        console.log("Investigation Board: Link clicked", link);
+        console.log("Investigation Board: Dataset", link.dataset);
+        console.log("Investigation Board: OuterHTML", link.outerHTML);
+
+        // Try to find an identifier in various possible attributes
+        let uuid = link.dataset.uuid || 
+                     link.getAttribute("data-uuid") || 
+                     link.dataset.id || 
+                     link.getAttribute("data-id") ||
+                     link.dataset.documentId ||
+                     link.dataset.entryId;
+        
+        // FALLBACK: If link attributes are missing (e.g. broken link), try to extract from the flag itself
+        if (!uuid) {
+          const flagValue = this.document.flags[MODULE_ID]?.linkedObject;
+          if (flagValue) {
+            const match = flagValue.match(/\[([^\]]+)\]/);
+            if (match) {
+              uuid = match[1];
+              console.log("Investigation Board: Extracted UUID from flag as fallback", uuid);
+            }
+          }
+        }
+        
+        console.log("Investigation Board: Detected identifier", uuid);
+
+        if (uuid) {
+          try {
+            // If it's not a full UUID (no dots), try to construct it from type
+            let finalUuid = uuid;
+            if (!uuid.includes(".") && link.dataset.type) {
+              finalUuid = `${link.dataset.type}.${uuid}`;
+              console.log("Investigation Board: Constructed UUID from type", finalUuid);
+            }
+
+            const doc = await fromUuid(finalUuid);
+            console.log("Investigation Board: Resolved document", doc);
+            if (doc) {
+              doc.sheet.render(true);
+            } else {
+              ui.notifications.warn(`Could not find document for ${finalUuid}`);
+            }
+          } catch (err) {
+            console.error("Investigation Board: Error opening linked document", err);
+          }
+        } else {
+          console.warn("Investigation Board: No UUID or ID found on clicked link");
+        }
+      });
+    });
 
     // Hook up file picker button
     const filePickerButton = this.element.querySelector(".file-picker-button");
@@ -417,6 +525,10 @@ class CustomDrawingSheet extends DrawingConfig {
           updates[`flags.${MODULE_ID}.image`] = data.image || (noteType === "handout" ? "modules/investigation-board/assets/newhandout.webp" : "modules/investigation-board/assets/placeholder.webp");
         }
 
+        if (data.linkedObject !== undefined) {
+          updates[`flags.${MODULE_ID}.linkedObject`] = data.linkedObject;
+        }
+
         if (data.identityName !== undefined) {
           updates[`flags.${MODULE_ID}.identityName`] = data.identityName;
         }
@@ -533,6 +645,81 @@ class CustomDrawing extends Drawing {
     }
     // Fall back to default behavior for regular drawings
     return super._canView?.(user, event) ?? true;
+  }
+
+  /**
+   * Handle right-click to show a custom context menu for investigation board notes.
+   */
+  _onClickRight(event) {
+    // Only handle if in Investigation Board mode
+    if (!investigationBoardModeActive) return super._onClickRight(event);
+
+    // Check if this is an investigation board note
+    const noteData = this.document.flags?.[MODULE_ID];
+    if (!noteData?.type) return super._onClickRight(event);
+
+    // Show the custom context menu
+    this._showContextMenu(event);
+  }
+
+  /**
+   * Show a custom context menu at the mouse position.
+   */
+  _showContextMenu(event) {
+    const data = event.data || event.interactionData;
+    const originalEvent = data.originalEvent;
+    
+    // Positions
+    const x = originalEvent.clientX;
+    const y = originalEvent.clientY;
+
+    // Remove any existing custom context menus
+    document.querySelectorAll('.ib-context-menu').forEach(el => el.remove());
+
+    const menu = document.createElement('div');
+    menu.classList.add('ib-context-menu');
+    menu.style.position = 'fixed';
+    menu.style.top = `${y}px`;
+    menu.style.left = `${x}px`;
+    menu.style.zIndex = '10000';
+
+    const editOption = document.createElement('div');
+    editOption.innerHTML = '<i class="fas fa-edit"></i> Edit';
+    editOption.classList.add('ib-context-menu-item');
+    editOption.onclick = (e) => {
+      e.stopPropagation();
+      this.document.sheet.render(true);
+      menu.remove();
+    };
+
+    const viewOption = document.createElement('div');
+    viewOption.innerHTML = '<i class="fas fa-eye"></i> View';
+    viewOption.classList.add('ib-context-menu-item', 'disabled');
+    viewOption.title = "View functionality coming soon";
+    viewOption.onclick = (e) => {
+      e.stopPropagation();
+      // Does nothing for now
+      menu.remove();
+    };
+
+    menu.appendChild(editOption);
+    menu.appendChild(viewOption);
+    document.body.appendChild(menu);
+
+    // Close menu when clicking elsewhere or scrolling
+    const closeMenu = (e) => {
+      if (!menu.contains(e.target)) {
+        menu.remove();
+        document.removeEventListener('mousedown', closeMenu);
+        window.removeEventListener('wheel', closeMenu);
+      }
+    };
+    
+    // Delay adding the listener to avoid immediate closing if the right-click event bubbles
+    setTimeout(() => {
+      document.addEventListener('mousedown', closeMenu);
+      window.addEventListener('wheel', closeMenu);
+    }, 100);
   }
 
   // Ensure sprites are created when the drawing is first rendered.
@@ -1449,6 +1636,7 @@ async function createNote(noteType) {
         [MODULE_ID]: {
           type: noteType,
           text: defaultText,
+          linkedObject: "",
           ...extraFlags
         },
         core: {
@@ -1501,16 +1689,6 @@ async function createPhotoNoteFromActor(actor, isUnknown = false) {
   const x = dims.width / 2;
   const y = dims.height / 2;
 
-  const displayName = isUnknown ? "????" : getActorDisplayName(actor);
-  const imagePath = actor.img || "modules/investigation-board/assets/placeholder.webp";
-
-  const boardMode = game.settings.get(MODULE_ID, "boardMode");
-  const extraFlags = { image: imagePath };
-
-  if (boardMode === "futuristic") {
-    extraFlags.identityName = displayName;
-  }
-
   const created = await canvas.scene.createEmbeddedDocuments("Drawing", [{
     type: "r",
     author: game.user.id,
@@ -1526,6 +1704,7 @@ async function createPhotoNoteFromActor(actor, isUnknown = false) {
       [MODULE_ID]: {
         type: "photo",
         text: displayName,
+        linkedObject: `@UUID[${actor.uuid}]{${displayName}}`,
         ...extraFlags
       },
       core: { sheetClass: "investigation-board.CustomDrawingSheet" }
@@ -1588,6 +1767,7 @@ async function createPhotoNoteFromScene(targetScene) {
       [MODULE_ID]: {
         type: "photo",
         text: displayName,
+        linkedObject: `@UUID[${targetScene.uuid}]{${displayName}}`,
         ...extraFlags
       },
       core: { sheetClass: "investigation-board.CustomDrawingSheet" }
@@ -1666,6 +1846,7 @@ async function createHandoutNoteFromPage(page) {
       [MODULE_ID]: {
         type: "handout",
         text: "",
+        linkedObject: `@UUID[${page.uuid}]{${page.name}}`,
         image: imagePath
       },
       core: { sheetClass: "investigation-board.CustomDrawingSheet" }
@@ -1867,33 +2048,6 @@ function activateInvestigationBoardMode() {
   console.log("Investigation Board: Activating mode...");
   investigationBoardModeActive = true;
 
-  // Store original double-click handler only
-  originalDrawingMethods._onClickLeft2 = canvas.drawings._onClickLeft2;
-
-  // Override double-click handler to open CustomDrawingSheet
-  canvas.drawings._onClickLeft2 = async function(event) {
-    // First check controlled drawings
-    let drawing = this.controlled[0];
-
-    // If no controlled drawing, try to find from event target
-    if (!drawing) {
-      const interactionData = event.interactionData;
-      if (interactionData?.object) {
-        drawing = interactionData.object;
-      }
-    }
-
-    // Check if it's an investigation board note
-    if (drawing?.document?.flags?.[MODULE_ID]) {
-      // Open custom sheet instead of default drawing config
-      event.stopPropagation();
-      drawing.document.sheet.render(true);
-      return;
-    }
-    // Fallback to original behavior
-    return originalDrawingMethods._onClickLeft2?.call(this, event);
-  };
-
   // Filter visible placeables using helper function
   refreshDrawingsInteractivity();
 
@@ -1926,11 +2080,8 @@ function deactivateInvestigationBoardMode() {
   // Clear connection numbers
   clearConnectionNumbers();
 
-  // Restore original methods
+  // Restore default interactivity to all drawings
   if (canvas.drawings) {
-    canvas.drawings._onClickLeft2 = originalDrawingMethods._onClickLeft2;
-
-    // Restore default interactivity to all drawings
     canvas.drawings.placeables.forEach(drawing => {
       drawing.eventMode = 'auto';
       drawing.interactiveChildren = true;
@@ -2011,6 +2162,36 @@ Hooks.on("renderSceneControls", (controls, html) => {
 //     investigationBoardHUD.clear();
 //   }
 // });
+
+// Hook to handle dragging objects onto notes directly
+Hooks.on("dropCanvasData", (canvas, data) => {
+  if (!investigationBoardModeActive) return true;
+  if (!data.uuid) return true;
+
+  // Find if we dropped on a drawing
+  const drawingsLayer = canvas.drawings;
+  const result = drawingsLayer.placeables.find(d => {
+    const isInvestigationNote = d.document.flags[MODULE_ID];
+    if (!isInvestigationNote) return false;
+
+    const b = d.bounds;
+    return (data.x >= b.x) && (data.x <= b.x + b.width) && (data.y >= b.y) && (data.y <= b.y + b.height);
+  });
+
+  if (result) {
+    (async () => {
+      const doc = await fromUuid(data.uuid);
+      const link = doc ? `@UUID[${doc.uuid}]{${doc.name}}` : `@UUID[${data.uuid}]`;
+      
+      await collaborativeUpdate(result.document.id, {
+        [`flags.${MODULE_ID}.linkedObject`]: link
+      });
+      ui.notifications.info(`Linked ${doc?.name || "object"} to note.`);
+    })();
+    return false; // Prevent default drop behavior
+  }
+  return true;
+});
 
 Hooks.once("init", () => {
   registerSettings();
