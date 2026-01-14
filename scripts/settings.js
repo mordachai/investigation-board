@@ -103,6 +103,26 @@ export const registerSettings = function() {
         onChange: () => refreshAllDrawings()
     });
 
+    game.settings.register(MODULE_ID, "handoutNoteWidth", {
+        name: "Handout Note Width",
+        hint: "The default width (in pixels) for newly created handout notes (default: 400).",
+        scope: "world",
+        config: true,
+        type: Number,
+        default: 400,
+        onChange: () => refreshAllDrawings()
+    });
+
+    game.settings.register(MODULE_ID, "handoutNoteHeight", {
+        name: "Handout Note Height",
+        hint: "The default height (in pixels) for newly created handout notes (default: 400).",
+        scope: "world",
+        config: true,
+        type: Number,
+        default: 400,
+        onChange: () => refreshAllDrawings()
+    });
+
     game.settings.register(MODULE_ID, "baseFontSize", {
         name: "Base Font Size",
         hint: "The font size (in pixels) for text when the note width is at its default size (default: 16).",

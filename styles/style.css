@@ -366,3 +366,113 @@ body.investigation-board-mode .drawing:not([data-investigation-note="true"]) {
 .cancel-button i {
   margin-right: 5px;
 }
+
+/* ========================= */
+/* Handout Size Controls     */
+/* ========================= */
+
+.size-controls {
+  margin-top: 10px;
+}
+
+.size-inputs {
+  display: flex;
+  gap: 15px;
+  margin-top: 8px;
+  margin-bottom: 10px;
+}
+
+.size-input-group {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+
+.size-input-group label {
+  font-size: 12px;
+  font-weight: 500;
+  color: #333;
+}
+
+.size-input-group input[type="number"] {
+  width: 100%;
+  padding: 6px 8px;
+  border: 1px solid #ccc;
+  border-radius: 3px;
+  font-size: 14px;
+}
+
+.aspect-ratio-lock {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 5px;
+}
+
+.aspect-ratio-lock input[type="checkbox"] {
+  width: 16px;
+  height: 16px;
+  cursor: pointer;
+}
+
+.aspect-ratio-lock label {
+  font-size: 13px;
+  cursor: pointer;
+  user-select: none;
+}
+
+.size-hint {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  margin-top: 10px;
+  padding: 8px 10px;
+  background: rgba(63, 81, 181, 0.1);
+  border-left: 3px solid #3f51b5;
+  border-radius: 3px;
+}
+
+.size-hint i {
+  color: #3f51b5;
+  font-size: 14px;
+  margin-top: 2px;
+  flex-shrink: 0;
+}
+
+.size-hint span {
+  font-size: 12px;
+  line-height: 1.4;
+  color: #555;
+}
+
+/* Font Settings (for other note types) */
+.font-settings {
+  display: flex;
+  gap: 15px;
+  margin-top: 10px;
+}
+
+.font-select-group,
+.font-size-group {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+
+.font-select-group label,
+.font-size-group label {
+  font-size: 12px;
+  font-weight: 500;
+  color: #333;
+}
+
+.font-select-group select,
+.font-size-group input[type="number"] {
+  width: 100%;
+  padding: 6px 8px;
+  border: 1px solid #ccc;
+  border-radius: 3px;
+  font-size: 14px;
+}

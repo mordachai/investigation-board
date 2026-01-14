@@ -1,29 +1,31 @@
 <form>
-  <div class="form-group">
-    <label for="text">Note Text:</label>
-    <textarea name="text" rows="4">{{text}}</textarea>
-  </div>
-
-  {{!-- Font Settings --}}
-  <div class="form-group font-settings">
-    <div class="font-select-group">
-      <label for="font">Font:</label>
-      <select name="font">
-        <option value="Rock Salt" {{#if (eq font "Rock Salt")}}selected{{/if}}>Rock Salt</option>
-        <option value="Courier New" {{#if (eq font "Courier New")}}selected{{/if}}>Courier New</option>
-        <option value="Times New Roman" {{#if (eq font "Times New Roman")}}selected{{/if}}>Times New Roman</option>
-        <option value="Signika" {{#if (eq font "Signika")}}selected{{/if}}>Signika</option>
-        <option value="Arial" {{#if (eq font "Arial")}}selected{{/if}}>Arial</option>
-      </select>
+  {{#unless (eq noteType "handout")}}
+    <div class="form-group">
+      <label for="text">Note Text:</label>
+      <textarea name="text" rows="4">{{text}}</textarea>
     </div>
-    <div class="font-size-group">
-      <label for="fontSize">Font Size:</label>
-      <input type="number" name="fontSize" value="{{fontSize}}" min="8" max="48" step="1" />
-    </div>
-  </div>
 
-  {{!-- Only show the Image Path field for photo notes --}}
-  {{#if (eq noteType "photo")}}
+    {{!-- Font Settings --}}
+    <div class="form-group font-settings">
+      <div class="font-select-group">
+        <label for="font">Font:</label>
+        <select name="font">
+          <option value="Rock Salt" {{#if (eq font "Rock Salt")}}selected{{/if}}>Rock Salt</option>
+          <option value="Courier New" {{#if (eq font "Courier New")}}selected{{/if}}>Courier New</option>
+          <option value="Times New Roman" {{#if (eq font "Times New Roman")}}selected{{/if}}>Times New Roman</option>
+          <option value="Signika" {{#if (eq font "Signika")}}selected{{/if}}>Signika</option>
+          <option value="Arial" {{#if (eq font "Arial")}}selected{{/if}}>Arial</option>
+        </select>
+      </div>
+      <div class="font-size-group">
+        <label for="fontSize">Font Size:</label>
+        <input type="number" name="fontSize" value="{{fontSize}}" min="8" max="48" step="1" />
+      </div>
+    </div>
+  {{/unless}}
+
+  {{!-- Show Image Path field for photo notes and handouts --}}
+  {{#if (or (eq noteType "photo") (eq noteType "handout"))}}
     <div class="form-group" style="display: block;">
       <label for="image">Image Path:</label>
       <div class="file-picker">
@@ -36,6 +38,7 @@
   {{else}}
     <div class="form-group" style="display: none;"></div>
   {{/if}}
+
 
   {{!-- If boardMode is futuristic and noteType is photo, show the extra Identity Name field --}}
   {{#if (eq noteType "photo")}}

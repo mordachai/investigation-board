@@ -106,7 +106,7 @@ class CustomDrawingSheet extends DrawingConfig {
       if (targetDrawing) {
         const targetData = targetDrawing.document.flags[MODULE_ID];
         if (targetData) {
-          const typeLabels = { sticky: "Sticky Note", photo: "Photo Note", index: "Index Card" };
+          const typeLabels = { sticky: "Sticky Note", photo: "Photo Note", index: "Index Card", handout: "Handout" };
           targetLabel = typeLabels[targetData.type] || "Note";
         }
       } else {
@@ -140,6 +140,7 @@ class CustomDrawingSheet extends DrawingConfig {
         sticky: "Sticky Note",
         photo: "Photo Note",
         index: "Index Card",
+        handout: "Handout"
       }
     };
     return data;
@@ -180,9 +181,63 @@ class CustomDrawingSheet extends DrawingConfig {
 
         new FilePicker({
           type: "image",
-          current: "modules/investigation-board/assets/",
-          callback: (path) => {
+          current: "",
+          callback: async (path) => {
             input.value = path;
+
+            // Update image immediately for all note types
+            const noteType = this.document.flags[MODULE_ID]?.type;
+            if (noteType === "handout") {
+              // Auto-resize handout notes when image is selected
+              try {
+                // Load the texture to get natural dimensions
+                const texture = await PIXI.Assets.load(path);
+                if (texture) {
+                  let targetWidth = texture.width;
+                  let targetHeight = texture.height;
+
+                  // Apply 1000px height cap
+                  if (targetHeight > 1000) {
+                    const scale = 1000 / targetHeight;
+                    targetWidth = Math.round(targetWidth * scale);
+                    targetHeight = 1000;
+                  }
+
+                  // Apply 2000px width cap
+                  if (targetWidth > 2000) {
+                    const scale = 2000 / targetWidth;
+                    targetHeight = Math.round(targetHeight * scale);
+                    targetWidth = 2000;
+                  }
+
+                  // Update the drawing document dimensions AND image path
+                  await this.document.update({
+                    'shape.width': targetWidth,
+                    'shape.height': targetHeight,
+                    [`flags.${MODULE_ID}.image`]: path
+                  });
+
+                  // Refresh the drawing on canvas
+                  const drawing = canvas.drawings.get(this.document.id);
+                  if (drawing) {
+                    await drawing.refresh();
+                  }
+                }
+              } catch (err) {
+                console.error("Failed to auto-resize handout:", err);
+              }
+            } else if (noteType === "photo") {
+              // Update photo note image immediately (no resize)
+              await this.document.update({
+                [`flags.${MODULE_ID}.image`]: path
+              });
+
+              // Refresh the drawing on canvas
+              const drawing = canvas.drawings.get(this.document.id);
+              if (drawing) {
+                await drawing.refresh();
+              }
+            }
           }
         }).browse();
       });
@@ -228,22 +283,32 @@ class CustomDrawingSheet extends DrawingConfig {
         const data = Object.fromEntries(formData.entries());
 
         // Update the document flags
-        const updates = {
-          [`flags.${MODULE_ID}.text`]: data.text || "",
-          [`flags.${MODULE_ID}.image`]: data.image || "modules/investigation-board/assets/placeholder.webp",
-        };
+        const noteType = this.document.flags[MODULE_ID]?.type;
+        const updates = {};
+
+        // Only save text for non-handout notes
+        if (noteType !== "handout") {
+          updates[`flags.${MODULE_ID}.text`] = data.text || "";
+        }
+
+        // Save image for photo and handout notes
+        if (noteType === "photo" || noteType === "handout") {
+          updates[`flags.${MODULE_ID}.image`] = data.image || "modules/investigation-board/assets/placeholder.webp";
+        }
 
         if (data.identityName !== undefined) {
           updates[`flags.${MODULE_ID}.identityName`] = data.identityName;
         }
 
-        // Save font and fontSize to note flags
-        if (data.font !== undefined) {
-          updates[`flags.${MODULE_ID}.font`] = data.font;
-        }
+        // Save font and fontSize to note flags (skip for handouts)
+        if (noteType !== "handout") {
+          if (data.font !== undefined) {
+            updates[`flags.${MODULE_ID}.font`] = data.font;
+          }
 
-        if (data.fontSize !== undefined) {
-          updates[`flags.${MODULE_ID}.fontSize`] = parseInt(data.fontSize);
+          if (data.fontSize !== undefined) {
+            updates[`flags.${MODULE_ID}.fontSize`] = parseInt(data.fontSize);
+          }
         }
 
         // Process connection color changes
@@ -327,11 +392,168 @@ class CustomDrawing extends Drawing {
   async _updateSprites() {
     const noteData = this.document.flags[MODULE_ID];
     if (!noteData) return;
-    
+
     const isPhoto = noteData.type === "photo";
     const isIndex = noteData.type === "index";
+    const isHandout = noteData.type === "handout";
     const mode = game.settings.get(MODULE_ID, "boardMode");
-    
+
+    // HANDOUT NOTE LAYOUT (Image-only, transparent background)
+    if (isHandout) {
+      const drawingWidth = this.document.shape.width || 400;
+      const drawingHeight = this.document.shape.height || 400;
+
+      // No background sprite for handouts (transparent)
+      if (this.bgSprite) {
+        this.removeChild(this.bgSprite);
+        this.bgSprite.destroy();
+        this.bgSprite = null;
+      }
+
+      // --- User Image (primary content) ---
+      // Check if sprite exists and has a valid parent, recreate if orphaned
+      if (!this.photoImageSprite || !this.photoImageSprite.parent) {
+        // Destroy old sprite if it exists
+        if (this.photoImageSprite) {
+          this.photoImageSprite.destroy();
+        }
+        this.photoImageSprite = new PIXI.Sprite();
+        this.addChild(this.photoImageSprite);
+      }
+
+      const imagePath = noteData.image || "modules/investigation-board/assets/placeholder.webp";
+      try {
+        const texture = await PIXI.Assets.load(imagePath);
+        if (texture && this.photoImageSprite && this.photoImageSprite.parent) {
+          this.photoImageSprite.texture = texture;
+
+          // Scale image to fit drawing bounds while maintaining aspect ratio
+          const textureRatio = texture.width / texture.height;
+          const drawingRatio = drawingWidth / drawingHeight;
+
+          if (textureRatio > drawingRatio) {
+            // Image is wider - fit to width
+            this.photoImageSprite.width = drawingWidth;
+            this.photoImageSprite.height = drawingWidth / textureRatio;
+          } else {
+            // Image is taller - fit to height
+            this.photoImageSprite.height = drawingHeight;
+            this.photoImageSprite.width = drawingHeight * textureRatio;
+          }
+
+          // Center the image within the drawing bounds
+          this.photoImageSprite.position.set(
+            (drawingWidth - this.photoImageSprite.width) / 2,
+            (drawingHeight - this.photoImageSprite.height) / 2
+          );
+
+          // Ensure sprite is visible and has correct properties
+          this.photoImageSprite.visible = true;
+          this.photoImageSprite.alpha = 1;
+          this.photoImageSprite.renderable = true;
+        }
+      } catch (err) {
+        console.error(`Failed to load handout image: ${imagePath}`, err);
+        if (this.photoImageSprite) {
+          this.photoImageSprite.texture = PIXI.Texture.EMPTY;
+        }
+      }
+
+      // --- Pin Sprite ---
+      const pinSetting = game.settings.get(MODULE_ID, "pinColor");
+      if (pinSetting === "none") {
+        if (this.pinSprite) {
+          this.removeChild(this.pinSprite);
+          this.pinSprite.destroy();
+          this.pinSprite = null;
+        }
+      } else {
+        // Check if sprite exists and has a valid parent, recreate if orphaned
+        if (!this.pinSprite || !this.pinSprite.parent) {
+          // Destroy old sprite if it exists
+          if (this.pinSprite) {
+            this.pinSprite.destroy();
+          }
+          this.pinSprite = new PIXI.Sprite();
+          this.addChild(this.pinSprite);
+        }
+
+        let pinColor = noteData.pinColor;
+        if (!pinColor) {
+          pinColor = (pinSetting === "random")
+            ? PIN_COLORS[Math.floor(Math.random() * PIN_COLORS.length)]
+            : `${pinSetting}Pin.webp`;
+          if (this.document.isOwner) {
+            await this.document.update({ [`flags.${MODULE_ID}.pinColor`]: pinColor });
+          }
+        }
+
+        const pinImage = `modules/investigation-board/assets/${pinColor}`;
+        try {
+          const texture = await PIXI.Assets.load(pinImage);
+          if (texture && this.pinSprite && this.pinSprite.parent) {
+            this.pinSprite.texture = texture;
+            this.pinSprite.width = 40;
+            this.pinSprite.height = 40;
+            // Position at 5% from top, centered horizontally
+            this.pinSprite.position.set(
+              drawingWidth / 2 - 20,
+              drawingHeight * 0.05
+            );
+
+            // Make pin interactive for connections
+            this.pinSprite.eventMode = 'static';
+            this.pinSprite.cursor = 'pointer';
+            this.pinSprite.on('click', (event) => {
+              event.stopPropagation();
+              handlePinClick(this);
+            });
+          }
+        } catch (err) {
+          console.error(`Failed to load pin texture: ${pinImage}`, err);
+          if (this.pinSprite) {
+            this.pinSprite.texture = PIXI.Texture.EMPTY;
+          }
+        }
+      }
+
+      // Hide text sprites (handouts don't have text)
+      if (this.noteText) {
+        this.noteText.visible = false;
+      }
+      if (this.identityNameText) {
+        this.identityNameText.visible = false;
+      }
+      if (this.futuristicText) {
+        this.futuristicText.visible = false;
+      }
+
+      // Ensure the drawing itself is visible for handouts
+      this.visible = true;
+      this.alpha = 1;
+      this.renderable = true;
+
+      // Force PIXI render update by multiple methods
+      this.transform.updateTransform(this.parent.transform);
+
+      // Mark all children as needing update
+      if (this.photoImageSprite) {
+        this.photoImageSprite.updateTransform();
+      }
+      if (this.pinSprite) {
+        this.pinSprite.updateTransform();
+      }
+
+      // Force canvas render on next frame
+      requestAnimationFrame(() => {
+        if (canvas?.app?.renderer) {
+          canvas.app.renderer.render(canvas.stage);
+        }
+      });
+
+      return; // Early exit for handout notes
+    }
+
     // FUTURISTIC PHOTO NOTE LAYOUT
     if (isPhoto && mode === "futuristic") {
       const fullWidth = game.settings.get(MODULE_ID, "photoNoteWidth");
@@ -613,6 +835,16 @@ class CustomDrawing extends Drawing {
     const noteData = this.document.flags[MODULE_ID];
     if (!noteData) return { x: this.document.x, y: this.document.y };
 
+    // Handout notes use dynamic positioning based on drawing height
+    if (noteData.type === "handout") {
+      const width = this.document.shape.width || 400;
+      const height = this.document.shape.height || 400;
+      return {
+        x: this.document.x + width / 2,
+        y: this.document.y + (height * 0.05) + 20  // 5% from top + half pin height
+      };
+    }
+
     const isPhoto = noteData.type === "photo";
     const isIndex = noteData.type === "index";
 
@@ -676,18 +908,28 @@ function drawAllConnectionLines(animationOffset = 0) {
         const noteData = drawing.document.flags[MODULE_ID];
         const isPhoto = noteData.type === "photo";
         const isIndex = noteData.type === "index";
+        const isHandout = noteData.type === "handout";
 
-        let width;
-        if (isPhoto) {
-          width = game.settings.get(MODULE_ID, "photoNoteWidth");
-        } else if (isIndex) {
-          width = game.settings.get(MODULE_ID, "indexNoteWidth") || 600;
+        let width, pinY;
+        if (isHandout) {
+          // Handout notes use dynamic positioning based on drawing dimensions
+          width = drawing.document.shape.width || 400;
+          const height = drawing.document.shape.height || 400;
+          pinY = drawing.document.y + (height * 0.05);
         } else {
-          width = game.settings.get(MODULE_ID, "stickyNoteWidth");
+          // Other note types use fixed positioning
+          if (isPhoto) {
+            width = game.settings.get(MODULE_ID, "photoNoteWidth");
+          } else if (isIndex) {
+            width = game.settings.get(MODULE_ID, "indexNoteWidth") || 600;
+          } else {
+            width = game.settings.get(MODULE_ID, "stickyNoteWidth");
+          }
+          pinY = drawing.document.y + 3;
         }
 
         drawing.pinSprite.x = drawing.document.x + width / 2 - 20;
-        drawing.pinSprite.y = drawing.document.y + 3;
+        drawing.pinSprite.y = pinY;
 
         // Make pin interactive for connection creation
         drawing.pinSprite.eventMode = 'static';
@@ -938,12 +1180,16 @@ async function createNote(noteType) {
   const stickyW = game.settings.get(MODULE_ID, "stickyNoteWidth") || 200;
   const photoW = game.settings.get(MODULE_ID, "photoNoteWidth") || 225;
   const indexW = game.settings.get(MODULE_ID, "indexNoteWidth") || 600;
+  const handoutW = game.settings.get(MODULE_ID, "handoutNoteWidth") || 400;
+  const handoutH = game.settings.get(MODULE_ID, "handoutNoteHeight") || 400;
 
-  const width = noteType === "photo" ? photoW 
-                : noteType === "index" ? indexW 
+  const width = noteType === "photo" ? photoW
+                : noteType === "index" ? indexW
+                : noteType === "handout" ? handoutW
                 : stickyW;
-  const height = noteType === "photo" ? Math.round(photoW / (225 / 290)) 
-                 : noteType === "index" ? Math.round(indexW / (600 / 400)) 
+  const height = noteType === "photo" ? Math.round(photoW / (225 / 290))
+                 : noteType === "index" ? Math.round(indexW / (600 / 400))
+                 : noteType === "handout" ? handoutH
                  : stickyW;
 
   const dims = canvas.dimensions;
@@ -951,7 +1197,9 @@ async function createNote(noteType) {
   const y = dims.height / 2;
 
   // Get default text from settings (fallback if missing)
-  const defaultText = game.settings.get(MODULE_ID, `${noteType}NoteDefaultText`) || "Notes";
+  const defaultText = noteType === "handout"
+                    ? ""
+                    : (game.settings.get(MODULE_ID, `${noteType}NoteDefaultText`) || "Notes");
 
   // Determine board mode and include identityName if note is a futuristic photo note
   const boardMode = game.settings.get(MODULE_ID, "boardMode");
@@ -972,8 +1220,8 @@ async function createNote(noteType) {
       x,
       y,
       shape: { width, height },
-      fillColor: "#ffffff",
-      fillAlpha: 1,
+      fillColor: noteType === "handout" ? "#000000" : "#ffffff",
+      fillAlpha: noteType === "handout" ? 0 : 1,
       strokeColor: "#000000",
       strokeWidth: 0,
       strokeAlpha: 0,
@@ -1293,6 +1541,14 @@ Hooks.on("getSceneControlButtons", (controls) => {
       button: true
     };
 
+    controls.drawings.tools.createHandout = {
+      name: "createHandout",
+      title: "Create Handout Note",
+      icon: "fas fa-file-image",
+      onChange: () => createNote("handout"),
+      button: true
+    };
+
     // Connect mode removed - now done by clicking pins directly
   }
 });
@@ -1331,7 +1587,7 @@ Hooks.once("init", () => {
   DocumentSheetConfig.registerSheet(DrawingDocument, "investigation-board", CustomDrawingSheet, {
     label: "Note Drawing Sheet",
     types: ["base"],
-    makeDefault: true,
+    makeDefault: false,
   });
 
   // ESC key handler to cancel pin connection
@@ -1369,10 +1625,30 @@ Hooks.on("createDrawing", (drawing, options, userId) => {
 });
 
 // Hook to redraw lines when notes move
-Hooks.on("updateDrawing", (drawing, changes, options, userId) => {
+Hooks.on("updateDrawing", async (drawing, changes, options, userId) => {
   // Check if this is an investigation board note
   const noteData = drawing.flags[MODULE_ID];
   if (!noteData) return;
+
+  // For handouts, always check if actual dimensions differ from sprite dimensions
+  if (noteData.type === "handout") {
+    const placeable = canvas.drawings.get(drawing.id);
+    if (placeable && placeable.photoImageSprite) {
+      const docW = drawing.shape.width;
+      const docH = drawing.shape.height;
+      const spriteW = placeable.photoImageSprite.width || 0;
+      const spriteH = placeable.photoImageSprite.height || 0;
+
+      // Check if sprite dimensions don't match document (allowing for aspect ratio differences)
+      const tolerance = 5; // pixels
+      const widthMismatch = Math.abs(spriteW - docW) > tolerance;
+      const heightMismatch = Math.abs(spriteH - docH) > tolerance;
+
+      if (widthMismatch || heightMismatch) {
+        await placeable.refresh();
+      }
+    }
+  }
 
   // If position changed, redraw all connection lines
   if (changes.x !== undefined || changes.y !== undefined) {
