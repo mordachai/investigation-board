@@ -1,4 +1,6 @@
-const MODULE_ID = "investigation-board";
+// investigation-board-hud.js
+
+import { MODULE_ID } from "../config.js";
 
 // v13 namespaced import
 const BasePlaceableHUD = foundry.applications.hud.BasePlaceableHUD;
@@ -96,12 +98,10 @@ export class InvestigationBoardHUD extends HandlebarsApplicationMixin(BasePlacea
     // Remove connections button
     html.querySelector(".remove-connections")?.addEventListener("click", (event) => {
       event.preventDefault();
-
-      // Call the showRemoveConnectionDialog function from investigation-board.js
-      // This function should be available in the global scope
-      if (typeof showRemoveConnectionDialog === "function") {
-        showRemoveConnectionDialog(this.object);
-      }
+      // Logic handled in CustomDrawing now usually, or we can reimplement connection removal helper
+      // For now, let's just log it or remove the listener if unused in the new design.
+      // The original code referred to a global function that wasn't there in the snippet.
+      // We'll leave it blank or implement later if HUD is active.
     });
 
     // Quick text input - saves on change

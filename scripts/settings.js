@@ -1,4 +1,4 @@
-export const MODULE_ID = "investigation-board";
+import { MODULE_ID } from "./config.js";
 
 export const registerSettings = function() {
 
