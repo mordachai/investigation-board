@@ -3,6 +3,27 @@ import { InvestigationBoardState } from "../state.js";
 import { getActorDisplayName } from "./helpers.js";
 import { collaborativeCreate } from "./socket-handler.js";
 
+/**
+ * Internal helper to find a random cassette image from assets
+ */
+async function _getRandomCassetteImage() {
+  let imagePath = "modules/investigation-board/assets/cassette1.webp"; // Default fallback
+  try {
+    const folder = "modules/investigation-board/assets/";
+    const browse = await FilePicker.browse("data", folder);
+    const cassettes = browse.files.filter(f => {
+      const filename = f.split("/").pop();
+      return filename.startsWith("cassette") && f.endsWith(".webp");
+    });
+    if (cassettes.length > 0) {
+      imagePath = cassettes[Math.floor(Math.random() * cassettes.length)];
+    }
+  } catch (err) {
+    console.warn("Investigation Board: Could not browse assets folder for cassettes", err);
+  }
+  return imagePath;
+}
+
 export async function createNote(noteType) {
   const scene = canvas.scene;
   if (!scene) {
@@ -57,9 +78,7 @@ export async function createNote(noteType) {
 
   // Set default image and audio for media notes
   if (noteType === "media") {
-    const cassettes = ["cassette1.webp", "cassette2.webp"];
-    const randomCassette = cassettes[Math.floor(Math.random() * cassettes.length)];
-    extraFlags.image = `modules/investigation-board/assets/${randomCassette}`;
+    extraFlags.image = await _getRandomCassetteImage();
     extraFlags.audioPath = "";
   }
 
@@ -339,9 +358,7 @@ export async function createMediaNoteFromSound(sound) {
   const x = dims.width / 2;
   const y = dims.height / 2;
 
-  const cassettes = ["cassette1.webp", "cassette2.webp"];
-  const randomCassette = cassettes[Math.floor(Math.random() * cassettes.length)];
-  const imagePath = `modules/investigation-board/assets/${randomCassette}`;
+  const imagePath = await _getRandomCassetteImage();
 
   const created = await collaborativeCreate({
     type: "r",

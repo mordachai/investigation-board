@@ -214,4 +214,13 @@ export const registerSettings = function() {
             "Arial": { sticky: 200, photo: 30, index: 650 }
         }
     });
+
+    game.settings.register(MODULE_ID, "showSetupWarning", {
+        name: "Show Setup Warning",
+        hint: "Whether to show the setup warning for GMs about player permissions.",
+        scope: "world",
+        config: true,
+        type: Boolean,
+        default: true
+    });
 };
