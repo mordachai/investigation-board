@@ -5,16 +5,26 @@
 
 A Foundry VTT module that lets everyone create, edit, and move sticky and photo notes on the scene. A must-have for investigative games like City of Mist, Call of Cthulhu, and all your conspiracy adventures.
 
-![image](https://github.com/user-attachments/assets/aa6ac7ea-6051-4c10-b88f-c4dcc8a3bd62)
+<img width="1200" height="591" alt="image" src="https://github.com/user-attachments/assets/a38c958e-82b0-49f7-85e1-7fb6fa2f1fa9" />
 
-## New Feature (v1.7): Connecting Notes!
+## NEW FEATURE: Connecting Notes
 
+Click on a pin, click on the other. That's it.
+
+Connecting lines will always have the player's Foundry color initially. You can change it in the Edit menu.
+
+**REMEMBER: YOU NEED TO BE IN DRAW MODE TO MAKE ALL OF THIS**
+
+
+## CHECK OUT THE VIDEO ↓ 
+
+https://github.com/user-attachments/assets/ee486ed2-040f-4d93-a379-e162cf052986
 
 ## How to Use
 
-<img width="349" height="661" alt="image" src="https://github.com/user-attachments/assets/62d48308-e44a-4f80-b7b3-047cf1663d64" />
-
 Open the **Drawing Tools Toolbar** in the scene controls. You will find several custom buttons to populate your board:
+
+<img width="349" height="661" alt="image" src="https://github.com/user-attachments/assets/62d48308-e44a-4f80-b7b3-047cf1663d64" />
 
 ### Note Types
 - **Sticky Note**: Classic square notes for quick clues or short text.
@@ -24,6 +34,13 @@ Open the **Drawing Tools Toolbar** in the scene controls. You will find several 
 - **Media (Cassette)**: Visual representation for audio recordings.
 
 <img width="800" height="500" alt="image" src="https://github.com/user-attachments/assets/9862eaab-8747-4df5-8153-4a795d1ef19d" />
+
+-----
+
+### Scene in Compendiums
+
+<img width="978" height="711" alt="image" src="https://github.com/user-attachments/assets/0ea03a2e-a5fc-4f4e-a0b2-8f9b2b690f66" />
+
 
 ### Interaction & Linking
 - **Double Click**: Opens the **Note Previewer**, a high-resolution view of the note and its contents.
@@ -55,6 +72,8 @@ If you click on the **Delete button** in the Drawing tools sidebar, **ALL DRAWIN
 
 The module's settings contain some pretty straightforward options, so you can better adjust it for your table. 
 
+-----
+
 ### Module Settings
 
 <img width="786" height="695" alt="image" src="https://github.com/user-attachments/assets/6eff3c27-66af-4a69-927d-d16a48ab4579" />
@@ -69,6 +88,8 @@ The module's settings contain some pretty straightforward options, so you can be
 - **Character Name Key**: For photo notes created from Actors, this defines which data field to use for the name (e.g., `prototypeToken.name` or `system.alias` for systems like Blades in the Dark).
 - **Default Note Texts**: Set the placeholder text for each new note type (Sticky, Photo, Index, Media).
 - **Show Setup Warning**: Toggle the reminder for GMs about player permissions for drawings and file uploads.
+
+-----
 
 ## Installation
 
@@ -86,6 +107,8 @@ Paste the following manifest URL into the bottom Manifest URL field:
 https://github.com/mordachai/investigation-board/releases/latest/download/module.json
 ```
 After that go to your world and enable the module in your Game Settings under Manage Modules
+
+-----
 
 ## Compatibility
 
