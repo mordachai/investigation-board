@@ -684,10 +684,13 @@ class CustomDrawingSheet extends DrawingConfig {
  */
 class NotePreviewer extends HandlebarsApplicationMixin(ApplicationV2) {
   constructor(document, options = {}) {
+    // Ensure singleton instance per document
+    options.id = `note-preview-${document.id}`;
     super(options);
     this.document = document;
     this.localSound = null;
     this.globalSoundActive = false;
+    this.audioPollInterval = null;
   }
 
   static DEFAULT_OPTIONS = {
@@ -771,6 +774,26 @@ class NotePreviewer extends HandlebarsApplicationMixin(ApplicationV2) {
       localAudio.addEventListener("ended", () => {
         if (!this.globalSoundActive) cassette.classList.remove("playing");
       });
+
+      // Poll for external playback (e.g. from canvas context menu) to sync animation
+      const audioPath = this.document.flags[MODULE_ID]?.audioPath;
+      if (audioPath) {
+        this.audioPollInterval = setInterval(() => {
+          // Check if any sound with this source is currently playing
+          const isPlaying = Array.from(game.audio.playing.values()).some(s => s.src === audioPath && s.playing);
+          
+          if (isPlaying) {
+            if (!cassette.classList.contains("playing")) {
+              cassette.classList.add("playing");
+            }
+          } else {
+            // Only remove if not locally playing (checked via audio element) and not globally active state
+            if (localAudio.paused && !this.globalSoundActive && cassette.classList.contains("playing")) {
+              cassette.classList.remove("playing");
+            }
+          }
+        }, 500);
+      }
     }
 
     // Global Play Button (GM only)
@@ -852,9 +875,32 @@ class NotePreviewer extends HandlebarsApplicationMixin(ApplicationV2) {
         }
       });
     });
+
+    // Handle auto-play options passed from Context Menu
+    if (options.autoplay) {
+      if (localAudio && localAudio.paused) {
+        // Small delay to ensure DOM is ready and constraints are met
+        setTimeout(() => {
+          localAudio.play().catch(e => console.warn("Investigation Board: Auto-play blocked by browser policy", e));
+        }, 100);
+      }
+    }
+
+    if (options.autobroadcast && playGlobalBtn) {
+      // Small delay to ensure logic is ready
+      setTimeout(() => {
+        if (!playGlobalBtn.classList.contains("active")) {
+          playGlobalBtn.click();
+        }
+      }, 100);
+    }
   }
 
   async _onClose(options) {
+    if (this.audioPollInterval) {
+      clearInterval(this.audioPollInterval);
+      this.audioPollInterval = null;
+    }
     if (this.localSound) {
       this.localSound.stop();
       this.localSound = null;
@@ -1045,14 +1091,22 @@ class CustomDrawing extends Drawing {
 
     // Media-specific options
     if (noteData.type === "media" && noteData.audioPath) {
-      // Local Play/Stop
-      const isLocalPlaying = Array.from(game.audio.playing.values()).some(s => s.src === noteData.audioPath);
+      const appId = `note-preview-${this.document.id}`;
+      const app = foundry.applications.instances.get(appId);
+      const audioEl = app?.element?.querySelector('.local-audio-player');
+      const isAppPlaying = audioEl && !audioEl.paused;
+      const isLegacyPlaying = Array.from(game.audio.playing.values()).some(s => s.src === noteData.audioPath);
+      const isPlaying = isAppPlaying || isLegacyPlaying;
+
       const playMeOption = document.createElement('div');
       
-      if (isLocalPlaying) {
+      if (isPlaying) {
         playMeOption.innerHTML = '<i class="fas fa-stop"></i> Stop for Me';
         playMeOption.onclick = (e) => {
           e.stopPropagation();
+          // Stop App Audio
+          if (audioEl) audioEl.pause();
+          // Stop Legacy Audio
           const sounds = Array.from(game.audio.playing.values()).filter(s => s.src === noteData.audioPath);
           sounds.forEach(s => s.stop());
           menu.remove();
@@ -1061,11 +1115,8 @@ class CustomDrawing extends Drawing {
         playMeOption.innerHTML = '<i class="fas fa-volume-up"></i> Play for Me';
         playMeOption.onclick = (e) => {
           e.stopPropagation();
-          // Check if already playing locally
-          if (Array.from(game.audio.playing.values()).some(s => s.src === noteData.audioPath && s.playing)) {
-            return;
-          }
-          game.audio.play(noteData.audioPath, { volume: 0.8 });
+          // Open Preview with autoplay
+          new NotePreviewer(this.document).render(true, { autoplay: true });
           menu.remove();
         };
       }
@@ -1080,12 +1131,22 @@ class CustomDrawing extends Drawing {
           playAllOption.innerHTML = '<i class="fas fa-stop"></i> Stop for All';
           playAllOption.onclick = (e) => {
             e.stopPropagation();
+            // Try to use App control first
+            if (app) {
+               const globalBtn = app.element.querySelector('.global-toggle');
+               if (globalBtn && globalBtn.classList.contains('active')) {
+                 globalBtn.click();
+                 menu.remove();
+                 return;
+               }
+            }
+
+            // Fallback to manual socket stop
             if (socket) {
               socket.emit(SOCKET_NAME, {
                 action: "stopAudio",
                 audioPath: noteData.audioPath
               });
-              // Stop locally too (GM is a client)
               const sound = activeGlobalSounds.get(noteData.audioPath);
               if (sound) {
                 sound.stop();
@@ -1098,22 +1159,8 @@ class CustomDrawing extends Drawing {
           playAllOption.innerHTML = '<i class="fas fa-broadcast-tower"></i> Play for All';
           playAllOption.onclick = (e) => {
             e.stopPropagation();
-            // Check if already playing globally
-            if (activeGlobalSounds.has(noteData.audioPath) && activeGlobalSounds.get(noteData.audioPath).playing) {
-              return;
-            }
-            
-            if (socket) {
-              socket.emit(SOCKET_NAME, {
-                action: "playAudio",
-                audioPath: noteData.audioPath
-              });
-              (async () => {
-                const sound = await game.audio.play(noteData.audioPath, { volume: 0.8 });
-                if (sound) activeGlobalSounds.set(noteData.audioPath, sound);
-              })();
-              ui.notifications.info(`Playing for everyone: ${noteData.audioPath}`);
-            }
+            // Unified: Open Preview and broadcast
+            new NotePreviewer(this.document).render(true, { autobroadcast: true });
             menu.remove();
           };
         }
@@ -1138,12 +1185,11 @@ class CustomDrawing extends Drawing {
       e.stopPropagation();
       menu.remove();
 
-      const confirm = await Dialog.confirm({
-        title: "Remove All Connections",
+      const confirm = await foundry.applications.api.DialogV2.confirm({
+        window: { title: "Remove All Connections" },
         content: `<p>Are you sure you want to remove ALL yarn connections connected to this note (incoming and outgoing)?</p>`,
-        yes: () => true,
-        no: () => false,
-        defaultYes: false
+        rejectClose: false,
+        modal: true
       });
 
       if (confirm) {
@@ -1254,12 +1300,11 @@ class CustomDrawing extends Drawing {
       e.stopPropagation();
       menu.remove();
 
-      const confirm = await Dialog.confirm({
-        title: "Delete Note",
+      const confirm = await foundry.applications.api.DialogV2.confirm({
+        window: { title: "Delete Note" },
         content: `<p>Are you sure you want to delete this note?</p>`,
-        yes: () => true,
-        no: () => false,
-        defaultYes: false
+        rejectClose: false,
+        modal: true
       });
 
       if (confirm) {

@@ -80,11 +80,11 @@ export class InvestigationBoardHUD extends HandlebarsApplicationMixin(BasePlacea
     html.querySelector(".delete-note")?.addEventListener("click", async (event) => {
       event.preventDefault();
 
-      const confirm = await Dialog.confirm({
-        title: "Delete Note",
+      const confirm = await foundry.applications.api.DialogV2.confirm({
+        window: { title: "Delete Note" },
         content: "<p>Are you sure you want to delete this note?</p>",
-        yes: () => true,
-        no: () => false
+        rejectClose: false,
+        modal: true
       });
 
       if (confirm) {
