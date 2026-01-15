@@ -795,20 +795,20 @@ body.investigation-board-mode .drawing:not([data-investigation-note="true"]) {
 
 .reel {
   position: absolute;
-  width: 50px;
-  height: 50px;
-  border: 4px dashed rgba(255, 255, 255, 0.4);
+  width: 42px;
+  height: 42px;
+  border: 7px dotted rgba(255, 255, 255, 0.4);
   border-radius: 50%;
-  top: 41%;
-  animation: spin 3s linear infinite;
+  top: 46%;
+  animation: spin 3s linear reverse infinite;
 }
 
 .reel.left {
-  left: 31%;
+  left: 24%;
 }
 
 .reel.right {
-  right: 31%;
+  right: 24%;
 }
 
 @keyframes spin {

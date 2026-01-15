@@ -2512,6 +2512,20 @@ async function createPhotoNoteFromActor(actor, isUnknown = false) {
     return;
   }
 
+  // Get displayName using the helper function
+  let displayName = getActorDisplayName(actor);
+
+  // Override if isUnknown is true
+  if (isUnknown) {
+    displayName = "Unknown";
+  }
+
+  const imagePath = actor.img || "modules/investigation-board/assets/placeholder.webp";
+  const extraFlags = {
+    image: imagePath,
+    ...(isUnknown ? { unknown: true } : {})
+  };
+
   const photoW = game.settings.get(MODULE_ID, "photoNoteWidth") || 225;
   const height = Math.round(photoW / (225 / 290));
 
@@ -2540,7 +2554,7 @@ async function createPhotoNoteFromActor(actor, isUnknown = false) {
       core: { sheetClass: "investigation-board.CustomDrawingSheet" }
     },
     ownership: { default: 3 }
-  }]);
+  }], { skipAutoOpen: true });
 
   // Handle interactivity in Investigation Board mode
   if (investigationBoardModeActive && created?.[0]) {
@@ -2603,7 +2617,7 @@ async function createPhotoNoteFromScene(targetScene) {
       core: { sheetClass: "investigation-board.CustomDrawingSheet" }
     },
     ownership: { default: 3 }
-  }]);
+  }], { skipAutoOpen: true });
 
   if (investigationBoardModeActive && created?.[0]) {
     setTimeout(() => {
@@ -2682,7 +2696,7 @@ async function createHandoutNoteFromPage(page) {
       core: { sheetClass: "investigation-board.CustomDrawingSheet" }
     },
     ownership: { default: 3 }
-  }]);
+  }], { skipAutoOpen: true });
 
   if (investigationBoardModeActive && created?.[0]) {
     setTimeout(() => {
@@ -3075,7 +3089,7 @@ Hooks.on("createDrawing", (drawing, options, userId) => {
   if (!noteData) return;
 
   // If this is the user who created the note, open the edit dialog
-  if (userId === game.user.id) {
+  if (userId === game.user.id && !options.skipAutoOpen) {
     setTimeout(() => {
       drawing.sheet.render(true);
     }, 150);
@@ -3356,7 +3370,7 @@ async function createMediaNoteFromSound(sound) {
       core: { sheetClass: "investigation-board.CustomDrawingSheet" }
     },
     ownership: { default: 3 }
-  }]);
+  }], { skipAutoOpen: true });
 
   if (investigationBoardModeActive && created?.[0]) {
     setTimeout(() => {
