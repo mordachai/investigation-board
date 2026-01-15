@@ -39,8 +39,9 @@ Open the **Drawing Tools Toolbar** in the scene controls. You will find several 
 
 ### Scene in Compendiums
 
-<img width="978" height="711" alt="image" src="https://github.com/user-attachments/assets/0ea03a2e-a5fc-4f4e-a0b2-8f9b2b690f66" />
+Don't have a scene? Don't worry, you can use this corkboard scene for starters. Import it in your level and knock yourself out!
 
+<img width="978" height="711" alt="image" src="https://github.com/user-attachments/assets/0ea03a2e-a5fc-4f4e-a0b2-8f9b2b690f66" />
 
 ### Interaction & Linking
 - **Double Click**: Opens the **Note Previewer**, a high-resolution view of the note and its contents.
