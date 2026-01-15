@@ -960,6 +960,18 @@ class CustomDrawing extends Drawing {
   }
 
   /**
+   * Override activateListeners to ensure the MouseInteractionManager is configured
+   * to allow right-click events even for non-owners.
+   */
+  activateListeners() {
+    super.activateListeners();
+    if (this.mouseInteractionManager) {
+      this.mouseInteractionManager.permissions.clickRight = () => true;
+      this.mouseInteractionManager.permissions.clickRight2 = () => true;
+    }
+  }
+
+  /**
    * Override double-click to open the larger preview instead of the edit sheet.
    */
   _onClickLeft2(event) {
@@ -1913,26 +1925,35 @@ class CustomDrawing extends Drawing {
 
 // Global function to draw all connection lines and pins
 function drawAllConnectionLines(animationOffset = 0) {
-  if (!canvas || !canvas.drawings) return;
+  if (!canvas || !canvas.ready || !canvas.drawings) return;
 
   // Enable sortable children on the drawings layer for z-index control
   canvas.drawings.sortableChildren = true;
 
-  // Initialize containers
-  if (!connectionLinesContainer) {
+  // Initialize or validate connection lines container
+  if (!connectionLinesContainer || connectionLinesContainer.destroyed) {
     connectionLinesContainer = new PIXI.Graphics();
     connectionLinesContainer.zIndex = 10; // Yarn in the middle
     canvas.drawings.addChild(connectionLinesContainer);
   } else {
-    connectionLinesContainer.clear();
+    try {
+      connectionLinesContainer.clear();
+    } catch (err) {
+      console.warn("Investigation Board: Failed to clear lines container, recreating...", err);
+      if (connectionLinesContainer.parent) connectionLinesContainer.parent.removeChild(connectionLinesContainer);
+      connectionLinesContainer.destroy({children: true});
+      connectionLinesContainer = new PIXI.Graphics();
+      connectionLinesContainer.zIndex = 10;
+      canvas.drawings.addChild(connectionLinesContainer);
+    }
   }
 
-  if (!pinsContainer) {
+  // Initialize or validate pins container
+  if (!pinsContainer || pinsContainer.destroyed) {
     pinsContainer = new PIXI.Container();
     pinsContainer.zIndex = 20; // Pins on top
     canvas.drawings.addChild(pinsContainer);
   } else {
-    // Clear all pins
     pinsContainer.removeChildren();
   }
 
@@ -2807,7 +2828,7 @@ Hooks.on("getSceneControlButtons", (controls) => {
     controls.drawings.tools.createMediaNote = {
       name: "createMediaNote",
       title: "Create Media Note",
-      icon: "fas fa-file-audio",
+      icon: "fas fa-cassette-tape",
       onChange: () => createNote("media"),
       button: true
     };
@@ -3122,20 +3143,25 @@ function _getPlaylistSoundFromLi(li) {
   const el = li instanceof HTMLElement ? li : li[0];
   if (!el) return null;
 
-  const soundId = el.dataset.soundId;
-  const playlistId = el.closest(".playlist")?.dataset.documentId;
+  // Try various ID attributes used in v13
+  const soundId = el.dataset.soundId || el.dataset.documentId || el.dataset.entryId || el.getAttribute("data-sound-id");
   
-  if (!soundId || !playlistId) return null;
+  if (!soundId) return null;
+
+  // Search through all playlists to find the sound with this ID
+  for (let playlist of game.playlists) {
+    const sound = playlist.sounds.get(soundId);
+    if (sound) return sound;
+  }
   
-  const playlist = game.playlists.get(playlistId);
-  return playlist?.sounds.get(soundId);
+  return null;
 }
 
 // Context menu hook for Playlist sounds
-Hooks.on("getPlaylistDirectoryEntryContext", (html, entryOptions) => {
+Hooks.on("getPlaylistSoundContextOptions", (html, entryOptions) => {
   entryOptions.push({
     name: "Create Media Note",
-    icon: '<i class="fas fa-file-audio"></i>',
+    icon: '<i class="fas fa-cassette-tape"></i>',
     callback: async (li) => {
       const sound = _getPlaylistSoundFromLi(li);
       if (sound) {
@@ -3143,8 +3169,7 @@ Hooks.on("getPlaylistDirectoryEntryContext", (html, entryOptions) => {
       }
     },
     condition: (li) => {
-      if (!game.user.isGM) return false;
-      return !!li[0].dataset.soundId;
+      return game.user.isGM;
     }
   });
 });

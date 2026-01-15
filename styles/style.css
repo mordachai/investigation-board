@@ -620,7 +620,13 @@ body.investigation-board-mode .drawing:not([data-investigation-note="true"]) {
 .note-preview-app .window-content {
   padding: 0;
   overflow: hidden;
-  background: #fdfaf0; /* Slightly aged paper color */
+  background: #fdfaf0; /* Light aged paper */
+  transition: background 0.3s, color 0.3s;
+}
+
+/* Dark Theme Overrides */
+.theme-dark .note-preview-app .window-content {
+  background: #1a1a1a; /* Dark background */
 }
 
 .ib-note-preview {
@@ -629,7 +635,11 @@ body.investigation-board-mode .drawing:not([data-investigation-note="true"]) {
   padding: 20px;
   max-height: 85vh;
   overflow-y: auto;
-  color: #222;
+  color: #222; /* Dark text for light mode */
+}
+
+.theme-dark .ib-note-preview {
+  color: #f0f0e0; /* Light text for dark mode */
 }
 
 .preview-image-container {
@@ -815,6 +825,10 @@ body.investigation-board-mode .drawing:not([data-investigation-note="true"]) {
   border-radius: 15px;
 }
 
+.theme-dark .media-interface {
+  background: rgba(255, 255, 255, 0.05);
+}
+
 .audio-player-container {
   width: 100%;
 }
@@ -828,6 +842,10 @@ body.investigation-board-mode .drawing:not([data-investigation-note="true"]) {
   justify-content: center;
   border-top: 1px solid rgba(0,0,0,0.1);
   padding-top: 10px;
+}
+
+.theme-dark .gm-broadcast-section {
+  border-top-color: rgba(255, 255, 255, 0.1);
 }
 
 .play-btn {
@@ -882,6 +900,11 @@ body.investigation-board-mode .drawing:not([data-investigation-note="true"]) {
   margin-bottom: 20px;
 }
 
+.theme-dark .preview-text-container {
+  background: rgba(0, 0, 0, 0.3);
+  border-color: rgba(255, 255, 255, 0.1);
+}
+
 .preview-text {
   line-height: 1.5;
   white-space: pre-wrap;
@@ -894,11 +917,19 @@ body.investigation-board-mode .drawing:not([data-investigation-note="true"]) {
   border-top: 1px solid #ccc;
 }
 
+.theme-dark .preview-footer {
+  border-top-color: #444;
+}
+
 .preview-link-label {
   font-size: 12px;
   font-weight: bold;
   color: #666;
   margin-bottom: 5px;
+}
+
+.theme-dark .preview-link-label {
+  color: #aaa;
 }
 
 .preview-controls {
