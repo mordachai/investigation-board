@@ -1,6 +1,7 @@
 [![ko-fi](https://ko-fi.com/img/githubbutton_sm.svg)](https://ko-fi.com/W7W01A1ZN1)
 
 # Investigation Board
+![Foundry v13](https://img.shields.io/badge/foundry-v13-green?style=for-the-badge) ![Github All Releases](https://img.shields.io/github/downloads/mordachai/investigation-board/total.svg?style=for-the-badge) ![GitHub Release](https://img.shields.io/github/v/release/mordachai/investigation-board?display_name=tag&style=for-the-badge&label=Current%20version)
 
 A Foundry VTT module that lets everyone create, edit, and move sticky and photo notes on the scene. A must-have for investigative games like City of Mist, Call of Cthulhu, and all your conspiracy adventures.
 
