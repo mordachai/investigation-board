@@ -88,10 +88,12 @@ export function applyTapeEffectToSound(sound) {
 const audioSourceMap = new WeakMap();
 
 export function applyTapeEffectToElement(audioElement) {
+    if (audioElement._ibTapeEffectApplied) return null;
     const context = game.audio.context;
     if (!context) return null;
 
     try {
+        audioElement._ibTapeEffectApplied = true;
         let source;
         if (audioSourceMap.has(audioElement)) {
             source = audioSourceMap.get(audioElement);
