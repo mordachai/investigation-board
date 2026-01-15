@@ -1968,9 +1968,20 @@ function drawAllConnectionLines(animationOffset = 0) {
       const targetPin = targetDrawing._getPinPosition();
 
       // Get line style
-      const lineColor = conn.color || game.settings.get(MODULE_ID, "connectionLineColor") || "#FF0000";
+      let lineColor = conn.color || game.settings.get(MODULE_ID, "connectionLineColor") || "#FF0000";
       const lineWidth = conn.width || game.settings.get(MODULE_ID, "connectionLineWidth") || 6;
-      const colorNum = parseInt(lineColor.replace("#", ""), 16);
+      
+      // Safely convert to color number (handling strings, numbers, or Color objects)
+      let colorNum;
+      if (typeof lineColor === "string") {
+        colorNum = parseInt(lineColor.replace("#", ""), 16);
+      } else if (typeof lineColor === "number") {
+        colorNum = lineColor;
+      } else if (lineColor?.hex !== undefined) {
+        colorNum = lineColor.hex;
+      } else {
+        colorNum = 0xFF0000; // Fallback
+      }
 
       // Draw yarn line in world coordinates with animation if editing this note
       drawYarnLine(
