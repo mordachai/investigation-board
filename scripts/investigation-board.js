@@ -39,6 +39,7 @@ const DocumentSheetConfig = foundry.applications.apps.DocumentSheetConfig;
 const FilePicker = foundry.applications.apps.FilePicker.implementation;
 const ApplicationV2 = foundry.applications.api.ApplicationV2;
 const HandlebarsApplicationMixin = foundry.applications.api.HandlebarsApplicationMixin;
+const TextEditor = foundry.applications.ux.TextEditor.implementation;
 
 function getBaseCharacterLimits() {
   return game.settings.get(MODULE_ID, "baseCharacterLimits") || {
@@ -920,6 +921,45 @@ class CustomDrawing extends Drawing {
   }
 
   /**
+   * Override canUserModify to allow all users to 'update' investigation board notes.
+   * This is crucial for Foundry's MouseInteractionManager to permit right-click and other interactions.
+   */
+  canUserModify(user, action) {
+    const noteData = this.document.flags?.[MODULE_ID];
+    if (noteData?.type) {
+      return true;
+    }
+    return super.canUserModify(user, action);
+  }
+
+  /**
+   * Override testUserPermission to grant all players 'UPDATE' permission for investigation notes.
+   * This is the lowest-level way to ensure Foundry's interaction managers permit right-click.
+   */
+  testUserPermission(user, permission, {exact=false}={}) {
+    const noteData = this.document.flags?.[MODULE_ID];
+    if (noteData?.type) {
+      // Treat all users as having at least UPDATE permission for context menus and dragging
+      const levels = foundry.CONST.DOCUMENT_OWNERSHIP_LEVELS;
+      const targetLevel = typeof permission === "string" ? levels[permission] : permission;
+      
+      if (targetLevel <= levels.OWNER) return true;
+    }
+    return super.testUserPermission(user, permission, {exact});
+  }
+
+  /**
+   * Override _canConfigure to allow all users to access the configuration and context menus.
+   */
+  _canConfigure(user, event) {
+    const noteData = this.document.flags?.[MODULE_ID];
+    if (noteData?.type) {
+      return true;
+    }
+    return super._canConfigure(user, event);
+  }
+
+  /**
    * Override double-click to open the larger preview instead of the edit sheet.
    */
   _onClickLeft2(event) {
@@ -933,17 +973,27 @@ class CustomDrawing extends Drawing {
   }
 
   /**
-   * Handle right-click to show a custom context menu for investigation board notes.
+   * Explicit override for single right-click.
    */
   _onClickRight(event) {
-    // Only handle if in Investigation Board mode
     if (!investigationBoardModeActive) return super._onClickRight(event);
-
-    // Check if this is an investigation board note
     const noteData = this.document.flags?.[MODULE_ID];
     if (!noteData?.type) return super._onClickRight(event);
 
-    // Show the custom context menu
+    event.stopPropagation();
+    this._showContextMenu(event);
+  }
+
+  /**
+   * Explicit override for double right-click.
+   * This prevents Foundry from opening the default config sheet on a right double-click.
+   */
+  _onClickRight2(event) {
+    if (!investigationBoardModeActive) return super._onClickRight2(event);
+    const noteData = this.document.flags?.[MODULE_ID];
+    if (!noteData?.type) return super._onClickRight2(event);
+
+    event.stopPropagation();
     this._showContextMenu(event);
   }
 
@@ -2649,6 +2699,7 @@ function refreshDrawingsInteractivity() {
       drawing.interactiveChildren = false;
     } else {
       // Ensure investigation notes are interactive and selectable
+      // Use 'static' to ensure it receives events even if it's not "owned"
       drawing.eventMode = 'static';
       drawing.interactiveChildren = true;
       drawing.cursor = 'pointer';
