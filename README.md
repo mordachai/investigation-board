@@ -12,7 +12,7 @@ A Foundry VTT module that lets everyone create, edit, and move sticky and photo 
 
 ## How to Use
 
-<img width="353" height="597" alt="image" src="https://github.com/user-attachments/assets/2281093f-3567-485b-97be-5653ccddddb0" />
+<img width="349" height="661" alt="image" src="https://github.com/user-attachments/assets/62d48308-e44a-4f80-b7b3-047cf1663d64" />
 
 Open the **Drawing Tools Toolbar** in the scene controls. You will find several custom buttons to populate your board:
 
@@ -37,6 +37,8 @@ Open the **Drawing Tools Toolbar** in the scene controls. You will find several 
 
 ### Directory Integration
 You can quickly create notes directly from your Foundry sidebars by right-clicking documents:
+
+<img width="800" height="543" alt="image" src="https://github.com/user-attachments/assets/8ae52eb0-4dfd-4a83-b672-850801e51d7b" />
 
 - **Actors**: Create a Photo Note using the actor's portrait. You can choose to use the actor's name or create an "Unknown" version.
 - **Scenes**: Create a Photo Note using the scene's thumbnail.
