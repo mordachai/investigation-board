@@ -16,6 +16,15 @@
 *   **PIXI.js**: Powered by Foundry's underlying PIXI engine for rendering "yarn" lines, pins, and custom note sprites.
 *   **Socket API**: Robust custom socket handler for collaborative actions (e.g., deletions, updates) and global audio broadcasting.
 
+### Modular File Structure
+The module is refactored into a clean, modular structure for better maintainability:
+*   `scripts/main.js`: Entry point, hook registrations, and mode management.
+*   `scripts/config.js`: Centralized constants and configuration.
+*   `scripts/state.js`: Module-wide state management.
+*   `scripts/apps/`: UI components (`CustomDrawingSheet`, `NotePreviewer`, `InvestigationBoardHUD`).
+*   `scripts/canvas/`: Canvas objects and rendering logic (`CustomDrawing`, `ConnectionManager`).
+*   `scripts/utils/`: Shared utilities (`SocketHandler`, `CreationUtils`, `Helpers`).
+
 ### Key Components
 
 #### 1. Custom Drawing (`CustomDrawing` extends `Drawing`)
@@ -29,20 +38,13 @@ A "Detail View" triggered by double-clicking a note.
 *   **Visuals**: Displays high-res versions of photos or text.
 *   **Audio**: Contains the cassette interface with a unified "Play for Everyone" button and local playback controls.
 *   **Sync**: Polls `game.audio` to animate spinning reels even if playback was triggered externally.
-*   **Auto-Play**: Supports opening in "autoplay" or "autobroadcast" modes via context menu actions.
 
 #### 3. Connection System ("Yarn")
-*   **Rendering**: Quadratic Bezier curves drawn on the `DrawingsLayer`.
+*   **Rendering**: Realistic "Twisted Yarn" appearance using Quadratic Bezier curves with diagonal ply texture.
+*   **Color Logic**: Automatically adjusts player colors to more realistic, darker "yarn-like" hues while avoiding becoming too dark or muddy.
 *   **Storage**: One-directional links stored in `flags.investigation-board.connections`.
 *   **Logic**: Handles updates when notes move, removing lines if notes are deleted.
 *   **Preview**: Shows a dynamic "yarn" line following the mouse cursor during the connection process.
-
-#### 4. The HUD (`InvestigationBoardHUD`)
-A custom HUD that appears next to selected notes for rapid access to:
-*   Quick text editing.
-*   Opening the full configuration sheet.
-*   Deleting the note.
-*   Removing connections.
 
 ## Data Model
 All data is stored in `drawing.document.flags['investigation-board']`:
@@ -73,31 +75,29 @@ All data is stored in `drawing.document.flags['investigation-board']`:
     *   **Drag & Drop**: Drag Actors, Scenes, Journal Pages, or Playlist Sounds onto the canvas.
     *   **Scene Controls**: Use the "Investigation Board" tool layer.
 *   **Connection**:
-    *   Double-click a note to open its sheet -> Click "Connect" -> Click target note.
-    *   (Legacy/Alt) Right-click -> Context Menu -> Connect.
+    *   Click on a Note's **Pin** to start a connection -> Click on target Note's **Pin** to finish.
+    *   Supports live preview line and connection numbering during the process.
 *   **Audio Control**:
     *   **Unified Control**: Right-click context menu options ("Play for Me", "Play for All") now route through the Note Previewer to ensure UI synchronization.
-    *   **Global Broadcast**: GM can broadcast audio to all clients via sockets.
 
 ### Settings & Customization
-*   **Board Mode**: Modern, Futuristic, Custom. Changes assets and styling (e.g., "Futuristic" adds neon accents and identity names).
+*   **Board Mode**: Modern, Futuristic, Custom. Changes assets and styling.
 *   **Pin Colors**: Red, Blue, Green, Yellow, Random, or None.
 *   **Fonts**: Rock Salt, Courier New, Times New Roman, Signika, Arial.
 *   **Dimensions**: Custom default sizes for all note types.
 
 ## Recent Development History
-*   **Fix (`createPhotoNoteFromActor`)**: Now correctly extracts `actor.img` and passes it to the note, ensuring photo notes from Actors aren't blank placeholders.
-*   **UX Improvement (`skipAutoOpen`)**: Notes created via Drag & Drop or Directory Context Menus no longer auto-open the edit dialog, streamlining setup.
-*   **Audio Sync**: Implemented polling in `NotePreviewer` to ensure the cassette spin animation activates regardless of how playback was started (e.g., via Canvas Context Menu).
-*   **Refactor**: Replaced deprecated `Dialog.confirm` with `foundry.applications.api.DialogV2.confirm` for v13 compliance.
-*   **Architecture**: Consolidated audio control logic to use the `NotePreviewer` instance as the source of truth for playback state.
+*   **Twisted Yarn Rendering**: Implemented a realistic rope-like texture for connection lines with diagonal hatching.
+*   **Automatic Color Adjustment**: Added `getRealisticYarnColor` to automatically darken and desaturate bright player colors for a more authentic physical yarn look.
+*   **Architectural Refactoring**: Decomposed the monolithic `investigation-board.js` into a modular directory structure using ES Modules.
+*   **Fix (`createPhotoNoteFromActor`)**: Now correctly extracts `actor.img` and passes it to the note.
+*   **UX Improvement (`skipAutoOpen`)**: Notes created via Drag & Drop or Directory Context Menus no longer auto-open the edit dialog.
 
 ## Troubleshooting & Known Patterns
-*   **Right-Click Issues**: If right-click stops working, check `activateListeners` in `CustomDrawing`. We forcibly override `mouseInteractionManager` permissions (`clickRight = () => true`) to ensure players can interact with GM-owned notes.
-*   **Socket Latency**: Global audio might have a slight delay; the spinning animation is triggered by the local audio playback event (or polling), so it remains visually accurate to what the user hears.
+*   **Right-Click Issues**: If right-click stops working, check `activateListeners` in `CustomDrawing`. We forcibly override `mouseInteractionManager` permissions to ensure all players can interact.
 *   **Permissions**: The module aggressively grants "UPDATE" permission logic via `testUserPermission` overrides to facilitate the collaborative board experience without changing actual document ownership.
 
 ## Building
 No build step required. The module uses native ES Modules.
-1.  Edit files in `scripts/`, `templates/`, `styles/`.
+1.  Edit files in `scripts/`.
 2.  Restart/Reload Foundry VTT.
