@@ -761,7 +761,7 @@ body.investigation-board-mode .drawing:not([data-investigation-note="true"]) {
   width: 400px !important;
   max-width: 100%;
   height: auto !important;
-  box-shadow: 0 10px 25px rgba(0,0,0,0.5) !important;
+  filter: drop-shadow(2px 2px 12px rgba(0, 0, 0, 0.8));
   border-radius: 10px;
   position: relative;
   z-index: 1;

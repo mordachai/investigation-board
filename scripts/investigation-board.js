@@ -133,6 +133,10 @@ function handleSocketMessage(data) {
   // Global actions for all users
   if (data.action === "playAudio") {
     if (data.audioPath) {
+      // DO NOT play if already playing this specific audio via global broadcast
+      const existing = activeGlobalSounds.get(data.audioPath);
+      if (existing && existing.playing) return;
+
       console.log("Investigation Board: Playing global audio", data.audioPath);
       (async () => {
         const sound = await game.audio.play(data.audioPath, { volume: 0.8 });
@@ -143,7 +147,7 @@ function handleSocketMessage(data) {
             if (activeGlobalSounds.get(data.audioPath) === sound && !sound.playing) {
               activeGlobalSounds.delete(data.audioPath);
             }
-          }, sound.duration * 1000 + 500 || 5000);
+          }, (sound.duration * 1000) + 1000 || 5000);
         }
       })();
     }
@@ -910,6 +914,9 @@ class CustomDrawing extends Drawing {
    * Show a custom context menu at the mouse position.
    */
   _showContextMenu(event) {
+    const noteData = this.document.flags?.[MODULE_ID];
+    if (!noteData) return;
+
     const data = event.data || event.interactionData;
     const originalEvent = data.originalEvent;
     
@@ -936,18 +943,211 @@ class CustomDrawing extends Drawing {
       menu.remove();
     };
 
+    // Media-specific options
+    if (noteData.type === "media" && noteData.audioPath) {
+      // Local Play/Stop
+      const isLocalPlaying = Array.from(game.audio.playing.values()).some(s => s.src === noteData.audioPath);
+      const playMeOption = document.createElement('div');
+      
+      if (isLocalPlaying) {
+        playMeOption.innerHTML = '<i class="fas fa-stop"></i> Stop for Me';
+        playMeOption.onclick = (e) => {
+          e.stopPropagation();
+          const sounds = Array.from(game.audio.playing.values()).filter(s => s.src === noteData.audioPath);
+          sounds.forEach(s => s.stop());
+          menu.remove();
+        };
+      } else {
+        playMeOption.innerHTML = '<i class="fas fa-volume-up"></i> Play for Me';
+        playMeOption.onclick = (e) => {
+          e.stopPropagation();
+          // Check if already playing locally
+          if (Array.from(game.audio.playing.values()).some(s => s.src === noteData.audioPath && s.playing)) {
+            return;
+          }
+          game.audio.play(noteData.audioPath, { volume: 0.8 });
+          menu.remove();
+        };
+      }
+      playMeOption.classList.add('ib-context-menu-item');
+      menu.appendChild(playMeOption);
+
+      if (game.user.isGM) {
+        const isGlobalActive = activeGlobalSounds.has(noteData.audioPath) && activeGlobalSounds.get(noteData.audioPath).playing;
+        const playAllOption = document.createElement('div');
+        
+        if (isGlobalActive) {
+          playAllOption.innerHTML = '<i class="fas fa-stop"></i> Stop for All';
+          playAllOption.onclick = (e) => {
+            e.stopPropagation();
+            if (socket) {
+              socket.emit(SOCKET_NAME, {
+                action: "stopAudio",
+                audioPath: noteData.audioPath
+              });
+              // Stop locally too (GM is a client)
+              const sound = activeGlobalSounds.get(noteData.audioPath);
+              if (sound) {
+                sound.stop();
+                activeGlobalSounds.delete(noteData.audioPath);
+              }
+            }
+            menu.remove();
+          };
+        } else {
+          playAllOption.innerHTML = '<i class="fas fa-broadcast-tower"></i> Play for All';
+          playAllOption.onclick = (e) => {
+            e.stopPropagation();
+            // Check if already playing globally
+            if (activeGlobalSounds.has(noteData.audioPath) && activeGlobalSounds.get(noteData.audioPath).playing) {
+              return;
+            }
+            
+            if (socket) {
+              socket.emit(SOCKET_NAME, {
+                action: "playAudio",
+                audioPath: noteData.audioPath
+              });
+              (async () => {
+                const sound = await game.audio.play(noteData.audioPath, { volume: 0.8 });
+                if (sound) activeGlobalSounds.set(noteData.audioPath, sound);
+              })();
+              ui.notifications.info(`Playing for everyone: ${noteData.audioPath}`);
+            }
+            menu.remove();
+          };
+        }
+        playAllOption.classList.add('ib-context-menu-item');
+        menu.appendChild(playAllOption);
+      }
+    }
+
     const viewOption = document.createElement('div');
     viewOption.innerHTML = '<i class="fas fa-eye"></i> View';
-    viewOption.classList.add('ib-context-menu-item', 'disabled');
-    viewOption.title = "View functionality coming soon";
+    viewOption.classList.add('ib-context-menu-item');
     viewOption.onclick = (e) => {
       e.stopPropagation();
-      // Does nothing for now
+      new NotePreviewer(this.document).render(true);
       menu.remove();
     };
 
-    menu.appendChild(editOption);
-    menu.appendChild(viewOption);
+    const removeConnectionsOption = document.createElement('div');
+    removeConnectionsOption.innerHTML = '<i class="fas fa-cut"></i> Remove Connections';
+    removeConnectionsOption.classList.add('ib-context-menu-item');
+    removeConnectionsOption.onclick = async (e) => {
+      e.stopPropagation();
+      menu.remove();
+
+      const confirm = await Dialog.confirm({
+        title: "Remove All Connections",
+        content: `<p>Are you sure you want to remove ALL yarn connections connected to this note (incoming and outgoing)?</p>`,
+        yes: () => true,
+        no: () => false,
+        defaultYes: false
+      });
+
+      if (confirm) {
+        const noteId = this.document.id;
+        
+        // 1. Clear outgoing connections (from this note to others)
+        await collaborativeUpdate(noteId, {
+          [`flags.${MODULE_ID}.connections`]: []
+        });
+
+        // 2. Clear incoming connections (from other notes to this one)
+        const otherNotesWithConnections = canvas.drawings.placeables.filter(d => {
+          if (d.document.id === noteId) return false;
+          const conns = d.document.flags[MODULE_ID]?.connections;
+          return conns && conns.some(c => c.targetId === noteId);
+        });
+
+        for (let otherNote of otherNotesWithConnections) {
+          const currentConns = otherNote.document.flags[MODULE_ID].connections;
+          const updatedConns = currentConns.filter(c => c.targetId !== noteId);
+          
+          await collaborativeUpdate(otherNote.document.id, {
+            [`flags.${MODULE_ID}.connections`]: updatedConns
+          });
+        }
+
+        drawAllConnectionLines();
+        ui.notifications.info("All related connections removed.");
+      }
+    };
+
+        menu.appendChild(editOption);
+
+        menu.appendChild(viewOption);
+
+    
+
+        // Linked Object Option
+
+        if (noteData.linkedObject) {
+
+          const linkMatch = noteData.linkedObject.match(/\[([^\]]+)\](?:\{([^\}]+)\})?/);
+
+          if (linkMatch) {
+
+            const uuid = linkMatch[1];
+
+            const name = linkMatch[2] || "Linked Object";
+
+            
+
+            const linkOption = document.createElement('div');
+
+            linkOption.innerHTML = `<i class="fas fa-link"></i> Open: ${name}`;
+
+            linkOption.classList.add('ib-context-menu-item');
+
+            linkOption.onclick = async (e) => {
+
+              e.stopPropagation();
+
+              menu.remove();
+
+              
+
+              try {
+
+                const doc = await fromUuid(uuid);
+
+                if (doc) {
+
+                  if (doc.testUserPermission(game.user, "LIMITED")) {
+
+                    doc.sheet.render(true);
+
+                  } else {
+
+                    ui.notifications.warn(`You do not have permission to view ${doc.name}.`);
+
+                  }
+
+                } else {
+
+                  ui.notifications.warn(`Could not find linked document.`);
+
+                }
+
+              } catch (err) {
+
+                console.error("Investigation Board: Error opening linked document from menu", err);
+
+              }
+
+            };
+
+            menu.appendChild(linkOption);
+
+          }
+
+        }
+
+    
+
+        menu.appendChild(removeConnectionsOption);
     document.body.appendChild(menu);
 
     // Close menu when clicking elsewhere or scrolling
@@ -1646,6 +1846,7 @@ function drawAllConnectionLines(animationOffset = 0) {
         const isPhoto = noteData.type === "photo";
         const isIndex = noteData.type === "index";
         const isHandout = noteData.type === "handout";
+        const isMedia = noteData.type === "media";
 
         let width, pinY;
         if (isHandout) {
@@ -1653,6 +1854,10 @@ function drawAllConnectionLines(animationOffset = 0) {
           width = drawing.document.shape.width || 400;
           const height = drawing.document.shape.height || 400;
           pinY = drawing.document.y + (height * 0.05);
+        } else if (isMedia) {
+          // Media notes (cassettes) center horizontally based on actual width
+          width = drawing.document.shape.width || 400;
+          pinY = drawing.document.y + 3;
         } else {
           // Other note types use fixed positioning
           if (isPhoto) {
