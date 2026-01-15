@@ -2,58 +2,102 @@
 
 ## Project Overview
 
-**Investigation Board** is a Foundry VTT module that transforms the canvas into an interactive investigation board. It allows players and GMs to create sticky notes, photo notes, index cards, handout-style notes, and media recordings, and connect them with "yarn" lines to map out mysteries and conspiracies.
+**Investigation Board** is a comprehensive Foundry VTT module designed to transform the canvas into an interactive mystery map. It empowers players and GMs to create, connect, and manage various types of clues using a visual "sticky note" interface. The module heavily leverages standard Foundry `Drawing` documents, extending them with custom rendering, behaviors, and interactivity suited for investigation scenarios.
 
-### Key Technologies
-*   **Foundry VTT API (v13)**: Built for the latest Foundry version using `ApplicationV2` and modern namespaced implementations (e.g., `foundry.applications.ux.TextEditor.implementation`).
-*   **PIXI.js**: Core rendering engine for notes, pins, and connection lines on the `DrawingsLayer`.
-*   **ES Modules**: Standard JavaScript modules without a build step.
-*   **Socket API**: Custom socket implementation for collaborative editing, global audio broadcasting, and cross-permission deletions.
+### Core Philosophy
+*   **Player Agency:** All players can move, edit, and connect notes, regardless of who created them (permissions are effectively overridden for Board items).
+*   **Visual Cohesion:** Notes look like physical objects (photos, sticky notes, index cards) rather than generic UI windows.
+*   **Immersive Audio:** Media notes provide synchronized audio playback ("Play for Everyone") visualized as spinning cassette tapes.
 
-### Core Architecture
-*   **Custom Classes**:
-    *   `CustomDrawing` (extends `Drawing`): Manages visual representation, custom interaction logic, and context menus.
-    *   `CustomDrawingSheet` (extends `DrawingConfig`): Custom editor for persistent note properties.
-    *   `NotePreviewer` (extends `ApplicationV2`): A large-format "Detail View" for notes, supporting enriched links and synchronized media playback.
-*   **Data Storage**: Persistent state is stored in `drawing.document.flags['investigation-board']`.
-*   **Connection System**: One-directional links stored in the source note, rendered globally as quadratic bezier curves with a "yarn" texture.
+## Technical Architecture
 
-## Interaction Model
-*   **Double-Click**: Opens the **Detail View** (`NotePreviewer`).
-*   **Right-Click**: Opens a custom context menu with comprehensive management options:
-    *   **Edit**: Opens the configuration sheet.
-    *   **View**: Opens the Detail View (same as double-click).
-    *   **Open [Linked Object]**: Directly opens the sheet of any associated Foundry document.
-    *   **Play/Stop (Media only)**: Controls local and global audio playback directly from the canvas.
-    *   **Remove Connections**: Performs a "deep clean" by removing all yarn lines arriving at or departing from the note.
-    *   **Delete**: Deletes the note with a confirmation prompt.
-*   **Drag-and-Drop**: Supports linking Foundry documents (Actor, Item, etc.) by dragging them onto notes or into the edit dialog.
+### Tech Stack
+*   **Foundry VTT API (v13+)**: Built for modern Foundry, utilizing `ApplicationV2` frameworks and ES modules.
+*   **PIXI.js**: Powered by Foundry's underlying PIXI engine for rendering "yarn" lines, pins, and custom note sprites.
+*   **Socket API**: Robust custom socket handler for collaborative actions (e.g., deletions, updates) and global audio broadcasting.
 
-## Note Types & Rendering
-*   **Sticky/Photo/Index**: Themed backgrounds with text truncation. Photo notes feature dynamic frames that "mount" images precisely.
-*   **Handout**: Image-only notes with transparent backgrounds and auto-resize logic.
-*   **Media**: Cassette tape notes representing audio evidence.
-    *   Standard width: 400px (0.74 height ratio).
-    *   Synchronized "spinning reels" animation in Detail View during playback.
-    *   Sophisticated audio management to prevent overlapping playback instances.
-    *   **Context Menu**: Created from the Playlist sidebar using `getPlaylistDirectorySoundContext` for individual sound entries.
+### Key Components
 
-## Critical Fix: The Right-Click Permission Bug
-Foundry's `MouseInteractionManager` aggressively blocks right-click events on `PlaceableObjects` that the current user does not own. Standard sheet registration and permission overrides are often insufficient to enable the right-click context menu for players on GM-created notes.
+#### 1. Custom Drawing (`CustomDrawing` extends `Drawing`)
+The heart of the module. It overrides standard drawing behaviors to:
+*   **Rendering**: Draw background sprites (notes), pins, and photo frames.
+*   **Interactivity**: Force `mouseInteractionManager` permissions to allow right-clicks for all users.
+*   **Context Menu**: A custom right-click menu tailored for note management (Edit, View, Play Audio, Connect).
 
-**The Multi-Layered Solution implemented in `CustomDrawing`:**
-1.  **`activateListeners` Override**: Manually injected permission overrides into the `mouseInteractionManager` instance:
-    `this.mouseInteractionManager.permissions.clickRight = () => true;`
-2.  **`testUserPermission` Override**: Forced the document to report `true` for all permission checks up to `OWNER` level. This satisfies internal Foundry checks that decide if an object is "interactable."
-3.  **`canUserModify` Override**: Returned `true` to ensure the object is treated as "writable" by the interaction manager, which is a prerequisite for certain mouse events.
-4.  **Event Propagation**: Explicitly called `event.stopPropagation()` in `_onClickRight` and `_onClickRight2` to prevent Foundry's default single/double right-click handlers from interfering with the custom menu.
+#### 2. Note Previewer (`NotePreviewer` extends `ApplicationV2`)
+A "Detail View" triggered by double-clicking a note.
+*   **Visuals**: Displays high-res versions of photos or text.
+*   **Audio**: Contains the cassette interface with a unified "Play for Everyone" button and local playback controls.
+*   **Sync**: Polls `game.audio` to animate spinning reels even if playback was triggered externally.
+*   **Auto-Play**: Supports opening in "autoplay" or "autobroadcast" modes via context menu actions.
 
-## Development Conventions & Tips
-*   **Linked Objects**: Always use `@UUID[document.uuid]{name}` format for compatibility.
-*   **Collaborative Actions**: Use `collaborativeUpdate` and `collaborativeDelete` to route actions through the GM via sockets when the player lacks direct permission.
-*   **Audio Broadcasting**: Use the `playAudio` and `stopAudio` socket actions for global synchronization.
-*   **Permissions**: Always use `doc.testUserPermission(game.user, "LIMITED")` before attempting to render a linked document's sheet.
+#### 3. Connection System ("Yarn")
+*   **Rendering**: Quadratic Bezier curves drawn on the `DrawingsLayer`.
+*   **Storage**: One-directional links stored in `flags.investigation-board.connections`.
+*   **Logic**: Handles updates when notes move, removing lines if notes are deleted.
+*   **Preview**: Shows a dynamic "yarn" line following the mouse cursor during the connection process.
 
-## Building and Running
-1.  **Edit**: Modify files in `scripts/`, `templates/`, or `styles/`.
-2.  **Test**: Reload the Foundry VTT world. No build step required.
+#### 4. The HUD (`InvestigationBoardHUD`)
+A custom HUD that appears next to selected notes for rapid access to:
+*   Quick text editing.
+*   Opening the full configuration sheet.
+*   Deleting the note.
+*   Removing connections.
+
+## Data Model
+All data is stored in `drawing.document.flags['investigation-board']`:
+
+| Property | Type | Description |
+| :--- | :--- | :--- |
+| `type` | String | `sticky`, `photo`, `index`, `media`, `handout` |
+| `text` | String | The content text of the note. |
+| `image` | String | Path to the main image (for Photo/Handout/Media). |
+| `audioPath` | String | Path to audio file (Media notes only). |
+| `connections` | Array | List of target note IDs for yarn lines. |
+| `linkedObject` | String | UUID link to a Foundry document (Actor, Item, etc.). |
+| `font` | String | Font family used for this specific note. |
+| `fontSize` | Number | Font size override. |
+| `identityName` | String | Special name field for "Futuristic" mode. |
+
+## Features & Mechanics
+
+### Note Types
+1.  **Sticky Note**: Classic square note for short text.
+2.  **Photo Note**: Polaroid-style frame mounting an image (Actor/Scene/User provided) with a caption.
+3.  **Index Card**: Larger lined card for longer text.
+4.  **Handout**: Image-only note (documents, maps) with transparent background.
+5.  **Media (Cassette)**: Represents audio. Plays local or global sound. Animates when playing.
+
+### Interaction Model
+*   **Creation**:
+    *   **Drag & Drop**: Drag Actors, Scenes, Journal Pages, or Playlist Sounds onto the canvas.
+    *   **Scene Controls**: Use the "Investigation Board" tool layer.
+*   **Connection**:
+    *   Double-click a note to open its sheet -> Click "Connect" -> Click target note.
+    *   (Legacy/Alt) Right-click -> Context Menu -> Connect.
+*   **Audio Control**:
+    *   **Unified Control**: Right-click context menu options ("Play for Me", "Play for All") now route through the Note Previewer to ensure UI synchronization.
+    *   **Global Broadcast**: GM can broadcast audio to all clients via sockets.
+
+### Settings & Customization
+*   **Board Mode**: Modern, Futuristic, Custom. Changes assets and styling (e.g., "Futuristic" adds neon accents and identity names).
+*   **Pin Colors**: Red, Blue, Green, Yellow, Random, or None.
+*   **Fonts**: Rock Salt, Courier New, Times New Roman, Signika, Arial.
+*   **Dimensions**: Custom default sizes for all note types.
+
+## Recent Development History
+*   **Fix (`createPhotoNoteFromActor`)**: Now correctly extracts `actor.img` and passes it to the note, ensuring photo notes from Actors aren't blank placeholders.
+*   **UX Improvement (`skipAutoOpen`)**: Notes created via Drag & Drop or Directory Context Menus no longer auto-open the edit dialog, streamlining setup.
+*   **Audio Sync**: Implemented polling in `NotePreviewer` to ensure the cassette spin animation activates regardless of how playback was started (e.g., via Canvas Context Menu).
+*   **Refactor**: Replaced deprecated `Dialog.confirm` with `foundry.applications.api.DialogV2.confirm` for v13 compliance.
+*   **Architecture**: Consolidated audio control logic to use the `NotePreviewer` instance as the source of truth for playback state.
+
+## Troubleshooting & Known Patterns
+*   **Right-Click Issues**: If right-click stops working, check `activateListeners` in `CustomDrawing`. We forcibly override `mouseInteractionManager` permissions (`clickRight = () => true`) to ensure players can interact with GM-owned notes.
+*   **Socket Latency**: Global audio might have a slight delay; the spinning animation is triggered by the local audio playback event (or polling), so it remains visually accurate to what the user hears.
+*   **Permissions**: The module aggressively grants "UPDATE" permission logic via `testUserPermission` overrides to facilitate the collaborative board experience without changing actual document ownership.
+
+## Building
+No build step required. The module uses native ES Modules.
+1.  Edit files in `scripts/`, `templates/`, `styles/`.
+2.  Restart/Reload Foundry VTT.
