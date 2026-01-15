@@ -193,6 +193,43 @@ function handleSocketMessage(data) {
     console.log("Investigation Board: GM processing socket update for drawing", data.drawingId, "requested by", data.requestingUser);
     drawing.update(data.updateData);
   }
+
+  if (data.action === "deleteDrawing") {
+    const scene = game.scenes.get(data.sceneId);
+    if (!scene) return;
+    const drawing = scene.drawings.get(data.drawingId);
+    if (!drawing) return;
+
+    console.log("Investigation Board: GM processing socket deletion for drawing", data.drawingId);
+    drawing.delete();
+  }
+}
+
+/**
+ * Deletes a drawing document, using socket communication if the user doesn't have permission.
+ */
+async function collaborativeDelete(drawingId, sceneId = null) {
+  const scene = sceneId ? game.scenes.get(sceneId) : canvas.scene;
+  if (!scene) return;
+
+  const drawing = scene.drawings.get(drawingId);
+  if (!drawing) return;
+
+  // If user is GM or has owner permission, delete directly
+  if (game.user.isGM || drawing.testUserPermission(game.user, "OWNER")) {
+    await drawing.delete();
+    return;
+  }
+
+  // Otherwise, request deletion via socket
+  if (socket) {
+    socket.emit(SOCKET_NAME, {
+      action: "deleteDrawing",
+      sceneId: scene.id,
+      drawingId: drawingId,
+      requestingUser: game.user.id
+    });
+  }
 }
 
 
@@ -1147,7 +1184,28 @@ class CustomDrawing extends Drawing {
 
     
 
-        menu.appendChild(removeConnectionsOption);
+        const deleteOption = document.createElement('div');
+    deleteOption.innerHTML = '<i class="fas fa-trash"></i> Delete';
+    deleteOption.classList.add('ib-context-menu-item');
+    deleteOption.onclick = async (e) => {
+      e.stopPropagation();
+      menu.remove();
+
+      const confirm = await Dialog.confirm({
+        title: "Delete Note",
+        content: `<p>Are you sure you want to delete this note?</p>`,
+        yes: () => true,
+        no: () => false,
+        defaultYes: false
+      });
+
+      if (confirm) {
+        await collaborativeDelete(this.document.id);
+      }
+    };
+
+    menu.appendChild(removeConnectionsOption);
+    menu.appendChild(deleteOption);
     document.body.appendChild(menu);
 
     // Close menu when clicking elsewhere or scrolling
