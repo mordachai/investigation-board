@@ -1,5 +1,6 @@
 import { MODULE_ID, SOCKET_NAME } from "../config.js";
 import { socket, activeGlobalSounds } from "../utils/socket-handler.js";
+import { applyTapeEffectToElement, applyTapeEffectToSound } from "../utils/audio-utils.js";
 
 // v13 namespaced imports
 const ApplicationV2 = foundry.applications.api.ApplicationV2;
@@ -92,6 +93,12 @@ export class NotePreviewer extends HandlebarsApplicationMixin(ApplicationV2) {
     const cassette = html.querySelector(".cassette-wrapper");
     
     if (localAudio && cassette) {
+      // Apply tape effect if enabled
+      const noteData = this.document.flags[MODULE_ID];
+      if (noteData?.audioEffectEnabled !== false) {
+        this.tapeEffect = applyTapeEffectToElement(localAudio);
+      }
+
       localAudio.addEventListener("play", () => {
         cassette.classList.add("playing");
       });
@@ -134,6 +141,9 @@ export class NotePreviewer extends HandlebarsApplicationMixin(ApplicationV2) {
         const icon = playGlobalBtn.querySelector("i");
         const span = playGlobalBtn.querySelector("span");
 
+        const noteData = this.document.flags[MODULE_ID];
+        const audioEffectEnabled = noteData?.audioEffectEnabled !== false;
+
         if (this.globalSoundActive) {
           socket.emit(SOCKET_NAME, { action: "stopAudio", audioPath: audioPath });
           const localGlobal = activeGlobalSounds.get(audioPath);
@@ -149,11 +159,20 @@ export class NotePreviewer extends HandlebarsApplicationMixin(ApplicationV2) {
           return;
         }
 
-        socket.emit(SOCKET_NAME, { action: "playAudio", audioPath: audioPath });
+        socket.emit(SOCKET_NAME, { 
+            action: "playAudio", 
+            audioPath: audioPath,
+            applyEffect: audioEffectEnabled
+        });
         
         const sound = await game.audio.play(audioPath, { volume: 0.8 });
         if (sound) {
           activeGlobalSounds.set(audioPath, sound);
+          
+          if (audioEffectEnabled) {
+            applyTapeEffectToSound(sound);
+          }
+
           this.globalSoundActive = true;
           icon.className = "fas fa-stop";
           span.innerText = "Stop for All";
@@ -224,6 +243,10 @@ export class NotePreviewer extends HandlebarsApplicationMixin(ApplicationV2) {
   }
 
   async _onClose(options) {
+    if (this.tapeEffect) {
+      this.tapeEffect.disconnect();
+      this.tapeEffect = null;
+    }
     if (this.audioPollInterval) {
       clearInterval(this.audioPollInterval);
       this.audioPollInterval = null;

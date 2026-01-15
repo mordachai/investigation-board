@@ -60,6 +60,11 @@
         </button>
       </div>
     </div>
+    <div class="form-group">
+      <label for="audioEffectEnabled">Apply Tape Effect:</label>
+      <input type="checkbox" name="audioEffectEnabled" {{#if audioEffectEnabled}}checked{{/if}} />
+      <p class="notes">Simulates the sound of an old tape recording (High-pass filter).</p>
+    </div>
   {{/if}}
 
   {{!-- Show Image Path field for photo notes and handouts --}}

@@ -373,6 +373,11 @@ Hooks.on("updateDrawing", async (drawing, changes, options, userId) => {
   // If flags changed, refresh the drawing to update visuals on ALL clients
   if (flagsChanged && placeable) {
     await placeable.refresh();
+    
+    // Also re-render open NotePreviewer for this drawing
+    const appId = `note-preview-${drawing.id}`;
+    const app = foundry.applications.instances.get(appId);
+    if (app) app.render();
   }
 
   // Redraw connection lines when position OR connections change

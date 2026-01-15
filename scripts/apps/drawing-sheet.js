@@ -67,6 +67,7 @@ export class CustomDrawingSheet extends DrawingConfig {
     context.connections = customData.connections;
     context.font = customData.font;
     context.fontSize = customData.fontSize;
+    context.audioEffectEnabled = customData.audioEffectEnabled;
 
     // Enrich the linked object for display
     context.enrichedLinkedObject = context.linkedObject ? await TextEditor.enrichHTML(context.linkedObject, { async: true }) : "";
@@ -111,6 +112,7 @@ export class CustomDrawingSheet extends DrawingConfig {
       noteType: noteType,
       text: this.document.flags[MODULE_ID]?.text || "Default Text",
       audioPath: this.document.flags[MODULE_ID]?.audioPath || "",
+      audioEffectEnabled: this.document.flags[MODULE_ID]?.audioEffectEnabled !== false, // Default to true
       linkedObject: this.document.flags[MODULE_ID]?.linkedObject || "",
       image: this.document.flags[MODULE_ID]?.image || (noteType === "handout" ? "modules/investigation-board/assets/newhandout.webp" : "modules/investigation-board/assets/placeholder.webp"),
       identityName: this.document.flags[MODULE_ID]?.identityName || "",
@@ -387,6 +389,10 @@ export class CustomDrawingSheet extends DrawingConfig {
 
         if (data.audioPath !== undefined) {
           updates[`flags.${MODULE_ID}.audioPath`] = data.audioPath;
+        }
+
+        if (noteType === "media") {
+          updates[`flags.${MODULE_ID}.audioEffectEnabled`] = !!data.audioEffectEnabled;
         }
 
         if (data.linkedObject !== undefined) {
