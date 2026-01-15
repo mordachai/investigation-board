@@ -14,24 +14,40 @@ A Foundry VTT module that lets everyone create, edit, and move sticky and photo 
 
 <img width="353" height="597" alt="image" src="https://github.com/user-attachments/assets/2281093f-3567-485b-97be-5653ccddddb0" />
 
-Open the Drawing Tools Toolbar, the buttons to create the notes are there:
+Open the **Drawing Tools Toolbar** in the scene controls. You will find several custom buttons to populate your board:
 
-- 3 types of notes: Sticky, Photo, and Index Card
-- Double click on a note let you edit the content
-- Delete key: delete selected note
+### Note Types
+- **Sticky Note**: Classic square notes for quick clues or short text.
+- **Photo Note**: Polaroid-style frames. Perfect for suspects, locations, or evidence.
+- **Index Card**: Larger lined cards for more detailed notes or descriptions.
+- **Handout**: Image-only notes like maps, pictures, or documents.
+- **Media (Cassette)**: Visual representation for audio recordings.
 
-### Create and Edit a Note
+### Interaction & Linking
+- **Double Click**: Opens the **Note Previewer**, a high-resolution view of the note and its contents.
+- **Edit & Drag**: Move notes around by selecting them. Note that you must be in the **Drawing Tools** layer to manipulate notes.
+- **Linked Objects**: You can drag and drop Actors, Items, Journal Pages, or Scenes directly onto a note (or into its configuration sheet) to link them. This creates a clickable reference in the note's preview for quick access.
+- **Context Menu (Right-Click)**: Right-clicking any note opens a custom menu allowing you to:
+    - **Edit**: Open the configuration sheet.
+    - **View**: Open the high-res preview.
+    - **Play for Me/All**: (Media notes only) Local or global audio playback.
+    - **Remove Connections**: Quickly clear all yarn lines attached to the note.
+    - **Open Link**: Directly open the linked document if one exists.
+    - **Delete**: Remove the note from the board.
 
-Click Create Sticky Note/Photo Note to place one of them in the middle of the scene.
+### Directory Integration
+You can quickly create notes directly from your Foundry sidebars by right-clicking documents:
 
-The scene will automatically go to __drawing mode__, and you can change the note content with a DOUBLE CLICK.
+- **Actors**: Create a Photo Note using the actor's portrait. You can choose to use the actor's name or create an "Unknown" version.
+- **Scenes**: Create a Photo Note using the scene's thumbnail.
+- **Playlists**: Right-click a sound to create a **Media Note** pre-linked to that audio file.
+- **Journals**: Right-click any **Image Page** within a journal to transform it into a **Handout**.
 
-__Edit and drag__ the note around is only possible in **drawing mode** ![image](https://github.com/user-attachments/assets/4b6ecb10-2ab4-4328-82fb-939bbcca1f91)
-, since in the end, they are a drawing. 
+> **Note for Players:** If the GM has granted you drawing and file upload permissions, you can autonomously create Handout notes from Image Pages in the Journal directory to share evidence with the group!
 
-#### **Note** (pun intended): Only the GM can assign an image to the photo notes unless she/he/they give you browser file permissions.
+#### **Permissions Note**: Only the GM can assign images to photo notes from the file system unless players are given browser file permissions.
 
-If you click on the Delete button of the Drawing tools, ALL NOTES WILL BE DELETED, so beware. To delete notes and drawings individually, select them and use the Delete button on your keyboard.
+If you click on the **Delete button** in the Drawing tools sidebar, **ALL DRAWINGS ON THE SCENE WILL BE DELETED**. To delete notes individually, select them and use the **Delete** key on your keyboard or use the **Right-click context menu**.
 
 The module's settings contain some pretty straightforward options, so you can better adjust it for your table. 
 
