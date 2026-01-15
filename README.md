@@ -35,8 +35,20 @@ If you click on the Delete button of the Drawing tools, ALL NOTES WILL BE DELETE
 
 The module's settings contain some pretty straightforward options, so you can better adjust it for your table. 
 
-![image](https://github.com/user-attachments/assets/47a642e8-ee5f-4d8a-89cf-c670e84276c2)
+### Module Settings
 
+<img width="786" height="695" alt="image" src="https://github.com/user-attachments/assets/6eff3c27-66af-4a69-927d-d16a48ab4579" />
+
+- **Pin Color**: Choose a fixed color for your pins (Red, Blue, Yellow, Green), set it to 'Random' for each new note, or 'No Pins' to hide them.
+- **Board Mode**: **(Work in Progress)** Changes the visual theme of notes. Please use **Modern** for now as other modes are under development.
+- **Connection Line Color**: Sets the fallback color for the yarn/lines connecting notes. Initial color is always the player color. Note: individual connection colors can also be edited in the note configuration.
+- **Connection Line Width**: Sets the default thickness of the connection yarn (default is 7).
+- **Note Widths**: Configure the default pixel width for Sticky Notes, Photo Notes, Index Cards, and Handouts.
+- **Base Font Size**: Sets the starting font size for text on your notes.
+- **Font**: Choose between several thematic fonts like Rock Salt or Courier New.
+- **Character Name Key**: For photo notes created from Actors, this defines which data field to use for the name (e.g., `prototypeToken.name` or `system.alias` for systems like Blades in the Dark).
+- **Default Note Texts**: Set the placeholder text for each new note type (Sticky, Photo, Index, Media).
+- **Show Setup Warning**: Toggle the reminder for GMs about player permissions for drawings and file uploads.
 
 ## Installation
 
@@ -48,15 +60,14 @@ OR
 
 Click Install Module
 
-Paste the following manifest URL into the bottom Manifest URL field: https://raw.githubusercontent.com/mordachai/investigation-board/main/module.json
+Paste the following manifest URL into the bottom Manifest URL field:
 
+```
+https://github.com/mordachai/investigation-board/releases/latest/download/module.json
+```
 After that go to your world and enable the module in your Game Settings under Manage Modules
 
 ## Compatibility
 
 - **Foundry VTT v13.x** (minimum v13.332)
-- For Foundry v12.x, please use module version 1.3.2
-
-## Known Limitations
-
-- **Refresh on Update:** The module includes a hook to ensure notes are redrawn when updated by others. However, if something seems out of date, try selecting/deselecting notes or refreshing the page.
+- For Foundry v12.x, please use module version 1.3.2 (has a lot less features)
