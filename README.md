@@ -8,7 +8,6 @@ A Foundry VTT module that lets everyone create, edit, and move sticky and photo 
 
 ## New Feature (v1.7): Connecting Notes!
 
-[Grabación 2026-01-13 214416.webm](https://github.com/user-attachments/assets/2f290c09-b59f-42cd-93ba-5c76cb0dc1d6)
 
 ## How to Use
 
@@ -22,6 +21,8 @@ Open the **Drawing Tools Toolbar** in the scene controls. You will find several 
 - **Index Card**: Larger lined cards for more detailed notes or descriptions.
 - **Handout**: Image-only notes like maps, pictures, or documents.
 - **Media (Cassette)**: Visual representation for audio recordings.
+
+<img width="800" height="500" alt="image" src="https://github.com/user-attachments/assets/9862eaab-8747-4df5-8153-4a795d1ef19d" />
 
 ### Interaction & Linking
 - **Double Click**: Opens the **Note Previewer**, a high-resolution view of the note and its contents.
