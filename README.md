@@ -38,7 +38,7 @@ Open the **Drawing Tools Toolbar** in the scene controls. You will find several 
 ### Directory Integration
 You can quickly create notes directly from your Foundry sidebars by right-clicking documents:
 
-<img width="800" height="543" alt="image" src="https://github.com/user-attachments/assets/8ae52eb0-4dfd-4a83-b672-850801e51d7b" />
+<img width="800" height="385" alt="image" src="https://github.com/user-attachments/assets/84e46265-a879-40d2-b387-129ffe5a9670" />
 
 - **Actors**: Create a Photo Note using the actor's portrait. You can choose to use the actor's name or create an "Unknown" version.
 - **Scenes**: Create a Photo Note using the scene's thumbnail.
