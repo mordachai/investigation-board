@@ -367,8 +367,7 @@ Hooks.on("getActorContextOptions", (html, entryOptions) => {
         const actorId = el?.dataset?.documentId || el?.dataset?.entryId || el?.getAttribute?.("data-document-id") || el?.getAttribute?.("data-entry-id");
         const actor = game.actors.get(actorId);
         if (actor) await createPhotoNoteFromActor(actor, false);
-      },
-      condition: () => game.user.isGM
+      }
     },
     {
       name: "Unknown Photo Note from Actor",
@@ -378,8 +377,7 @@ Hooks.on("getActorContextOptions", (html, entryOptions) => {
         const actorId = el?.dataset?.documentId || el?.dataset?.entryId || el?.getAttribute?.("data-document-id") || el?.getAttribute?.("data-entry-id");
         const actor = game.actors.get(actorId);
         if (actor) await createPhotoNoteFromActor(actor, true);
-      },
-      condition: () => game.user.isGM
+      }
     }
   );
 });
@@ -394,8 +392,7 @@ Hooks.on("getSceneContextOptions", (html, entryOptions) => {
       const sceneId = el?.dataset?.documentId || el?.dataset?.entryId || el?.getAttribute?.("data-document-id") || el?.getAttribute?.("data-entry-id");
       const scene = game.scenes.get(sceneId);
       if (scene) await createPhotoNoteFromScene(scene);
-    },
-    condition: () => game.user.isGM
+    }
   });
 });
 
@@ -409,8 +406,7 @@ Hooks.on("getSceneNavigationContext", (html, entryOptions) => {
       const sceneId = el?.dataset?.documentId || el?.getAttribute?.("data-document-id") || (typeof li.data === "function" ? li.data("sceneId") : null);
       const scene = game.scenes.get(sceneId);
       if (scene) await createPhotoNoteFromScene(scene);
-    },
-    condition: () => game.user.isGM
+    }
   });
 });
 
@@ -428,7 +424,6 @@ Hooks.on("getJournalEntryPageContextOptions", (html, entryOptions) => {
       }
     },
     condition: (li) => {
-      if (!game.user.isGM) return false;
       const page = _getJournalPageFromLi(li);
       return page?.type === "image";
     }
@@ -445,9 +440,6 @@ Hooks.on("getPlaylistSoundContextOptions", (html, entryOptions) => {
       if (sound) {
         await createMediaNoteFromSound(sound);
       }
-    },
-    condition: (li) => {
-      return game.user.isGM;
     }
   });
 });

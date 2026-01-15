@@ -1,6 +1,7 @@
 import { MODULE_ID } from "../config.js";
 import { InvestigationBoardState } from "../state.js";
 import { getActorDisplayName } from "./helpers.js";
+import { collaborativeCreate } from "./socket-handler.js";
 
 export async function createNote(noteType) {
   const scene = canvas.scene;
@@ -62,33 +63,31 @@ export async function createNote(noteType) {
     extraFlags.audioPath = "";
   }
 
-  const created = await canvas.scene.createEmbeddedDocuments("Drawing", [
-    {
-      type: "r",
-      author: game.user.id,
-      x,
-      y,
-      shape: { width, height },
-      fillColor: noteType === "handout" || noteType === "media" ? "#000000" : "#ffffff",
-      fillAlpha: noteType === "handout" || noteType === "media" ? 0 : 1,
-      strokeColor: "#000000",
-      strokeWidth: 0,
-      strokeAlpha: 0,
-      locked: false,
-      flags: {
-        [MODULE_ID]: {
-          type: noteType,
-          text: defaultText,
-          linkedObject: "",
-          ...extraFlags
-        },
-        core: {
-          sheetClass: "investigation-board.CustomDrawingSheet"
-        }
+  const created = await collaborativeCreate({
+    type: "r",
+    author: game.user.id,
+    x,
+    y,
+    shape: { width, height },
+    fillColor: noteType === "handout" || noteType === "media" ? "#000000" : "#ffffff",
+    fillAlpha: noteType === "handout" || noteType === "media" ? 0 : 1,
+    strokeColor: "#000000",
+    strokeWidth: 0,
+    strokeAlpha: 0,
+    locked: false,
+    flags: {
+      [MODULE_ID]: {
+        type: noteType,
+        text: defaultText,
+        linkedObject: "",
+        ...extraFlags
       },
-      ownership: { default: 3 },
+      core: {
+        sheetClass: "investigation-board.CustomDrawingSheet"
+      }
     },
-  ]);
+    ownership: { default: 3 },
+  });
 
   // If in Investigation Board mode, ensure the new drawing is interactive
   if (InvestigationBoardState.isActive && created && created[0]) {
@@ -146,7 +145,7 @@ export async function createPhotoNoteFromActor(actor, isUnknown = false) {
   const x = dims.width / 2;
   const y = dims.height / 2;
 
-  const created = await canvas.scene.createEmbeddedDocuments("Drawing", [{
+  const created = await collaborativeCreate({
     type: "r",
     author: game.user.id,
     x, y,
@@ -167,7 +166,7 @@ export async function createPhotoNoteFromActor(actor, isUnknown = false) {
       core: { sheetClass: "investigation-board.CustomDrawingSheet" }
     },
     ownership: { default: 3 }
-  }], { skipAutoOpen: true });
+  }, { skipAutoOpen: true });
 
   // Handle interactivity in Investigation Board mode
   if (InvestigationBoardState.isActive && created?.[0]) {
@@ -209,7 +208,7 @@ export async function createPhotoNoteFromScene(targetScene) {
     extraFlags.identityName = displayName;
   }
 
-  const created = await canvas.scene.createEmbeddedDocuments("Drawing", [{
+  const created = await collaborativeCreate({
     type: "r",
     author: game.user.id,
     x, y,
@@ -230,7 +229,7 @@ export async function createPhotoNoteFromScene(targetScene) {
       core: { sheetClass: "investigation-board.CustomDrawingSheet" }
     },
     ownership: { default: 3 }
-  }], { skipAutoOpen: true });
+  }, { skipAutoOpen: true });
 
   if (InvestigationBoardState.isActive && created?.[0]) {
     setTimeout(() => {
@@ -288,7 +287,7 @@ export async function createHandoutNoteFromPage(page) {
     console.error("Investigation Board: Failed to get image dimensions for handout", err);
   }
 
-  const created = await canvas.scene.createEmbeddedDocuments("Drawing", [{
+  const created = await collaborativeCreate({
     type: "r",
     author: game.user.id,
     x, y,
@@ -309,7 +308,7 @@ export async function createHandoutNoteFromPage(page) {
       core: { sheetClass: "investigation-board.CustomDrawingSheet" }
     },
     ownership: { default: 3 }
-  }], { skipAutoOpen: true });
+  }, { skipAutoOpen: true });
 
   if (InvestigationBoardState.isActive && created?.[0]) {
     setTimeout(() => {
@@ -344,7 +343,7 @@ export async function createMediaNoteFromSound(sound) {
   const randomCassette = cassettes[Math.floor(Math.random() * cassettes.length)];
   const imagePath = `modules/investigation-board/assets/${randomCassette}`;
 
-  const created = await canvas.scene.createEmbeddedDocuments("Drawing", [{
+  const created = await collaborativeCreate({
     type: "r",
     author: game.user.id,
     x, y,
@@ -366,7 +365,7 @@ export async function createMediaNoteFromSound(sound) {
       core: { sheetClass: "investigation-board.CustomDrawingSheet" }
     },
     ownership: { default: 3 }
-  }], { skipAutoOpen: true });
+  }, { skipAutoOpen: true });
 
   if (InvestigationBoardState.isActive && created?.[0]) {
     setTimeout(() => {
