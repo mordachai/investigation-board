@@ -450,20 +450,20 @@ class CustomDrawingSheet extends DrawingConfig {
         if (this.previewSound && this.previewSound.playing) {
           this.previewSound.stop();
           this.previewSound = null;
-          previewAudioBtn.innerHTML = '<i class="fas fa-play"></i> Preview Audio';
+          previewAudioBtn.innerHTML = '<i class="fas fa-play"></i>';
           return;
         }
 
         const audioPath = this.element.querySelector("input[name='audioPath']")?.value;
         if (audioPath) {
           this.previewSound = await game.audio.play(audioPath, { volume: 0.8 });
-          previewAudioBtn.innerHTML = '<i class="fas fa-stop"></i> Stop Preview';
+          previewAudioBtn.innerHTML = '<i class="fas fa-stop"></i>';
           
           // Reset button when sound ends
           const sound = this.previewSound;
           setTimeout(() => {
             if (this.previewSound === sound && !sound.playing) {
-               previewAudioBtn.innerHTML = '<i class="fas fa-play"></i> Preview Audio';
+               previewAudioBtn.innerHTML = '<i class="fas fa-play"></i>';
             }
           }, 100); // Small delay to let it start
           
@@ -867,6 +867,7 @@ class CustomDrawing extends Drawing {
   constructor(...args) {
     super(...args);
     this.bgSprite = null;
+    this.bgShadow = null;
     this.pinSprite = null;
     this.noteText = null;
     this.photoImageSprite = null;
@@ -1336,11 +1337,29 @@ class CustomDrawing extends Drawing {
         this.addChild(this.photoImageSprite);
       }
 
+      // --- Cassette Shadow ---
+      if (!this.bgShadow) {
+        this.bgShadow = new PIXI.Sprite();
+        this.addChildAt(this.bgShadow, 0); // Put it behind everything
+      }
+
       const imagePath = noteData.image || "modules/investigation-board/assets/cassette1.webp";
       try {
         const texture = await PIXI.Assets.load(imagePath);
-        if (texture && this.photoImageSprite && this.photoImageSprite.parent) {
-          this.photoImageSprite.texture = texture;
+        if (texture) {
+          // Update shadow
+          if (this.bgShadow) {
+            this.bgShadow.texture = texture;
+            this.bgShadow.width = drawingWidth;
+            this.bgShadow.height = drawingHeight;
+            this.bgShadow.tint = 0x000000;
+            this.bgShadow.alpha = 0.4;
+            this.bgShadow.position.set(6, 6); // Offset shadow
+            this.bgShadow.filters = [new PIXI.BlurFilter(2)];
+          }
+
+          if (this.photoImageSprite && this.photoImageSprite.parent) {
+            this.photoImageSprite.texture = texture;
           this.photoImageSprite.width = drawingWidth;
           this.photoImageSprite.height = drawingHeight;
           this.photoImageSprite.position.set(0, 0);
@@ -1350,9 +1369,10 @@ class CustomDrawing extends Drawing {
           this.photoImageSprite.visible = true;
           this.photoImageSprite.alpha = 1;
         }
-      } catch (err) {
-        console.error(`Failed to load media image: ${imagePath}`, err);
       }
+    } catch (err) {
+      console.error(`Failed to load media image: ${imagePath}`, err);
+    }
 
       // --- Pin Sprite ---
       const pinSetting = game.settings.get(MODULE_ID, "pinColor");
@@ -1568,20 +1588,66 @@ class CustomDrawing extends Drawing {
       const textAreaX = margin + photoImgWidth + margin;
       const fullHeight = photoImgHeight + margin * 2;
     
-      // --- Background Frame ---
-      if (!this.bgSprite) {
-        this.bgSprite = new PIXI.Sprite();
-        this.addChildAt(this.bgSprite, 0);
-      }
-      try {
-        const texture = await PIXI.Assets.load("modules/investigation-board/assets/photoFrame.webp");
-        if (texture && this.bgSprite) {
-          this.bgSprite.texture = texture;
-          this.bgSprite.width = fullWidth;
-          this.bgSprite.height = fullHeight;
-        }
-      } catch (err) {
-        console.error("Failed to load photo frame texture", err);
+            // --- Background Frame ---
+    
+            if (!this.bgSprite) {
+    
+              this.bgSprite = new PIXI.Sprite();
+    
+              this.addChildAt(this.bgSprite, 0);
+    
+            }
+    
+      
+    
+            // --- Background Shadow ---
+    
+            if (!this.bgShadow) {
+    
+              this.bgShadow = new PIXI.Sprite();
+    
+              this.addChildAt(this.bgShadow, 0); // Behind the frame
+    
+            }
+    
+      
+    
+            try {
+    
+              const texture = await PIXI.Assets.load("modules/investigation-board/assets/photoFrame.webp");
+    
+              if (texture) {
+    
+                // Update shadow
+    
+                if (this.bgShadow) {
+    
+                  this.bgShadow.texture = texture;
+    
+                  this.bgShadow.width = fullWidth;
+    
+                  this.bgShadow.height = fullHeight;
+    
+                  this.bgShadow.tint = 0x000000;
+    
+                  this.bgShadow.alpha = 0.4;
+    
+                  this.bgShadow.position.set(6, 6);
+    
+                  this.bgShadow.filters = [new PIXI.BlurFilter(3)];
+    
+                }
+    
+      
+    
+                if (this.bgSprite) {
+                  this.bgSprite.texture = texture;
+                  this.bgSprite.width = fullWidth;
+                  this.bgSprite.height = fullHeight;
+                }
+              }
+            } catch (err) {
+              console.error("Failed to load photo frame texture", err);
         if (this.bgSprite) {
           this.bgSprite.texture = PIXI.Texture.EMPTY;
         }
@@ -1718,19 +1784,85 @@ class CustomDrawing extends Drawing {
     };
     const bgImage = getBackgroundImage(noteData.type, mode);
     
-    if (!this.bgSprite) {
-      this.bgSprite = new PIXI.Sprite();
-      this.addChild(this.bgSprite);
-    }
-    try {
-      const texture = await PIXI.Assets.load(bgImage);
-      if (texture && this.bgSprite) {
-        this.bgSprite.texture = texture;
-        this.bgSprite.width = width;
-        this.bgSprite.height = height;
-      }
-    } catch (err) {
-      console.error(`Failed to load background texture: ${bgImage}`, err);
+        if (!this.bgSprite) {
+    
+          this.bgSprite = new PIXI.Sprite();
+    
+          this.addChild(this.bgSprite);
+    
+        }
+    
+    
+    
+        // --- Background Shadow ---
+    
+        if (!this.bgShadow) {
+    
+          this.bgShadow = new PIXI.Sprite();
+    
+          this.addChildAt(this.bgShadow, 0); // Behind the background
+    
+        }
+    
+    
+    
+        try {
+    
+          const texture = await PIXI.Assets.load(bgImage);
+    
+          if (texture) {
+    
+            // Update shadow
+    
+            if (this.bgShadow) {
+    
+              this.bgShadow.texture = texture;
+    
+              this.bgShadow.width = width;
+    
+              this.bgShadow.height = height;
+    
+              this.bgShadow.tint = 0x000000;
+    
+              this.bgShadow.alpha = 0.4;
+    
+              this.bgShadow.position.set(6, 6);
+    
+              this.bgShadow.filters = [new PIXI.BlurFilter(3)];
+    
+            }
+    
+    
+    
+                        if (this.bgSprite) {
+    
+    
+    
+                          this.bgSprite.texture = texture;
+    
+    
+    
+                          this.bgSprite.width = width;
+    
+    
+    
+                          this.bgSprite.height = height;
+    
+    
+    
+                        }
+    
+    
+    
+                      }
+    
+    
+    
+                    } catch (err) {
+    
+    
+    
+                      console.error(`Failed to load background texture: ${bgImage}`, err);
       if (this.bgSprite) {
         this.bgSprite.texture = PIXI.Texture.EMPTY;
       }
@@ -2082,6 +2214,12 @@ function drawYarnLine(graphics, x1, y1, x2, y2, color, width, animated = false, 
   const ctrlY = midY + sagAmount;
   const seed = (Math.abs(x1) + Math.abs(y1) + Math.abs(x2) + Math.abs(y2)) % 100;
   const wobble = (seed / 100) * 20 - 10;
+
+  // --- DRAW SHADOW LINE FIRST ---
+  const shadowOffset = 3;
+  graphics.lineStyle(width + 1, 0x000000, 0.25); // Slightly thicker, black, low alpha
+  graphics.moveTo(x1 + shadowOffset, y1 + shadowOffset);
+  graphics.quadraticCurveTo(ctrlX + wobble + shadowOffset, ctrlY + shadowOffset, x2 + shadowOffset, y2 + shadowOffset);
 
   if (animated) {
     // Draw HIGHLY VISIBLE animated dashed line with marching effect
@@ -3212,7 +3350,7 @@ async function createMediaNoteFromSound(sound) {
         type: "media",
         text: sound.name,
         image: imagePath,
-        audioPath: sound.src,
+        audioPath: sound.path,
         linkedObject: `@UUID[${sound.uuid}]{${sound.name}}`
       },
       core: { sheetClass: "investigation-board.CustomDrawingSheet" }
