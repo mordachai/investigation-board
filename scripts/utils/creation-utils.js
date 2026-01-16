@@ -161,7 +161,7 @@ export async function createPhotoNoteFromActor(actor, isUnknown = false) {
   const height = Math.round(photoW / (225 / 290));
 
   const viewCenter = canvas.stage.pivot;
-  const x = viewCenter.x - width / 2;
+  const x = viewCenter.x - photoW / 2;
   const y = viewCenter.y - height / 2;
 
   const created = await collaborativeCreate({
@@ -214,7 +214,7 @@ export async function createPhotoNoteFromScene(targetScene) {
   const height = Math.round(photoW / (225 / 290));
 
   const viewCenter = canvas.stage.pivot;
-  const x = viewCenter.x - width / 2;
+  const x = viewCenter.x - photoW / 2;
   const y = viewCenter.y - height / 2;
 
   const displayName = targetScene.navName || targetScene.name || "Unknown Location";
@@ -276,8 +276,8 @@ export async function createHandoutNoteFromPage(page) {
   const handoutH = game.settings.get(MODULE_ID, "handoutNoteHeight") || 400;
 
   const viewCenter = canvas.stage.pivot;
-  const x = viewCenter.x - width / 2;
-  const y = viewCenter.y - height / 2;
+  const x = viewCenter.x - handoutW / 2;
+  const y = viewCenter.y - handoutH / 2;
 
   const imagePath = page.src || "modules/investigation-board/assets/newhandout.webp";
 
@@ -355,7 +355,7 @@ export async function createMediaNoteFromSound(sound) {
   const height = Math.round(mediaW * 0.74);
 
   const viewCenter = canvas.stage.pivot;
-  const x = viewCenter.x - width / 2;
+  const x = viewCenter.x - mediaW / 2;
   const y = viewCenter.y - height / 2;
 
   const imagePath = await _getRandomCassetteImage();
