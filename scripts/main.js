@@ -11,6 +11,7 @@ import {
   clearConnectionPreview
 } from "./canvas/connection-manager.js";
 import { initSocket, socket, collaborativeUpdate } from "./utils/socket-handler.js";
+import { SetupWarningDialog } from "./apps/setup-warning.js";
 import { 
   createNote, 
   createPhotoNoteFromActor, 
@@ -255,36 +256,16 @@ Hooks.once("ready", () => {
 
   // Show setup warning to GM if enabled
   if (game.user.isGM && game.settings.get(MODULE_ID, "showSetupWarning")) {
-    const drawingPerm = game.permissions.DRAWING_CREATE.includes(1); // PLAYER role
-    const filePerm = game.permissions.FILES_BROWSE.includes(1); // PLAYER role
+    const users = game.users.filter(u => !u.isGM);
+    const playerRoles = [...new Set(users.map(u => u.role))];
+    if (playerRoles.length === 0) playerRoles.push(1);
+
+    const drawingPerm = playerRoles.every(role => game.permissions.DRAWING_CREATE.includes(role));
+    const browsePerm = playerRoles.every(role => game.permissions.FILES_BROWSE.includes(role));
+    const uploadPerm = playerRoles.every(role => game.permissions.FILES_UPLOAD.includes(role));
     
-    if (!drawingPerm || !filePerm) {
-      const { DialogV2 } = foundry.applications.api;
-      new DialogV2({
-        window: { title: "Investigation Board: Setup Recommended" },
-        content: `
-          <p>To allow <strong>Players</strong> to fully use the Investigation Board, consider updating these World Permissions in <b>Game Settings >> User Management >> Configure Permissions</b>:</p>
-          <ul>
-            <li><strong>Use Drawing Tools</strong>: ${drawingPerm ? "✅ Enabled" : "❌ Disabled (Needed to create/manipulate notes and connections)"}</li>
-            <li><strong>Upload Files</strong>: ${filePerm ? "✅ Enabled" : "❌ Disabled (Needed to create Photo and Handout notes with images)"}</li>
-          </ul>
-          <p style="color: #882222; font-style: italic;"><strong>Security Note:</strong> Enabling 'Upload Files' for players gives them access to your server's file system through the File Picker. Be careful with who you let access your files!</p>
-          <hr>
-        `,
-        buttons: [
-          {
-            action: "ok",
-            label: "Understood",
-            icon: "fas fa-check"
-          },
-          {
-            action: "disable",
-            label: "Don't show again",
-            icon: "fas fa-times",
-            callback: (event, button, dialog) => game.settings.set(MODULE_ID, "showSetupWarning", false)
-          }
-        ]
-      }).render(true);
+    if (!drawingPerm || !browsePerm || !uploadPerm) {
+      new SetupWarningDialog().render(true);
     }
   }
 });
