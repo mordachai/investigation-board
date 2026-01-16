@@ -730,13 +730,48 @@ export class CustomDrawing extends Drawing {
         const texture = await PIXI.Assets.load(imagePath);
         if (texture && this.photoImageSprite) {
           this.photoImageSprite.texture = texture;
-          this.photoImageSprite.width = fullWidth * 0.9;
-          this.photoImageSprite.height = fullHeight * 0.9;
-          this.photoImageSprite.position.set(fullWidth * 0.05, fullHeight * 0.05);
           
-          // Ensure mask is disabled for futuristic mode
-          this.photoImageSprite.mask = null;
-          if (this.photoMask) this.photoMask.visible = false;
+          const frameWidth = fullWidth * 0.9;
+          const frameHeight = fullHeight * 0.9;
+          const frameX = fullWidth * 0.05;
+          const frameY = fullHeight * 0.05;
+
+          // Use center-top positioning logic to avoid stretching
+          const textureRatio = texture.width / texture.height;
+          const frameRatio = frameWidth / frameHeight;
+
+          let spriteWidth, spriteHeight, offsetX, offsetY;
+
+          if (textureRatio > frameRatio) {
+            // Case 1: Image is wider than frame - Fit by height, center horizontally
+            spriteHeight = frameHeight;
+            spriteWidth = frameHeight * textureRatio;
+            offsetX = (frameWidth - spriteWidth) / 2;
+            offsetY = 0;
+          } else {
+            // Case 2: Image is taller than frame - Fit by width, top aligned
+            spriteWidth = frameWidth;
+            spriteHeight = frameWidth / textureRatio;
+            offsetX = 0;
+            offsetY = 0;
+          }
+
+          this.photoImageSprite.width = spriteWidth;
+          this.photoImageSprite.height = spriteHeight;
+          this.photoImageSprite.position.set(frameX + offsetX, frameY + offsetY);
+
+          // Apply Mask to clip overflow in futuristic mode too
+          if (!this.photoMask) {
+            this.photoMask = new PIXI.Graphics();
+            this.addChild(this.photoMask);
+          }
+          this.photoMask.clear();
+          this.photoMask.beginFill(0xffffff);
+          this.photoMask.drawRect(frameX, frameY, frameWidth, frameHeight);
+          this.photoMask.endFill();
+          this.photoImageSprite.mask = this.photoMask;
+          this.photoMask.visible = true;
+          this.photoImageSprite.visible = true;
         }
       } catch (err) {
         console.error(`Failed to load user photo: ${noteData.image}`, err);

@@ -1,5 +1,6 @@
 import { MODULE_ID, PIN_COLORS } from "../config.js";
 import { collaborativeUpdate } from "../utils/socket-handler.js";
+import { applyTapeEffectToSound } from "../utils/audio-utils.js";
 import { 
   startConnectionAnimation, 
   stopConnectionAnimation, 
@@ -232,19 +233,29 @@ export class CustomDrawingSheet extends DrawingConfig {
           this.previewSound.stop();
           this.previewSound = null;
           previewAudioBtn.innerHTML = '<i class="fas fa-play"></i>';
+          previewAudioBtn.title = "Preview Audio";
           return;
         }
 
         const audioPath = this.element.querySelector("input[name='audioPath']")?.value;
         if (audioPath) {
           this.previewSound = await game.audio.play(audioPath, { volume: 0.8 });
+          
+          // Apply tape effect if enabled in the form
+          const effectEnabled = this.element.querySelector("input[name='audioEffectEnabled']")?.checked;
+          if (effectEnabled && this.previewSound) {
+            applyTapeEffectToSound(this.previewSound);
+          }
+
           previewAudioBtn.innerHTML = '<i class="fas fa-stop"></i>';
+          previewAudioBtn.title = "Stop Preview";
           
           // Reset button when sound ends
           const sound = this.previewSound;
           setTimeout(() => {
             if (this.previewSound === sound && !sound.playing) {
                previewAudioBtn.innerHTML = '<i class="fas fa-play"></i>';
+               previewAudioBtn.title = "Preview Audio";
             }
           }, 100); // Small delay to let it start
           
@@ -252,7 +263,8 @@ export class CustomDrawingSheet extends DrawingConfig {
           const checkEnd = setInterval(() => {
             if (!this.previewSound || this.previewSound !== sound || !sound.playing) {
               if (this.previewSound === sound) {
-                previewAudioBtn.innerHTML = '<i class="fas fa-play"></i> Preview Audio';
+                previewAudioBtn.innerHTML = '<i class="fas fa-play"></i>';
+                previewAudioBtn.title = "Preview Audio";
                 this.previewSound = null;
               }
               clearInterval(checkEnd);

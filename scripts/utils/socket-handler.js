@@ -165,7 +165,10 @@ export function handleSocketMessage(data) {
     if (!scene) return;
     
     console.log("Investigation Board: GM processing socket creation requested by", data.requestingUser);
-    scene.createEmbeddedDocuments("Drawing", [data.createData], data.options);
+    
+    // Pass along the original requesting userId so we can filter the sheet opening
+    const options = { ...data.options, ibRequestingUser: data.requestingUser };
+    scene.createEmbeddedDocuments("Drawing", [data.createData], options);
   }
 
   if (data.action === "updateDrawing") {

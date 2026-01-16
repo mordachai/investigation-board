@@ -295,11 +295,14 @@ Hooks.on("createDrawing", (drawing, options, userId) => {
   const noteData = drawing.flags[MODULE_ID];
   if (!noteData) return;
 
+  // Determine who should see the sheet: either the direct userId or the original requester via socket
+  const requesterId = options.ibRequestingUser || userId;
+
   // If this is the user who created the note, open the edit dialog
-  if (userId === game.user.id && !options.skipAutoOpen) {
+  if (requesterId === game.user.id && !options.skipAutoOpen) {
     setTimeout(() => {
       drawing.sheet.render(true);
-    }, 150);
+    }, 250);
   }
 
   // If we're in Investigation Board mode, refresh interactivity after the drawing is rendered
