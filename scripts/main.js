@@ -301,7 +301,23 @@ Hooks.on("createDrawing", (drawing, options, userId) => {
   // If this is the user who created the note, open the edit dialog
   if (requesterId === game.user.id && !options.skipAutoOpen) {
     setTimeout(() => {
-      drawing.sheet.render(true);
+      // Calculate screen position to place dialog below the note
+      const drawingObject = canvas.drawings.get(drawing.id);
+      if (drawingObject) {
+        const bounds = drawingObject.getBounds();
+        // bounds are in screen coordinates (pixels)
+        const top = bounds.bottom + 20; // 20px padding below the note
+        const left = bounds.left + (bounds.width / 2) - 200; // Center horizontally (sheet width is 400)
+        
+        drawing.sheet.render(true, {
+          position: {
+            top: Math.max(0, top),
+            left: Math.max(0, left)
+          }
+        });
+      } else {
+        drawing.sheet.render(true);
+      }
     }, 250);
   }
 
