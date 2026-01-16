@@ -105,60 +105,88 @@ function drawYarnLine(graphics, x1, y1, x2, y2, color, width, animated = false, 
     const points = getQuadraticBezierPoints(x1, y1, controlPointX, controlPointY, x2, y2, segments);
     
     // 1. Draw solid thick base line
-    // Use slightly darker version for the base to create depth
     graphics.lineStyle(width, color, 1);
     graphics.moveTo(points[0].x, points[0].y);
     for (let i = 1; i < points.length; i++) {
       graphics.lineTo(points[i].x, points[i].y);
     }
 
-    // 2. Draw "Twisted" diagonal texture
-    // We create lighter diagonal hashes along the curve to simulate ply twist
-    // Use white with low alpha for the highlight strands
-    const twistWidth = Math.max(1, width / 2);
-    graphics.lineStyle(twistWidth, 0xFFFFFF, 0.4); 
-
-    const stepSize = Math.max(3, width * 1.5); // Distance between twists
+    // 2. Draw "Twisted" diagonal texture (Dark Shadows)
+    // We create dark diagonal hashes along the curve to simulate the grooves between ply twists
+    const stepSize = Math.max(2, width * 1.2); // Tighter steps for more detail
     let currentDist = 0;
     
     for (let i = 0; i < points.length - 1; i++) {
       const p1 = points[i];
       const p2 = points[i + 1];
       const segDist = Math.hypot(p2.x - p1.x, p2.y - p1.y);
-      
-      // Interpolate points between p1 and p2 for smoother twist placement
       const numSubSteps = Math.ceil(segDist / 2); 
       
       for (let j = 0; j < numSubSteps; j++) {
         currentDist += segDist / numSubSteps;
-        
         if (currentDist >= stepSize) {
           currentDist = 0;
-          
-          // Calculate interpolated point
           const t = j / numSubSteps;
           const px = p1.x + (p2.x - p1.x) * t;
           const py = p1.y + (p2.y - p1.y) * t;
-          
-          // Calculate tangent angle
           const angle = Math.atan2(p2.y - p1.y, p2.x - p1.x);
           
-          // Draw diagonal slash: offset perpendicular to tangent
-          // Twist angle: tangent + 45 degrees
-          const twistAngle = angle + (Math.PI / 4);
-          const length = width * 1.2;
+          // Randomize twist angle and thickness slightly
+          const twistAngle = angle + (Math.PI / 4) + (Math.random() * 0.2 - 0.1);
+          const randThick = Math.max(1, (width / 2) * (0.8 + Math.random() * 0.4));
+          const randLen = width * (1.0 + Math.random() * 0.4);
           
-          const sx = px - Math.cos(twistAngle) * (length / 2);
-          const sy = py - Math.sin(twistAngle) * (length / 2);
-          const ex = px + Math.cos(twistAngle) * (length / 2);
-          const ey = py + Math.sin(twistAngle) * (length / 2);
+          graphics.lineStyle(randThick, 0x000000, 0.4);
           
+          const sx = px - Math.cos(twistAngle) * (randLen / 2);
+          const sy = py - Math.sin(twistAngle) * (randLen / 2);
+          const ex = px + Math.cos(twistAngle) * (randLen / 2);
+          const ey = py + Math.sin(twistAngle) * (randLen / 2);
           graphics.moveTo(sx, sy);
           graphics.lineTo(ex, ey);
         }
       }
     }
+
+    // 3. Draw a "Fibrous" highlight right in the middle (approx 1/3 of original width)
+    const highlightWidth = Math.max(1, width / 3);
+    for (let i = 0; i < points.length - 1; i++) {
+      // More frequent and visible highlights
+      if ((i % 2 === 0) || Math.random() > 0.5) {
+        const jitterAlpha = 0.1 + (Math.random() * 0.2);
+        graphics.lineStyle(highlightWidth, 0xFFFFFF, jitterAlpha);
+        graphics.moveTo(points[i].x, points[i].y);
+        graphics.lineTo(points[i + 1].x, points[i + 1].y);
+      }
+    }
   }
+
+  // 4. Draw dangling ends to make it look like the yarn passes the pin and hangs
+  const drawDanglingEnd = (x, y, isStart) => {
+    // Make the angle more varied (mostly downwards, but some left/right sweep)
+    const angle = (Math.PI / 2) + (Math.random() * 2.0 - 1.0); 
+    const dangleLen = width * (3.0 + Math.random() * 3.0); // Much longer
+    
+    // Draw the dangle base
+    graphics.lineStyle(width, color, 1);
+    const ex = x + Math.cos(angle) * dangleLen;
+    const ey = y + Math.sin(angle) * dangleLen;
+    graphics.moveTo(x, y);
+    graphics.lineTo(ex, ey);
+
+    // Add a bit of 3D texture to the dangle too
+    graphics.lineStyle(Math.max(1, (width / 2) * (0.8 + Math.random() * 0.4)), 0x000000, 0.4);
+    graphics.moveTo(x, y);
+    graphics.lineTo(ex, ey);
+    
+    // Small highlight on dangle
+    graphics.lineStyle(Math.max(1, width / 3), 0xFFFFFF, 0.2);
+    graphics.moveTo(x, y);
+    graphics.lineTo(ex, ey);
+  };
+
+  drawDanglingEnd(x1, y1, true);
+  drawDanglingEnd(x2, y2, false);
 }
 
 // Helper to get a realistic yarn color from a hex color
