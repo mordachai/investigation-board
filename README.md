@@ -7,6 +7,13 @@ A Foundry VTT module that lets everyone create, edit, and move sticky and photo 
 
 <img width="1200" height="591" alt="image" src="https://github.com/user-attachments/assets/a38c958e-82b0-49f7-85e1-7fb6fa2f1fa9" />
 
+## NEW FEATURE: Old Tape Sound Effects
+<img width="609" height="482" alt="image" src="https://github.com/user-attachments/assets/d8a8d34b-8ef8-41f7-9b83-ecb16241fee1" />
+
+Now you can activate a sound effect filter to make the audio even more immersive. This option is on by default in all Media notes created. Remember to edit and uncheck if you want the original audio.
+
+------
+
 ## NEW FEATURE: Connecting Notes
 
 Click on a pin, click on the other. That's it.
@@ -15,6 +22,7 @@ Connecting lines will always have the player's Foundry color initially. You can 
 
 **REMEMBER: YOU NEED TO BE IN DRAW MODE TO MAKE ALL OF THIS**
 
+-----
 
 ## CHECK OUT THE VIDEO ↓ 
 
