@@ -14,13 +14,13 @@ export function applyTapeEffect(context, inputNode, outputNode) {
   // Create High-pass filter (removes bass/lows for that tinny sound)
   const hpFilter = context.createBiquadFilter();
   hpFilter.type = "highpass";
-  hpFilter.frequency.value = 400; // Cut everything below 400Hz
+  hpFilter.frequency.value = 600; // Cut everything below 500Hz
   hpFilter.Q.value = 1;
 
   // Create Low-pass filter (removes very high frequencies to simulate tape degradation)
   const lpFilter = context.createBiquadFilter();
   lpFilter.type = "lowpass";
-  lpFilter.frequency.value = 4000; // Cut everything above 4000Hz
+  lpFilter.frequency.value = 2500; // Cut everything above 3000Hz
   lpFilter.Q.value = 1;
 
   // Create a Gain node to boost the signal slightly if it feels too quiet after filtering

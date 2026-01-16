@@ -628,8 +628,14 @@ export function onPinClick(event, drawing) {
 export function resetPinConnectionState() {
   pinConnectionFirstNote = null;
   if (pinConnectionHighlight) {
-    canvas.controls.removeChild(pinConnectionHighlight);
-    pinConnectionHighlight.destroy();
+    try {
+      if (!pinConnectionHighlight.destroyed) {
+        if (pinConnectionHighlight.parent) pinConnectionHighlight.parent.removeChild(pinConnectionHighlight);
+        pinConnectionHighlight.destroy();
+      }
+    } catch (err) {
+      console.warn("Investigation Board: Error destroying pin highlight", err);
+    }
     pinConnectionHighlight = null;
   }
   clearConnectionPreview();
@@ -637,18 +643,26 @@ export function resetPinConnectionState() {
 
 export function cleanupConnectionLines() {
   if (connectionLinesContainer) {
-    if (connectionLinesContainer.parent) {
-      connectionLinesContainer.parent.removeChild(connectionLinesContainer);
+    try {
+      if (!connectionLinesContainer.destroyed) {
+        if (connectionLinesContainer.parent) connectionLinesContainer.parent.removeChild(connectionLinesContainer);
+        connectionLinesContainer.destroy({children: true, texture: false, baseTexture: false});
+      }
+    } catch (err) {
+      console.warn("Investigation Board: Error destroying lines container", err);
     }
-    connectionLinesContainer.destroy();
     connectionLinesContainer = null;
   }
 
   if (pinsContainer) {
-    if (pinsContainer.parent) {
-      pinsContainer.parent.removeChild(pinsContainer);
+    try {
+      if (!pinsContainer.destroyed) {
+        if (pinsContainer.parent) pinsContainer.parent.removeChild(pinsContainer);
+        pinsContainer.destroy({children: true});
+      }
+    } catch (err) {
+      console.warn("Investigation Board: Error destroying pins container", err);
     }
-    pinsContainer.destroy();
     pinsContainer = null;
   }
 }
