@@ -50,9 +50,9 @@ export async function createNote(noteType) {
                  : noteType === "media" ? Math.round(mediaW * 0.74)
                  : stickyW;
 
-  const dims = canvas.dimensions;
-  const x = dims.width / 2;
-  const y = dims.height / 2;
+  const viewCenter = canvas.stage.pivot;
+  const x = viewCenter.x - width / 2;
+  const y = viewCenter.y - height / 2;
 
   // Get default text from settings (fallback if missing)
   const defaultText = noteType === "handout"
@@ -160,9 +160,9 @@ export async function createPhotoNoteFromActor(actor, isUnknown = false) {
   const photoW = game.settings.get(MODULE_ID, "photoNoteWidth") || 225;
   const height = Math.round(photoW / (225 / 290));
 
-  const dims = canvas.dimensions;
-  const x = dims.width / 2;
-  const y = dims.height / 2;
+  const viewCenter = canvas.stage.pivot;
+  const x = viewCenter.x - width / 2;
+  const y = viewCenter.y - height / 2;
 
   const created = await collaborativeCreate({
     type: "r",
@@ -213,9 +213,9 @@ export async function createPhotoNoteFromScene(targetScene) {
   const photoW = game.settings.get(MODULE_ID, "photoNoteWidth") || 225;
   const height = Math.round(photoW / (225 / 290));
 
-  const dims = canvas.dimensions;
-  const x = dims.width / 2;
-  const y = dims.height / 2;
+  const viewCenter = canvas.stage.pivot;
+  const x = viewCenter.x - width / 2;
+  const y = viewCenter.y - height / 2;
 
   const displayName = targetScene.navName || targetScene.name || "Unknown Location";
   const imagePath = targetScene.background?.src || "modules/investigation-board/assets/placeholder.webp";
@@ -275,9 +275,9 @@ export async function createHandoutNoteFromPage(page) {
   const handoutW = game.settings.get(MODULE_ID, "handoutNoteWidth") || 400;
   const handoutH = game.settings.get(MODULE_ID, "handoutNoteHeight") || 400;
 
-  const dims = canvas.dimensions;
-  const x = dims.width / 2;
-  const y = dims.height / 2;
+  const viewCenter = canvas.stage.pivot;
+  const x = viewCenter.x - width / 2;
+  const y = viewCenter.y - height / 2;
 
   const imagePath = page.src || "modules/investigation-board/assets/newhandout.webp";
 
@@ -354,9 +354,9 @@ export async function createMediaNoteFromSound(sound) {
   const mediaW = 400;
   const height = Math.round(mediaW * 0.74);
 
-  const dims = canvas.dimensions;
-  const x = dims.width / 2;
-  const y = dims.height / 2;
+  const viewCenter = canvas.stage.pivot;
+  const x = viewCenter.x - width / 2;
+  const y = viewCenter.y - height / 2;
 
   const imagePath = await _getRandomCassetteImage();
 

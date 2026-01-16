@@ -1,0 +1,69 @@
+<div class="ib-setup-warning">
+    <p>To allow <strong>all players</strong> to fully use the Investigation Board, consider updating World Permissions in <b>Game Settings >> User Management >> Configure Permissions</b>.</p>
+
+    <div class="permissions-summary">
+        <div class="permission-item {{#if drawingPerm}}enabled{{else}}disabled{{/if}}">
+            <i class="fas {{#if drawingPerm}}fa-check-circle{{else}}fa-exclamation-triangle{{/if}}"></i>
+            <span><strong>Use Drawing Tools</strong> (Needed to create notes/connections)</span>
+        </div>
+        <div class="permission-item {{#if browsePerm}}enabled{{else}}disabled{{/if}}">
+            <i class="fas {{#if browsePerm}}fa-check-circle{{else}}fa-exclamation-triangle{{/if}}"></i>
+            <span><strong>Browse Files</strong> (Needed to select assets)</span>
+        </div>
+        <div class="permission-item {{#if uploadPerm}}enabled{{else}}disabled{{/if}}">
+            <i class="fas {{#if uploadPerm}}fa-check-circle{{else}}fa-exclamation-triangle{{/if}}"></i>
+            <span><strong>Upload Files</strong> (Needed to upload assets)</span>
+        </div>
+    </div>
+
+    <p class="permission-explanation">
+        <i class="fas fa-info-circle"></i>
+        To allow players to <strong>move, edit, and connect</strong> notes, you only need to enable <strong>Use Drawing Tools</strong>. This permission is harmless as it only affects canvas drawings and does not grant access to your server files.
+    </p>
+
+    <hr>
+
+    <h3>Users with Missing Permissions:</h3>
+    <div class="user-permissions-table-container">
+        <table class="ib-permissions-table">
+            <thead>
+                <tr>
+                    <th>User</th>
+                    <th>Role</th>
+                    <th class="text-center">Draw</th>
+                    <th class="text-center">Browse</th>
+                    <th class="text-center">Upload</th>
+                </tr>
+            </thead>
+            <tbody>
+                {{#each missingUsers}}
+                <tr>
+                    <td>{{this.name}}</td>
+                    <td><small>{{this.roleName}}</small></td>
+                    <td class="text-center">{{#if this.canDraw}}✅{{else}}❌{{/if}}</td>
+                    <td class="text-center">{{#if this.canBrowse}}✅{{else}}❌{{/if}}</td>
+                    <td class="text-center">{{#if this.canUpload}}✅{{else}}❌{{/if}}</td>
+                </tr>
+                {{else}}
+                <tr>
+                    <td colspan="5" class="text-center">No active players missing permissions.</td>
+                </tr>
+                {{/each}}
+            </tbody>
+        </table>
+    </div>
+
+    <p class="security-note">
+        <i class="fas fa-user-shield"></i>
+        <strong>Security Note:</strong> Enabling file permissions gives players access to your server's file system through the File Picker.
+    </p>
+
+    <div class="ib-dialog-buttons">
+        <button type="button" class="ib-btn ok" data-action="ok">
+            <i class="fas fa-check"></i> Understood
+        </button>
+        <button type="button" class="ib-btn disable" data-action="disable">
+            <i class="fas fa-times"></i> Don't show again
+        </button>
+    </div>
+</div>

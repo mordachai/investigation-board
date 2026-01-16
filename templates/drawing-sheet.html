@@ -55,10 +55,15 @@
         <button type="button" class="audio-picker-button" title="Browse Audio">
           <i class="fas fa-music"></i>
         </button>
-        <button type="button" class="preview-audio-btn" {{#unless audioPath}}disabled{{/unless}}>
+        <button type="button" class="preview-audio-btn" title="Preview Audio" {{#unless audioPath}}disabled{{/unless}}>
           <i class="fas fa-play"></i>
         </button>
       </div>
+    </div>
+    <div class="form-group">
+      <label for="audioEffectEnabled">Apply Tape Effect:</label>
+      <input type="checkbox" name="audioEffectEnabled" {{#if audioEffectEnabled}}checked{{/if}} />
+      <p class="notes">Old tape recording (High-pass filter).</p>
     </div>
   {{/if}}
 

@@ -1,4 +1,5 @@
 import { MODULE_ID, SOCKET_NAME } from "../config.js";
+import { applyTapeEffectToSound } from "./audio-utils.js";
 
 export let socket = null;
 export let activeGlobalSounds = new Map(); // Track sounds played via socket
@@ -127,6 +128,11 @@ export function handleSocketMessage(data) {
         const sound = await game.audio.play(data.audioPath, { volume: 0.8 });
         if (sound) {
           activeGlobalSounds.set(data.audioPath, sound);
+          
+          if (data.applyEffect) {
+            applyTapeEffectToSound(sound);
+          }
+
           // Clean up reference when sound ends
           setTimeout(() => {
             if (activeGlobalSounds.get(data.audioPath) === sound && !sound.playing) {
@@ -159,7 +165,10 @@ export function handleSocketMessage(data) {
     if (!scene) return;
     
     console.log("Investigation Board: GM processing socket creation requested by", data.requestingUser);
-    scene.createEmbeddedDocuments("Drawing", [data.createData], data.options);
+    
+    // Pass along the original requesting userId so we can filter the sheet opening
+    const options = { ...data.options, ibRequestingUser: data.requestingUser };
+    scene.createEmbeddedDocuments("Drawing", [data.createData], options);
   }
 
   if (data.action === "updateDrawing") {

@@ -1,5 +1,6 @@
 import { MODULE_ID, PIN_COLORS } from "../config.js";
 import { collaborativeUpdate } from "../utils/socket-handler.js";
+import { applyTapeEffectToSound } from "../utils/audio-utils.js";
 import { 
   startConnectionAnimation, 
   stopConnectionAnimation, 
@@ -67,6 +68,7 @@ export class CustomDrawingSheet extends DrawingConfig {
     context.connections = customData.connections;
     context.font = customData.font;
     context.fontSize = customData.fontSize;
+    context.audioEffectEnabled = customData.audioEffectEnabled;
 
     // Enrich the linked object for display
     context.enrichedLinkedObject = context.linkedObject ? await TextEditor.enrichHTML(context.linkedObject, { async: true }) : "";
@@ -111,6 +113,7 @@ export class CustomDrawingSheet extends DrawingConfig {
       noteType: noteType,
       text: this.document.flags[MODULE_ID]?.text || "Default Text",
       audioPath: this.document.flags[MODULE_ID]?.audioPath || "",
+      audioEffectEnabled: this.document.flags[MODULE_ID]?.audioEffectEnabled !== false, // Default to true
       linkedObject: this.document.flags[MODULE_ID]?.linkedObject || "",
       image: this.document.flags[MODULE_ID]?.image || (noteType === "handout" ? "modules/investigation-board/assets/newhandout.webp" : "modules/investigation-board/assets/placeholder.webp"),
       identityName: this.document.flags[MODULE_ID]?.identityName || "",
@@ -230,19 +233,29 @@ export class CustomDrawingSheet extends DrawingConfig {
           this.previewSound.stop();
           this.previewSound = null;
           previewAudioBtn.innerHTML = '<i class="fas fa-play"></i>';
+          previewAudioBtn.title = "Preview Audio";
           return;
         }
 
         const audioPath = this.element.querySelector("input[name='audioPath']")?.value;
         if (audioPath) {
           this.previewSound = await game.audio.play(audioPath, { volume: 0.8 });
+          
+          // Apply tape effect if enabled in the form
+          const effectEnabled = this.element.querySelector("input[name='audioEffectEnabled']")?.checked;
+          if (effectEnabled && this.previewSound) {
+            applyTapeEffectToSound(this.previewSound);
+          }
+
           previewAudioBtn.innerHTML = '<i class="fas fa-stop"></i>';
+          previewAudioBtn.title = "Stop Preview";
           
           // Reset button when sound ends
           const sound = this.previewSound;
           setTimeout(() => {
             if (this.previewSound === sound && !sound.playing) {
                previewAudioBtn.innerHTML = '<i class="fas fa-play"></i>';
+               previewAudioBtn.title = "Preview Audio";
             }
           }, 100); // Small delay to let it start
           
@@ -250,7 +263,8 @@ export class CustomDrawingSheet extends DrawingConfig {
           const checkEnd = setInterval(() => {
             if (!this.previewSound || this.previewSound !== sound || !sound.playing) {
               if (this.previewSound === sound) {
-                previewAudioBtn.innerHTML = '<i class="fas fa-play"></i> Preview Audio';
+                previewAudioBtn.innerHTML = '<i class="fas fa-play"></i>';
+                previewAudioBtn.title = "Preview Audio";
                 this.previewSound = null;
               }
               clearInterval(checkEnd);
@@ -387,6 +401,10 @@ export class CustomDrawingSheet extends DrawingConfig {
 
         if (data.audioPath !== undefined) {
           updates[`flags.${MODULE_ID}.audioPath`] = data.audioPath;
+        }
+
+        if (noteType === "media") {
+          updates[`flags.${MODULE_ID}.audioEffectEnabled`] = !!data.audioEffectEnabled;
         }
 
         if (data.linkedObject !== undefined) {
