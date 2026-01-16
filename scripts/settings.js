@@ -64,11 +64,11 @@ export const registerSettings = function() {
 
     game.settings.register(MODULE_ID, "connectionLineWidth", {
       name: "Connection Line Width",
-      hint: "The width (in pixels) of the connection lines between notes (default: 3).",
+      hint: "The width (in pixels) of the connection lines between notes (default: 7).",
       scope: "world",
       config: true,
       type: Number,
-      default: 6,
+      default: 7,
       onChange: () => refreshAllDrawings()
     });
 
