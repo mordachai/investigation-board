@@ -15,6 +15,8 @@ The module now automatically adapts to your map size. Whether you are on a small
 
 ## NEW FEATURE >> Rapid Connection Creation:
 
+<img width="781" height="355" alt="image" src="https://github.com/user-attachments/assets/6709fe44-650e-4d25-8505-ed06c5b96726" />
+
 Speed up your board building! While dragging a yarn connection (after clicking a pin):
 - **Left-Click** anywhere on the background to instantly create a new Pin and connect it.
 - **Right-Click** anywhere on the background to open a quick menu and create any note type (Sticky, Photo, Index, etc.) already connected to your path.
@@ -79,6 +81,7 @@ Open the **Drawing Tools Toolbar** in the scene controls. You will find several 
 - **Index Card**: Larger lined cards for more detailed notes or descriptions.
 - **Handout**: Image-only notes like maps, pictures, or documents.
 - **Media (Cassette)**: Visual representation for audio recordings.
+- **Pin Only**: creates a single pin that can be connect to any note and be linked to an object. Access the link by right clicking on it (Open option, Edit to create the Linked Reference).
 
 <img width="800" height="500" alt="image" src="https://github.com/user-attachments/assets/9862eaab-8747-4df5-8153-4a795d1ef19d" />
 
@@ -121,7 +124,7 @@ You can quickly create notes directly from your Foundry sidebars by right-clicki
 
 ### Module Settings
 
-<img width="786" height="695" alt="image" src="https://github.com/user-attachments/assets/6eff3c27-66af-4a69-927d-d16a48ab4579" />
+<img width="789" height="698" alt="image" src="https://github.com/user-attachments/assets/6de3adbc-aacc-4d16-b820-4c301c5f9da8" />
 
 - **Automatic Scale per Scene**: When enabled, the module automatically calculates the best scale based on the background image width.
 - **Scene Scale / Multiplier**: A fixed scale for elements (if Auto-Scale is OFF) or a global multiplier (if Auto-Scale is ON) to fine-tune the size on all maps.
