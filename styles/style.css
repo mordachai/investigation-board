@@ -621,13 +621,13 @@ body.investigation-board-mode .drawing:not([data-investigation-note="true"]) {
 .note-preview-app .window-content {
   padding: 0;
   overflow: hidden;
-  background: #fdfaf0; /* Light aged paper */
+  background: transparent;
   transition: background 0.3s, color 0.3s;
 }
 
 /* Dark Theme Overrides */
 .theme-dark .note-preview-app .window-content {
-  background: #1a1a1a; /* Dark background */
+  background: transparent;
 }
 
 .ib-note-preview {
@@ -641,6 +641,13 @@ body.investigation-board-mode .drawing:not([data-investigation-note="true"]) {
 
 .theme-dark .ib-note-preview {
   color: #f0f0e0; /* Light text for dark mode */
+}
+
+/* Force dark text for notes with paper/texture backgrounds */
+.theme-dark .sticky-preview .preview-text,
+.theme-dark .index-preview .preview-text,
+.theme-dark .photo-preview .photo-frame-text {
+  color: #111;
 }
 
 .preview-image-container {
@@ -679,7 +686,6 @@ body.investigation-board-mode .drawing:not([data-investigation-note="true"]) {
   width: 86.66%; /* frameWidth / width */
   height: 69.75%;/* frameHeight / height */
   overflow: hidden;
-  background: #000;
 }
 
 .user-photo {
@@ -905,7 +911,7 @@ body.investigation-board-mode .drawing:not([data-investigation-note="true"]) {
 
 .preview-text-container.has-background {
   border: none;
-  padding: 60px; /* More padding for paper edges */
+  padding: 10px; /* More padding for paper edges */
   display: flex;
   align-items: center;
   justify-content: center;
@@ -934,13 +940,16 @@ body.investigation-board-mode .drawing:not([data-investigation-note="true"]) {
   z-index: 2;
   text-align: center;
   width: 100%;
-  padding: 0 40px; /* Internal safety margin on paper */
+  padding: 0 10px; /* Internal safety margin on paper */
 }
 
 .preview-footer {
-  margin-top: 10px;
-  padding-top: 15px;
-  border-top: 1px solid #ccc;
+  display: flex;
+  justify-content: flex-start;
+  gap: 4px;
+  margin: 5px;
+  padding: 5px;
+  border-bottom: 1px solid #ccc;
 }
 
 .theme-dark .preview-footer {
