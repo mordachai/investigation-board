@@ -119,13 +119,19 @@ export function handleSocketMessage(data) {
   // Global actions for all users
   if (data.action === "playAudio") {
     if (data.audioPath) {
-      // DO NOT play if already playing this specific audio via global broadcast
+      // Stop existing instance of this specific audio if already playing globally
       const existing = activeGlobalSounds.get(data.audioPath);
-      if (existing && existing.playing) return;
+      if (existing) {
+        existing.stop();
+        activeGlobalSounds.delete(data.audioPath);
+      }
 
-      console.log("Investigation Board: Playing global audio", data.audioPath);
+      console.log("Investigation Board: Playing global audio", data.audioPath, "at offset", data.offset || 0);
       (async () => {
-        const sound = await game.audio.play(data.audioPath, { volume: 0.8 });
+        const sound = await game.audio.play(data.audioPath, { 
+          volume: 0.8,
+          offset: data.offset || 0
+        });
         if (sound) {
           activeGlobalSounds.set(data.audioPath, sound);
           
@@ -135,7 +141,8 @@ export function handleSocketMessage(data) {
 
           // Clean up reference when sound ends
           setTimeout(() => {
-            if (activeGlobalSounds.get(data.audioPath) === sound && !sound.playing) {
+            const current = activeGlobalSounds.get(data.audioPath);
+            if (current === sound && !sound.playing) {
               activeGlobalSounds.delete(data.audioPath);
             }
           }, (sound.duration * 1000) + 1000 || 5000);

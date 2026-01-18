@@ -35,8 +35,9 @@
                             
                             {{#if isGM}}
                                 <div class="gm-broadcast-section">
-                                    <button type="button" class="play-btn global-toggle" data-type="global" title="Play for all players">
-                                        <i class="fas fa-broadcast-tower"></i> <span>Play for All</span>
+                                    <button type="button" class="play-btn global-toggle {{#if isGlobalActive}}active{{/if}}" data-type="global" title="Play for all players">
+                                        <i class="fas {{#if isGlobalActive}}fa-stop{{else}}fa-broadcast-tower{{/if}}"></i> 
+                                        <span>{{#if isGlobalActive}}Stop for All{{else}}Play for All{{/if}}</span>
                                     </button>
                                 </div>
                             {{/if}}

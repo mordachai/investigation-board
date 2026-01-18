@@ -75,11 +75,15 @@ export class NotePreviewer extends HandlebarsApplicationMixin(ApplicationV2) {
     // We show it for sticky and index notes, and for futuristic photo notes
     const showSeparateText = ["sticky", "index"].includes(noteType) || (noteType === "photo" && boardMode === "futuristic");
 
+    const audioPath = noteData?.audioPath;
+    const isGlobalActive = !!(audioPath && activeGlobalSounds.has(audioPath) && activeGlobalSounds.get(audioPath).playing);
+    this.globalSoundActive = isGlobalActive;
+
     return {
       noteType: noteType,
       text: noteData?.text || "",
       image: noteData?.image || "modules/investigation-board/assets/placeholder.webp",
-      audioPath: noteData?.audioPath || "",
+      audioPath: audioPath,
       framePath: framePath,
       backgroundPath: backgroundPath,
       identityName: noteData?.identityName || "",
@@ -88,6 +92,7 @@ export class NotePreviewer extends HandlebarsApplicationMixin(ApplicationV2) {
       previewFontSize: (noteData?.fontSize || 15) * 2.5,
       showSeparateText: showSeparateText,
       isGM: game.user.isGM,
+      isGlobalActive: isGlobalActive,
       linkedObject: noteData?.linkedObject || "",
       enrichedLinkedObject: noteData?.linkedObject ? await TextEditor.enrichHTML(noteData.linkedObject, { async: true }) : ""
     };
@@ -163,6 +168,7 @@ export class NotePreviewer extends HandlebarsApplicationMixin(ApplicationV2) {
         const noteData = this.document.flags[MODULE_ID];
         const audioEffectEnabled = noteData?.audioEffectEnabled !== false;
 
+        // If currently active, stop it
         if (this.globalSoundActive) {
           socket.emit(SOCKET_NAME, { action: "stopAudio", audioPath: audioPath });
           const localGlobal = activeGlobalSounds.get(audioPath);
@@ -178,13 +184,33 @@ export class NotePreviewer extends HandlebarsApplicationMixin(ApplicationV2) {
           return;
         }
 
+        // START NEW - Stop any existing first to be sure
+        const existing = activeGlobalSounds.get(audioPath);
+        if (existing) {
+          existing.stop();
+          activeGlobalSounds.delete(audioPath);
+        }
+
+        // Get offset from local audio if it's already playing
+        const offset = (localAudio && !localAudio.paused) ? localAudio.currentTime : 0;
+
+        // PAUSE local audio before starting global to prevent doubling/distortion
+        if (localAudio && !localAudio.paused) {
+          localAudio.pause();
+        }
+
         socket.emit(SOCKET_NAME, { 
             action: "playAudio", 
             audioPath: audioPath,
-            applyEffect: audioEffectEnabled
+            applyEffect: audioEffectEnabled,
+            offset: offset
         });
         
-        const sound = await game.audio.play(audioPath, { volume: 0.8 });
+        const sound = await game.audio.play(audioPath, { 
+          volume: 0.8,
+          offset: offset
+        });
+
         if (sound) {
           activeGlobalSounds.set(audioPath, sound);
           
@@ -204,7 +230,8 @@ export class NotePreviewer extends HandlebarsApplicationMixin(ApplicationV2) {
               icon.className = "fas fa-broadcast-tower";
               span.innerText = "Play for All";
               playGlobalBtn.classList.remove("active");
-              activeGlobalSounds.delete(audioPath);
+              const current = activeGlobalSounds.get(audioPath);
+              if (current === sound) activeGlobalSounds.delete(audioPath);
               if (localAudio?.paused) cassette.classList.remove("playing");
               clearInterval(checkEnd);
             }
