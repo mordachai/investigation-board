@@ -402,7 +402,10 @@ export class CustomDrawing extends Drawing {
     this.element?.setAttribute("data-investigation-note", "true");
     await this._updateSprites();
     // Redraw all connections and reposition pins globally
-    drawAllConnectionLines();
+    import("./connection-manager.js").then(m => {
+      m.updatePins();
+      m.drawAllConnectionLines();
+    });
     return this;
   }
 
@@ -413,7 +416,10 @@ export class CustomDrawing extends Drawing {
     this.element?.setAttribute("data-investigation-note", "true");
     await this._updateSprites();
     // Redraw all connections and reposition pins globally
-    drawAllConnectionLines();
+    import("./connection-manager.js").then(m => {
+      m.updatePins();
+      m.drawAllConnectionLines();
+    });
     return this;
   }
 

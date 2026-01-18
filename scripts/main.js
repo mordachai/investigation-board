@@ -5,6 +5,7 @@ import { CustomDrawing } from "./canvas/custom-drawing.js";
 import { CustomDrawingSheet } from "./apps/drawing-sheet.js";
 import { 
   drawAllConnectionLines, 
+  updatePins,
   cleanupConnectionLines, 
   resetPinConnectionState, 
   clearConnectionNumbers,
@@ -306,8 +307,9 @@ Hooks.on("createDrawing", (drawing, options, userId) => {
   if (InvestigationBoardState.isActive) {
     // Wait for the drawing to be fully rendered on canvas
     setTimeout(() => {
+      updatePins();
       refreshDrawingsInteractivity();
-      console.log("Investigation Board: Refreshed interactivity for new note", drawing.id);
+      console.log("Investigation Board: Refreshed interactivity and pins for new note", drawing.id);
     }, 300);
   }
 });
@@ -382,6 +384,7 @@ Hooks.on("updateDrawing", async (drawing, changes, options, userId) => {
 
   // Redraw connection lines when position OR connections change
   if (changes.x !== undefined || changes.y !== undefined || flagsChanged) {
+    updatePins();
     drawAllConnectionLines();
   }
 });
@@ -392,7 +395,8 @@ Hooks.on("deleteDrawing", (drawing, options, userId) => {
   const noteData = drawing.flags[MODULE_ID];
   if (!noteData) return;
 
-  // Redraw all connection lines to remove orphaned connections
+  // Redraw pins and all connection lines to remove orphaned connections
+  updatePins();
   drawAllConnectionLines();
 });
 
@@ -506,6 +510,7 @@ Hooks.on("canvasReady", () => {
 
   // Draw all connection lines and pins after a short delay to ensure all drawings are loaded
   setTimeout(() => {
+    updatePins();
     drawAllConnectionLines();
   }, 100);
 });

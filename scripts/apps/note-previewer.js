@@ -88,6 +88,12 @@ export class NotePreviewer extends HandlebarsApplicationMixin(ApplicationV2) {
     // Close button
     html.querySelector(".close-preview-btn")?.addEventListener("click", () => this.close());
 
+    // Edit button
+    html.querySelector(".edit-note-btn")?.addEventListener("click", (ev) => {
+      ev.preventDefault();
+      this.document.sheet.render(true);
+    });
+
     // Local Audio Player Logic
     const localAudio = html.querySelector(".local-audio-player");
     const cassette = html.querySelector(".cassette-wrapper");

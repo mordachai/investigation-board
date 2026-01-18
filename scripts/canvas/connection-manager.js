@@ -29,6 +29,12 @@ function getQuadraticBezierPoints(x0, y0, cx, cy, x1, y1, segments) {
   return pts;
 }
 
+// Stable pseudo-random function based on a seed
+function pseudoRandom(seed) {
+  const x = Math.sin(seed) * 10000;
+  return x - Math.floor(x);
+}
+
 // Helper function to draw a yarn line
 function drawYarnLine(graphics, x1, y1, x2, y2, color, width, animated = false, animationOffset = 0) {
   const midX = (x1 + x2) / 2;
@@ -39,8 +45,10 @@ function drawYarnLine(graphics, x1, y1, x2, y2, color, width, animated = false, 
   const horizontalOffset = dx * 0.05;
   const ctrlX = midX + horizontalOffset;
   const ctrlY = midY + sagAmount;
-  const seed = (Math.abs(x1) + Math.abs(y1) + Math.abs(x2) + Math.abs(y2)) % 100;
-  const wobble = (seed / 100) * 20 - 10;
+  
+  // Use a stable seed based on coordinates to stop flickering
+  const stableSeed = Math.floor((Math.abs(x1) + Math.abs(y1) + Math.abs(x2) + Math.abs(y2)) * 100) % 10000;
+  const wobble = (stableSeed % 100 / 100) * 20 - 10;
   const controlPointX = ctrlX + wobble;
   const controlPointY = ctrlY;
 
@@ -51,12 +59,12 @@ function drawYarnLine(graphics, x1, y1, x2, y2, color, width, animated = false, 
   graphics.quadraticCurveTo(controlPointX + shadowOffset, controlPointY + shadowOffset, x2 + shadowOffset, y2 + shadowOffset);
 
   if (animated) {
-    // Draw HIGHLY VISIBLE animated dashed line with marching effect
-    const dashLength = 30; // Longer dashes
-    const gapLength = 20; // Longer gaps
+    // Draw HIGHLY VISIBLE animated dashed line with marching effect (Marching Ants)
+    const dashLength = 30;
+    const gapLength = 20;
 
     // Calculate points along the curve for dashed effect
-    const steps = 100; // More points for smoother animation
+    const steps = Math.min(100, Math.max(20, Math.floor(distance / 5)));
     const points = [];
     for (let i = 0; i <= steps; i++) {
       const t = i / steps;
@@ -80,27 +88,23 @@ function drawYarnLine(graphics, x1, y1, x2, y2, color, width, animated = false, 
       const startDist = currentDistance;
       const endDist = currentDistance + segmentLength;
 
-      // Determine if this segment should be drawn (in dash, not gap)
       const dashCycle = dashLength + gapLength;
       const startMod = ((startDist % dashCycle) + dashCycle) % dashCycle;
       const endMod = ((endDist % dashCycle) + dashCycle) % dashCycle;
 
       if (startMod < dashLength || endMod < dashLength || startMod > endMod) {
-        // Draw thick bright dash with glow
         graphics.lineStyle(width * 2.5, 0xFFFFFF, 0.8); // White glow
         graphics.moveTo(p1.x, p1.y);
         graphics.lineTo(p2.x, p2.y);
 
-        // Draw colored dash on top
         graphics.lineStyle(width * 2, color, 1); // Full opacity, thicker
         graphics.moveTo(p1.x, p1.y);
         graphics.lineTo(p2.x, p2.y);
       }
-
       currentDistance = endDist;
     }
   } else {
-    // Determine quality (segments) based on distance
+    // Realistic static yarn line
     const segments = Math.max(20, Math.floor(distance / 5));
     const points = getQuadraticBezierPoints(x1, y1, controlPointX, controlPointY, x2, y2, segments);
     
@@ -111,9 +115,8 @@ function drawYarnLine(graphics, x1, y1, x2, y2, color, width, animated = false, 
       graphics.lineTo(points[i].x, points[i].y);
     }
 
-    // 2. Draw "Twisted" diagonal texture (Dark Shadows)
-    // We create dark diagonal hashes along the curve to simulate the grooves between ply twists
-    const stepSize = Math.max(2, width * 1.2); // Tighter steps for more detail
+    // 2. Draw "Twisted" diagonal texture (Deterministic)
+    const stepSize = Math.max(2, width * 1.2);
     let currentDist = 0;
     
     for (let i = 0; i < points.length - 1; i++) {
@@ -131,10 +134,10 @@ function drawYarnLine(graphics, x1, y1, x2, y2, color, width, animated = false, 
           const py = p1.y + (p2.y - p1.y) * t;
           const angle = Math.atan2(p2.y - p1.y, p2.x - p1.x);
           
-          // Randomize twist angle and thickness slightly
-          const twistAngle = angle + (Math.PI / 4) + (Math.random() * 0.2 - 0.1);
-          const randThick = Math.max(1, (width / 2) * (0.8 + Math.random() * 0.4));
-          const randLen = width * (1.0 + Math.random() * 0.4);
+          const twistSeed = stableSeed + i * 10 + j;
+          const twistAngle = angle + (Math.PI / 4) + (pseudoRandom(twistSeed) * 0.2 - 0.1);
+          const randThick = Math.max(1, (width / 2) * (0.8 + pseudoRandom(twistSeed + 1) * 0.4));
+          const randLen = width * (1.0 + pseudoRandom(twistSeed + 2) * 0.4);
           
           graphics.lineStyle(randThick, 0x000000, 0.4);
           
@@ -148,12 +151,12 @@ function drawYarnLine(graphics, x1, y1, x2, y2, color, width, animated = false, 
       }
     }
 
-    // 3. Draw a "Fibrous" highlight right in the middle (approx 1/3 of original width)
+    // 3. Draw a "Fibrous" highlight (Deterministic)
     const highlightWidth = Math.max(1, width / 3);
     for (let i = 0; i < points.length - 1; i++) {
-      // More frequent and visible highlights
-      if ((i % 2 === 0) || Math.random() > 0.5) {
-        const jitterAlpha = 0.1 + (Math.random() * 0.2);
+      const highlightSeed = stableSeed + i * 7;
+      if ((i % 2 === 0) || pseudoRandom(highlightSeed) > 0.5) {
+        const jitterAlpha = 0.1 + (pseudoRandom(highlightSeed + 1) * 0.2);
         graphics.lineStyle(highlightWidth, 0xFFFFFF, jitterAlpha);
         graphics.moveTo(points[i].x, points[i].y);
         graphics.lineTo(points[i + 1].x, points[i + 1].y);
@@ -161,25 +164,22 @@ function drawYarnLine(graphics, x1, y1, x2, y2, color, width, animated = false, 
     }
   }
 
-  // 4. Draw dangling ends to make it look like the yarn passes the pin and hangs
+  // 4. Draw dangling ends (Deterministic and Static)
   const drawDanglingEnd = (x, y, isStart) => {
-    // Make the angle more varied (mostly downwards, but some left/right sweep)
-    const angle = (Math.PI / 2) + (Math.random() * 2.0 - 1.0); 
-    const dangleLen = width * (3.0 + Math.random() * 3.0); // Much longer
+    const endSeed = stableSeed + (isStart ? 123 : 456);
+    const angle = (Math.PI / 2) + (pseudoRandom(endSeed) * 2.0 - 1.0); 
+    const dangleLen = width * (3.0 + pseudoRandom(endSeed + 1) * 3.0);
     
-    // Draw the dangle base
     graphics.lineStyle(width, color, 1);
     const ex = x + Math.cos(angle) * dangleLen;
     const ey = y + Math.sin(angle) * dangleLen;
     graphics.moveTo(x, y);
     graphics.lineTo(ex, ey);
 
-    // Add a bit of 3D texture to the dangle too
-    graphics.lineStyle(Math.max(1, (width / 2) * (0.8 + Math.random() * 0.4)), 0x000000, 0.4);
+    graphics.lineStyle(Math.max(1, (width / 2) * (0.8 + pseudoRandom(endSeed + 2) * 0.4)), 0x000000, 0.4);
     graphics.moveTo(x, y);
     graphics.lineTo(ex, ey);
     
-    // Small highlight on dangle
     graphics.lineStyle(Math.max(1, width / 3), 0xFFFFFF, 0.2);
     graphics.moveTo(x, y);
     graphics.lineTo(ex, ey);
@@ -191,66 +191,34 @@ function drawYarnLine(graphics, x1, y1, x2, y2, color, width, animated = false, 
 
 // Helper to get a realistic yarn color from a hex color
 function getRealisticYarnColor(colorInput) {
-  // Use Foundry's Color class if available (v10+), otherwise fall back to simple logic or return input
   if (typeof foundry !== "undefined" && foundry.utils && foundry.utils.Color) {
     try {
       const c = foundry.utils.Color.from(colorInput);
+      let hsl = c.hsl; 
       
-      // If the color is very bright (L > 0.6), darken it significantly (0.5x)
-      // If it's mid-range, darken slightly (0.7x)
-      // If it's already dark (L < 0.2), boost saturation and keep lightness or brighten slightly
-      
-      let hsl = c.hsl; // [h, s, l]
-      
-      // Adjust Lightness
       if (hsl[2] > 0.6) {
         hsl[2] *= 0.5;
       } else if (hsl[2] > 0.2) {
         hsl[2] *= 0.7;
       } else {
-        // Very dark, ensure it's not pitch black
         hsl[2] = Math.max(hsl[2], 0.15);
       }
       
-      // Boost Saturation slightly if it's not grayscale, to prevent muddiness when darkening
       if (hsl[1] > 0.1) {
          hsl[1] = Math.min(1, hsl[1] * 1.2);
       }
 
-      // Re-create color from modified HSL
-      // Foundry's Color.fromHSL might vary by version, but let's assume standard usage or manipulation
-      // Actually, Color instance is immutable in some versions, so we create new
-      // But commonly we can just use CSS string or manipulate RGB directly if HSL is tricky to set back on same instance
-      
-      // Alternative: Use simpler darken method if HSL manipulation is verbose in API
-      // But specific logic was requested.
-      
-      // Let's rely on standard Color methods if possible or manual HSL to RGB conversion if needed.
-      // v11/v12 Color class has .mix, .multiply (for RGB).
-      
-      // Let's try to just return the CSS string for the HSL and let PIXI/Foundry parse it if possible, 
-      // OR easier: just return the integer from the modified components.
-      
-      // Since we need an integer for PIXI usually (or it handles it):
-      // Let's use a robust internal helper or Color class features.
-      
-      // Simplified approach using Color class methods:
       let finalColor = c;
-      if (c.r > 0.6 && c.g > 0.6 && c.b > 0.6) { // Very bright/white-ish
+      if (c.r > 0.6 && c.g > 0.6 && c.b > 0.6) {
          finalColor = c.multiply(0.5); 
       } else {
          finalColor = c.multiply(0.7);
       }
       
-      // Ensure not too black
       if (finalColor.r < 0.1 && finalColor.g < 0.1 && finalColor.b < 0.1) {
-        // Add a bit of vibrancy/lightness back
         finalColor = finalColor.add(foundry.utils.Color.from(0x222222)); 
       }
 
-      // If original had some saturation, ensure we didn't lose it all? 
-      // The multiply method keeps saturation relative usually.
-      
       return finalColor; 
     } catch (e) {
       console.warn("Error adjusting yarn color", e);
@@ -260,97 +228,88 @@ function getRealisticYarnColor(colorInput) {
   return colorInput;
 }
 
-// Global function to draw all connection lines and pins
-export function drawAllConnectionLines(animationOffset = 0) {
+/**
+ * Update pin positions and listeners. Call only when drawings change or canvas is ready.
+ */
+export function updatePins() {
   if (!canvas || !canvas.ready || !canvas.drawings) return;
 
-  // Enable sortable children on the drawings layer for z-index control
-  canvas.drawings.sortableChildren = true;
-
-  // Initialize or validate connection lines container
-  if (!connectionLinesContainer || connectionLinesContainer.destroyed) {
-    connectionLinesContainer = new PIXI.Graphics();
-    connectionLinesContainer.zIndex = 10; // Yarn in the middle
-    canvas.drawings.addChild(connectionLinesContainer);
-  } else {
-    try {
-      connectionLinesContainer.clear();
-    } catch (err) {
-      console.warn("Investigation Board: Failed to clear lines container, recreating...", err);
-      if (connectionLinesContainer.parent) connectionLinesContainer.parent.removeChild(connectionLinesContainer);
-      connectionLinesContainer.destroy({children: true});
-      connectionLinesContainer = new PIXI.Graphics();
-      connectionLinesContainer.zIndex = 10;
-      canvas.drawings.addChild(connectionLinesContainer);
-    }
-  }
-
-  // Initialize or validate pins container
   if (!pinsContainer || pinsContainer.destroyed) {
     pinsContainer = new PIXI.Container();
-    pinsContainer.zIndex = 20; // Pins on top
+    pinsContainer.zIndex = 20;
     canvas.drawings.addChild(pinsContainer);
   } else {
     pinsContainer.removeChildren();
   }
 
-  // Set all investigation board drawings to base zIndex
   canvas.drawings.placeables.forEach(drawing => {
     const noteData = drawing.document.flags[MODULE_ID];
-    if (noteData) {
-      drawing.zIndex = 0; // Base level (backgrounds render here)
-
-      // If drawing has a pin sprite, move it to the global pins container
-      if (drawing.pinSprite) {
-        // Remove from drawing if it's there
-        if (drawing.pinSprite.parent === drawing) {
-          drawing.removeChild(drawing.pinSprite);
-        }
-
-        // Position in world coordinates
-        const isHandout = noteData.type === "handout";
-        const isMedia = noteData.type === "media";
-        const isPhoto = noteData.type === "photo";
-        const isIndex = noteData.type === "index";
-
-        let width, pinY;
-        if (isHandout) {
-          // Handout notes use dynamic positioning based on drawing dimensions
-          width = drawing.document.shape.width || 400;
-          const height = drawing.document.shape.height || 400;
-          pinY = drawing.document.y + (height * 0.05);
-        } else if (isMedia) {
-          // Media notes (cassettes) center horizontally based on actual width
-          width = drawing.document.shape.width || 400;
-          pinY = drawing.document.y + 3;
-        } else {
-          // Other note types use fixed positioning
-          if (isPhoto) {
-            width = game.settings.get(MODULE_ID, "photoNoteWidth");
-          } else if (isIndex) {
-            width = game.settings.get(MODULE_ID, "indexNoteWidth") || 600;
-          } else {
-            width = game.settings.get(MODULE_ID, "stickyNoteWidth");
-          }
-          pinY = drawing.document.y + 3;
-        }
-
-        drawing.pinSprite.x = drawing.document.x + width / 2 - 20;
-        drawing.pinSprite.y = pinY;
-
-        // Make pin interactive for connection creation
-        drawing.pinSprite.eventMode = 'static';
-        drawing.pinSprite.cursor = 'pointer';
-        drawing.pinSprite.removeAllListeners(); // Clear old listeners
-        drawing.pinSprite.on('click', (event) => onPinClick(event, drawing));
-
-        // Add to global pins container
-        pinsContainer.addChild(drawing.pinSprite);
+    if (noteData && drawing.pinSprite) {
+      drawing.zIndex = 0;
+      
+      if (drawing.pinSprite.parent === drawing) {
+        drawing.removeChild(drawing.pinSprite);
       }
+
+      const isHandout = noteData.type === "handout";
+      const isMedia = noteData.type === "media";
+      const isPhoto = noteData.type === "photo";
+      const isIndex = noteData.type === "index";
+
+      let width, pinY;
+      if (isHandout) {
+        width = drawing.document.shape.width || 400;
+        const height = drawing.document.shape.height || 400;
+        pinY = drawing.document.y + (height * 0.05);
+      } else if (isMedia) {
+        width = drawing.document.shape.width || 400;
+        pinY = drawing.document.y + 3;
+      } else {
+        if (isPhoto) {
+          width = game.settings.get(MODULE_ID, "photoNoteWidth");
+        } else if (isIndex) {
+          width = game.settings.get(MODULE_ID, "indexNoteWidth") || 600;
+        } else {
+          width = game.settings.get(MODULE_ID, "stickyNoteWidth");
+        }
+        pinY = drawing.document.y + 3;
+      }
+
+      drawing.pinSprite.x = drawing.document.x + width / 2 - 20;
+      drawing.pinSprite.y = pinY;
+      drawing.pinSprite.eventMode = 'static';
+      drawing.pinSprite.cursor = 'pointer';
+      drawing.pinSprite.removeAllListeners();
+      drawing.pinSprite.on('click', (event) => onPinClick(event, drawing));
+
+      pinsContainer.addChild(drawing.pinSprite);
     }
   });
+}
 
-  // Draw all connections from all notes
+/**
+ * Redraw all connection lines.
+ * @param {number} animationOffset - Current offset for marching ants effect
+ */
+export function drawAllConnectionLines(animationOffset = 0) {
+  if (!canvas || !canvas.ready || !canvas.drawings) return;
+
+  // Reposition pins if containers are missing or count mismatch (safety check)
+  const investigationNotes = canvas.drawings.placeables.filter(d => d.document.flags[MODULE_ID]);
+  if (!pinsContainer || pinsContainer.destroyed || pinsContainer.children.length !== investigationNotes.length) {
+    updatePins();
+  }
+
+  canvas.drawings.sortableChildren = true;
+
+  if (!connectionLinesContainer || connectionLinesContainer.destroyed) {
+    connectionLinesContainer = new PIXI.Graphics();
+    connectionLinesContainer.zIndex = 10;
+    canvas.drawings.addChild(connectionLinesContainer);
+  } else {
+    connectionLinesContainer.clear();
+  }
+
   canvas.drawings.placeables.forEach(drawing => {
     const noteData = drawing.document.flags[MODULE_ID];
     if (!noteData) return;
@@ -358,52 +317,31 @@ export function drawAllConnectionLines(animationOffset = 0) {
     const connections = noteData.connections || [];
     if (connections.length === 0) return;
 
-    // Check if this drawing's connections should be animated
     const shouldAnimate = activeEditingDrawingId === drawing.document.id;
-
-    // Get source pin position (Using the drawing's method, assuming drawing is a CustomDrawing)
     const sourcePin = drawing._getPinPosition ? drawing._getPinPosition() : { x: drawing.document.x, y: drawing.document.y };
 
-    // Draw each connection
     connections.forEach(conn => {
       const targetDrawing = canvas.drawings.get(conn.targetId);
       if (!targetDrawing) return;
 
-      const targetNoteData = targetDrawing.document.flags[MODULE_ID];
-      if (!targetNoteData) return;
-
       const targetPin = targetDrawing._getPinPosition ? targetDrawing._getPinPosition() : { x: targetDrawing.document.x, y: targetDrawing.document.y };
 
-      // Get line style
       let lineColor = conn.color || game.settings.get(MODULE_ID, "connectionLineColor") || "#FF0000";
       const lineWidth = conn.width || game.settings.get(MODULE_ID, "connectionLineWidth") || 6;
       
-      // Safely convert to color number (handling strings, numbers, or Color objects)
       let colorNum;
-      
-      // Adjust color for realistic yarn look
       const realisticColor = getRealisticYarnColor(lineColor);
       
       if (typeof realisticColor === "number") {
           colorNum = realisticColor;
       } else if (realisticColor instanceof foundry.utils.Color) {
-          colorNum = realisticColor.valueOf(); // Gets integer
+          colorNum = realisticColor.valueOf();
       } else if (typeof realisticColor === "string") {
         colorNum = parseInt(realisticColor.replace("#", ""), 16);
       } else {
-         // Fallback logic if adjustment failed or returned complex obj
-         if (typeof lineColor === "string") {
-            colorNum = parseInt(lineColor.replace("#", ""), 16);
-         } else if (typeof lineColor === "number") {
-            colorNum = lineColor;
-         } else if (lineColor?.hex !== undefined) {
-            colorNum = lineColor.hex;
-         } else {
-            colorNum = 0xFF0000;
-         }
+         colorNum = 0xFF0000;
       }
 
-      // Draw yarn line in world coordinates with animation if editing this note
       drawYarnLine(
         connectionLinesContainer,
         sourcePin.x,
@@ -429,8 +367,9 @@ export function startConnectionAnimation(drawingId) {
 
   let offset = 0;
   animationTickerId = () => {
-    offset += 4; // Faster animation speed (was 2)
-    if (offset > 50) offset = 0; // Reset to create loop (matches dashLength + gapLength)
+    offset += 4;
+    if (offset > 50) offset = 0;
+    // Only redraw lines, not pins
     drawAllConnectionLines(offset);
   };
 
@@ -446,13 +385,11 @@ export function stopConnectionAnimation() {
     animationTickerId = null;
   }
 
-  // Redraw without animation
   drawAllConnectionLines();
 }
 
 // Show connection numbers on connected notes
 export function showConnectionNumbers(sourceDrawingId) {
-  // Clear any existing overlays first
   clearConnectionNumbers();
 
   const sourceDrawing = canvas.drawings.get(sourceDrawingId);
@@ -467,7 +404,6 @@ export function showConnectionNumbers(sourceDrawingId) {
     const noteData = targetDrawing.document.flags[MODULE_ID];
     if (!noteData) return;
 
-    // Get note dimensions
     const isPhoto = noteData.type === "photo";
     const isIndex = noteData.type === "index";
     let width, height;
@@ -483,7 +419,6 @@ export function showConnectionNumbers(sourceDrawingId) {
       height = width;
     }
 
-    // Create text overlay
     const numberText = new PIXI.Text(String(index + 1), {
       fontFamily: "Arial",
       fontSize: Math.max(48, width / 4),
@@ -502,13 +437,11 @@ export function showConnectionNumbers(sourceDrawingId) {
       targetDrawing.document.x + width / 2,
       targetDrawing.document.y + height / 2
     );
-    numberText.zIndex = 100; // Very high, above everything
+    numberText.zIndex = 100;
 
     canvas.drawings.addChild(numberText);
     connectionNumberOverlays.push(numberText);
   });
-
-  console.log(`Investigation Board: Showing ${connectionNumberOverlays.length} connection numbers`);
 }
 
 // Clear all connection number overlays
@@ -528,43 +461,33 @@ function onMouseMovePreview(event) {
     return;
   }
 
-  // Get mouse position in world coordinates from the event
   const worldPos = event.getLocalPosition(canvas.stage);
-
-  // Get the first pin position
   const firstPin = pinConnectionFirstNote._getPinPosition ? pinConnectionFirstNote._getPinPosition() : { x: pinConnectionFirstNote.document.x, y: pinConnectionFirstNote.document.y };
 
-  // Clear and redraw the preview line
   connectionPreviewLine.clear();
 
-  // Use player's color for preview
   const playerColor = game.user.color || game.settings.get(MODULE_ID, "connectionLineColor") || "#FF0000";
   const width = game.settings.get(MODULE_ID, "connectionLineWidth") || 3;
 
-  // Draw yarn line from first pin to cursor
   drawYarnLine(connectionPreviewLine, firstPin.x, firstPin.y, worldPos.x, worldPos.y, playerColor, width, false, 0);
 }
 
 // Start connection preview
 function startConnectionPreview(drawing) {
-  // Create preview line container if it doesn't exist
   if (!connectionPreviewLine) {
     connectionPreviewLine = new PIXI.Graphics();
-    connectionPreviewLine.zIndex = 15; // Between yarn lines and pins
+    connectionPreviewLine.zIndex = 15;
     canvas.drawings.sortableChildren = true;
     canvas.drawings.addChild(connectionPreviewLine);
   }
 
-  // Add mouse move listener to canvas
   canvas.stage.on('pointermove', onMouseMovePreview);
 }
 
 // Clear connection preview
 export function clearConnectionPreview() {
-  // Remove mouse move listener
   canvas.stage.off('pointermove', onMouseMovePreview);
 
-  // Clear and remove preview line
   if (connectionPreviewLine) {
     connectionPreviewLine.clear();
     if (connectionPreviewLine.parent) {
@@ -578,48 +501,39 @@ export function clearConnectionPreview() {
 async function createConnection(sourceDrawing, targetDrawing) {
   const connections = sourceDrawing.document.flags[MODULE_ID]?.connections || [];
 
-  // Check for duplicate
   const isDuplicate = connections.some(conn => conn.targetId === targetDrawing.document.id);
   if (isDuplicate) {
     return;
   }
 
-  // Use player's color by default, fallback to setting or red
   const playerColor = game.user.color || game.settings.get(MODULE_ID, "connectionLineColor") || "#FF0000";
   const width = game.settings.get(MODULE_ID, "connectionLineWidth") || 6;
 
-  // Add new connection
   connections.push({
     targetId: targetDrawing.document.id,
     color: playerColor,
     width: width
   });
 
-  // Update document using collaborative update (works for all users)
   await collaborativeUpdate(sourceDrawing.document.id, {
     [`flags.${MODULE_ID}.connections`]: connections
   });
 
-  // Immediately redraw all connection lines
   drawAllConnectionLines();
 }
 
 // Pin-Click Connection Function
 export function onPinClick(event, drawing) {
-  event.stopPropagation(); // Prevent selection of the drawing itself
+  event.stopPropagation();
 
-  // Only allow connections when in Investigation Board mode
   if (!InvestigationBoardState.isActive) return;
 
-  // Check if it's an investigation board note
   const noteData = drawing.document.flags[MODULE_ID];
   if (!noteData) return;
 
-  // First click: store the note
   if (!pinConnectionFirstNote) {
     pinConnectionFirstNote = drawing;
 
-    // Draw green border highlight
     if (pinConnectionHighlight) {
       canvas.controls.removeChild(pinConnectionHighlight);
       pinConnectionHighlight.destroy();
@@ -635,21 +549,17 @@ export function onPinClick(event, drawing) {
     );
     canvas.controls.addChild(pinConnectionHighlight);
 
-    // Start the preview line
     startConnectionPreview(drawing);
 
     return;
   }
 
-  // Second click: create connection
   if (drawing === pinConnectionFirstNote) {
     ui.notifications.error("Cannot connect a note to itself.");
     return;
   }
 
   createConnection(pinConnectionFirstNote, drawing);
-
-  // Reset state
   resetPinConnectionState();
 }
 
