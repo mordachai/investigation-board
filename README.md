@@ -7,6 +7,21 @@ A Foundry VTT module that lets everyone create, edit, and move sticky and photo 
 
 <img width="1200" height="655" alt="image" src="https://github.com/user-attachments/assets/329f44f1-0c5a-455e-b3d1-d585cc3ed665" />
 
+## NEW FEATURE >> Automatic Scene Scale:
+
+The module now automatically adapts to your map size. Whether you are on a small 1280px map or a massive 5000px scene, your notes, pins, and yarn connections will stay proportional. You can even set a global multiplier if you want them a bit larger or smaller on all maps.
+
+------
+
+## NEW FEATURE >> Rapid Connection Creation:
+
+Speed up your board building! While dragging a yarn connection (after clicking a pin):
+- **Left-Click** anywhere on the background to instantly create a new Pin and connect it.
+- **Right-Click** anywhere on the background to open a quick menu and create any note type (Sticky, Photo, Index, etc.) already connected to your path.
+- Clicking on another's note pin will connect both, as usual.
+
+------
+
 ## NEW FEATURE >> Only Pins:
 
 We reach the peak: we are now able to create only pins and connections. Its practically Zen at this point.
@@ -108,9 +123,9 @@ You can quickly create notes directly from your Foundry sidebars by right-clicki
 
 <img width="786" height="695" alt="image" src="https://github.com/user-attachments/assets/6eff3c27-66af-4a69-927d-d16a48ab4579" />
 
+- **Automatic Scale per Scene**: When enabled, the module automatically calculates the best scale based on the background image width.
+- **Scene Scale / Multiplier**: A fixed scale for elements (if Auto-Scale is OFF) or a global multiplier (if Auto-Scale is ON) to fine-tune the size on all maps.
 - **Pin Color**: Choose a fixed color for your pins (Red, Blue, Yellow, Green), set it to 'Random' for each new note, or 'No Pins' to hide them.
-- **Board Mode**: **(Work in Progress)** Changes the visual theme of notes. Please use **Modern** for now as other modes are under development.
-- **Connection Line Color**: Sets the fallback color for the yarn/lines connecting notes. Initial color is always the player color. Note: individual connection colors can also be edited in the note configuration.
 - **Connection Line Width**: Sets the default thickness of the connection yarn (default is 7).
 - **Note Widths**: Configure the default pixel width for Sticky Notes, Photo Notes, Index Cards, and Handouts.
 - **Base Font Size**: Sets the starting font size for text on your notes.
