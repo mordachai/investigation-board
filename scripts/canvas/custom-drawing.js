@@ -548,6 +548,9 @@ export class CustomDrawing extends Drawing {
     await super.draw();
     // Mark as investigation board note for CSS filtering
     this.element?.setAttribute("data-investigation-note", "true");
+    
+    const sceneScale = game.settings.get(MODULE_ID, "sceneScale") || 1.0;
+    this.scale.set(sceneScale);
     await this._updateSprites();
     // Redraw all connections and reposition pins globally
     import("./connection-manager.js").then(m => {
@@ -562,6 +565,9 @@ export class CustomDrawing extends Drawing {
     await super.refresh();
     // Mark as investigation board note for CSS filtering
     this.element?.setAttribute("data-investigation-note", "true");
+    
+    const sceneScale = game.settings.get(MODULE_ID, "sceneScale") || 1.0;
+    this.scale.set(sceneScale);
     await this._updateSprites();
     // Redraw all connections and reposition pins globally
     import("./connection-manager.js").then(m => {
@@ -1276,30 +1282,31 @@ export class CustomDrawing extends Drawing {
   _getPinPosition() {
     const noteData = this.document.flags[MODULE_ID];
     if (!noteData) return { x: this.document.x, y: this.document.y };
+    const sceneScale = game.settings.get(MODULE_ID, "sceneScale") || 1.0;
 
     // Handout notes use dynamic positioning based on drawing height
     if (noteData.type === "handout") {
-      const width = this.document.shape.width || 400;
-      const height = this.document.shape.height || 400;
+      const width = (this.document.shape.width || 400) * sceneScale;
+      const height = (this.document.shape.height || 400) * sceneScale;
       return {
         x: this.document.x + width / 2,
-        y: this.document.y + (height * 0.05) + 20  // 5% from top + half pin height
+        y: this.document.y + (height * 0.05) + (20 * sceneScale) 
       };
     }
 
     // Media notes (cassettes) center horizontally based on actual width
     if (noteData.type === "media") {
-      const width = this.document.shape.width || 400;
+      const width = (this.document.shape.width || 400) * sceneScale;
       return {
         x: this.document.x + width / 2,
-        y: this.document.y + 23
+        y: this.document.y + (23 * sceneScale)
       };
     }
     
     // Pin-only notes
     if (noteData.type === "pin") {
-      const width = this.document.shape.width || 50;
-      const height = this.document.shape.height || 50;
+      const width = (this.document.shape.width || 50) * sceneScale;
+      const height = (this.document.shape.height || 50) * sceneScale;
       return {
         x: this.document.x + width / 2,
         y: this.document.y + height / 2
@@ -1312,17 +1319,17 @@ export class CustomDrawing extends Drawing {
     // Get note width based on type
     let width;
     if (isPhoto) {
-      width = game.settings.get(MODULE_ID, "photoNoteWidth");
+      width = game.settings.get(MODULE_ID, "photoNoteWidth") * sceneScale;
     } else if (isIndex) {
-      width = game.settings.get(MODULE_ID, "indexNoteWidth") || 600;
+      width = (game.settings.get(MODULE_ID, "indexNoteWidth") || 600) * sceneScale;
     } else {
-      width = game.settings.get(MODULE_ID, "stickyNoteWidth");
+      width = game.settings.get(MODULE_ID, "stickyNoteWidth") * sceneScale;
     }
 
     // Pin center is at (width/2, 23) relative to drawing position
     return {
       x: this.document.x + width / 2,
-      y: this.document.y + 23
+      y: this.document.y + (23 * sceneScale)
     };
   }
 }

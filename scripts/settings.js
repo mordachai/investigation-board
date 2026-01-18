@@ -11,6 +11,21 @@ export const registerSettings = function() {
         });
       }
     };
+
+    game.settings.register(MODULE_ID, "sceneScale", {
+        name: "Scene Scale",
+        hint: "Scales all notes, pins, yarn connections, and fonts. (Default: 1.0, Min: 0.1, Max: 2.0). Use this to conform to different map sizes.",
+        scope: "world",
+        config: true,
+        type: Number,
+        range: {
+            min: 0.1,
+            max: 2.0,
+            step: 0.1
+        },
+        default: 1.0,
+        onChange: () => refreshAllDrawings()
+    });
   
     // Update the pinColor setting to include a "No Pins" option.
     game.settings.register(MODULE_ID, "pinColor", {

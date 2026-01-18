@@ -33,6 +33,8 @@ export async function createNote(noteType) {
     return;
   }
 
+  const sceneScale = game.settings.get(MODULE_ID, "sceneScale") || 1.0;
+
   // Retrieve width settings (or use defaults)
   const stickyW = game.settings.get(MODULE_ID, "stickyNoteWidth") || 200;
   const photoW = game.settings.get(MODULE_ID, "photoNoteWidth") || 225;
@@ -56,8 +58,9 @@ export async function createNote(noteType) {
                  : stickyW;
 
   const viewCenter = canvas.stage.pivot;
-  const x = viewCenter.x - width / 2;
-  const y = viewCenter.y - height / 2;
+  // Account for sceneScale in visual centering
+  const x = viewCenter.x - (width * sceneScale) / 2;
+  const y = viewCenter.y - (height * sceneScale) / 2;
 
   // Get default text from settings (fallback if missing)
   const defaultText = (noteType === "handout" || noteType === "pin")
@@ -164,10 +167,11 @@ export async function createPhotoNoteFromActor(actor, isUnknown = false) {
 
   const photoW = game.settings.get(MODULE_ID, "photoNoteWidth") || 225;
   const height = Math.round(photoW / (225 / 290));
+  const sceneScale = game.settings.get(MODULE_ID, "sceneScale") || 1.0;
 
   const viewCenter = canvas.stage.pivot;
-  const x = viewCenter.x - photoW / 2;
-  const y = viewCenter.y - height / 2;
+  const x = viewCenter.x - (photoW * sceneScale) / 2;
+  const y = viewCenter.y - (height * sceneScale) / 2;
 
   const created = await collaborativeCreate({
     type: "r",
@@ -217,10 +221,11 @@ export async function createPhotoNoteFromScene(targetScene) {
 
   const photoW = game.settings.get(MODULE_ID, "photoNoteWidth") || 225;
   const height = Math.round(photoW / (225 / 290));
+  const sceneScale = game.settings.get(MODULE_ID, "sceneScale") || 1.0;
 
   const viewCenter = canvas.stage.pivot;
-  const x = viewCenter.x - photoW / 2;
-  const y = viewCenter.y - height / 2;
+  const x = viewCenter.x - (photoW * sceneScale) / 2;
+  const y = viewCenter.y - (height * sceneScale) / 2;
 
   const displayName = targetScene.navName || targetScene.name || "Unknown Location";
   const imagePath = targetScene.background?.src || "modules/investigation-board/assets/placeholder.webp";
@@ -279,10 +284,11 @@ export async function createHandoutNoteFromPage(page) {
 
   const handoutW = game.settings.get(MODULE_ID, "handoutNoteWidth") || 400;
   const handoutH = game.settings.get(MODULE_ID, "handoutNoteHeight") || 400;
+  const sceneScale = game.settings.get(MODULE_ID, "sceneScale") || 1.0;
 
   const viewCenter = canvas.stage.pivot;
-  const x = viewCenter.x - handoutW / 2;
-  const y = viewCenter.y - handoutH / 2;
+  const x = viewCenter.x - (handoutW * sceneScale) / 2;
+  const y = viewCenter.y - (handoutH * sceneScale) / 2;
 
   const imagePath = page.src || "modules/investigation-board/assets/newhandout.webp";
 
@@ -359,10 +365,11 @@ export async function createMediaNoteFromSound(sound) {
 
   const mediaW = 400;
   const height = Math.round(mediaW * 0.74);
+  const sceneScale = game.settings.get(MODULE_ID, "sceneScale") || 1.0;
 
   const viewCenter = canvas.stage.pivot;
-  const x = viewCenter.x - mediaW / 2;
-  const y = viewCenter.y - height / 2;
+  const x = viewCenter.x - (mediaW * sceneScale) / 2;
+  const y = viewCenter.y - (height * sceneScale) / 2;
 
   const imagePath = await _getRandomCassetteImage();
 
@@ -414,10 +421,11 @@ export async function createPhotoNoteFromItem(item) {
 
   const photoW = game.settings.get(MODULE_ID, "photoNoteWidth") || 225;
   const height = Math.round(photoW / (225 / 290));
+  const sceneScale = game.settings.get(MODULE_ID, "sceneScale") || 1.0;
 
   const viewCenter = canvas.stage.pivot;
-  const x = viewCenter.x - photoW / 2;
-  const y = viewCenter.y - height / 2;
+  const x = viewCenter.x - (photoW * sceneScale) / 2;
+  const y = viewCenter.y - (height * sceneScale) / 2;
 
   const displayName = item.name || "Unknown Item";
   const imagePath = item.img || "modules/investigation-board/assets/placeholder.webp";
@@ -530,10 +538,11 @@ export async function importFolderAsNotes(folder) {
   const photoH = Math.round(photoW / (225 / 290));
   const mediaW = 400;
   const mediaH = Math.round(mediaW * 0.74);
+  const sceneScale = game.settings.get(MODULE_ID, "sceneScale") || 1.0;
 
   const viewCenter = canvas.stage.pivot;
-  const startX = viewCenter.x - photoW / 2;
-  const startY = viewCenter.y - photoH / 2;
+  const startX = viewCenter.x - (photoW * sceneScale) / 2;
+  const startY = viewCenter.y - (photoH * sceneScale) / 2;
 
   const cols = Math.ceil(Math.sqrt(documents.length));
   const spacing = 40;
@@ -681,10 +690,11 @@ export async function importPlaylistAsNotes(playlist) {
 
   const mediaW = 400;
   const mediaH = Math.round(mediaW * 0.74);
+  const sceneScale = game.settings.get(MODULE_ID, "sceneScale") || 1.0;
 
   const viewCenter = canvas.stage.pivot;
-  const startX = viewCenter.x - mediaW / 2;
-  const startY = viewCenter.y - mediaH / 2;
+  const startX = viewCenter.x - (mediaW * sceneScale) / 2;
+  const startY = viewCenter.y - (mediaH * sceneScale) / 2;
 
   const cols = Math.ceil(Math.sqrt(documents.length));
   const spacing = 40;

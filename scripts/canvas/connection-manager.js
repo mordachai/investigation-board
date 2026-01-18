@@ -37,6 +37,7 @@ function pseudoRandom(seed) {
 
 // Helper function to draw a yarn line
 function drawYarnLine(graphics, x1, y1, x2, y2, color, width, animated = false, animationOffset = 0) {
+  const sceneScale = game.settings.get(MODULE_ID, "sceneScale") || 1.0;
   const midX = (x1 + x2) / 2;
   const midY = (y1 + y2) / 2;
   const distance = Math.sqrt(Math.pow(x2 - x1, 2) + Math.pow(y2 - y1, 2));
@@ -48,23 +49,23 @@ function drawYarnLine(graphics, x1, y1, x2, y2, color, width, animated = false, 
   
   // Use a stable seed based on coordinates to stop flickering
   const stableSeed = Math.floor((Math.abs(x1) + Math.abs(y1) + Math.abs(x2) + Math.abs(y2)) * 100) % 10000;
-  const wobble = (stableSeed % 100 / 100) * 20 - 10;
+  const wobble = (stableSeed % 100 / 100) * (20 * sceneScale) - (10 * sceneScale);
   const controlPointX = ctrlX + wobble;
   const controlPointY = ctrlY;
 
   // --- DRAW SHADOW LINE FIRST ---
-  const shadowOffset = 3;
-  graphics.lineStyle(width + 2, 0x000000, 0.25); // Slightly thicker, black, low alpha
+  const shadowOffset = 3 * sceneScale;
+  graphics.lineStyle(width + (2 * sceneScale), 0x000000, 0.25); // Slightly thicker, black, low alpha
   graphics.moveTo(x1 + shadowOffset, y1 + shadowOffset);
   graphics.quadraticCurveTo(controlPointX + shadowOffset, controlPointY + shadowOffset, x2 + shadowOffset, y2 + shadowOffset);
 
   if (animated) {
     // Draw HIGHLY VISIBLE animated dashed line with marching effect (Marching Ants)
-    const dashLength = 30;
-    const gapLength = 20;
+    const dashLength = 30 * sceneScale;
+    const gapLength = 20 * sceneScale;
 
     // Calculate points along the curve for dashed effect
-    const steps = Math.min(100, Math.max(20, Math.floor(distance / 5)));
+    const steps = Math.min(100, Math.max(20, Math.floor(distance / (5 * sceneScale))));
     const points = [];
     for (let i = 0; i <= steps; i++) {
       const t = i / steps;
@@ -105,7 +106,7 @@ function drawYarnLine(graphics, x1, y1, x2, y2, color, width, animated = false, 
     }
   } else {
     // Realistic static yarn line
-    const segments = Math.max(20, Math.floor(distance / 5));
+    const segments = Math.max(20, Math.floor(distance / (5 * sceneScale)));
     const points = getQuadraticBezierPoints(x1, y1, controlPointX, controlPointY, x2, y2, segments);
     
     // 1. Draw solid thick base line
@@ -116,14 +117,14 @@ function drawYarnLine(graphics, x1, y1, x2, y2, color, width, animated = false, 
     }
 
     // 2. Draw "Twisted" diagonal texture (Deterministic)
-    const stepSize = Math.max(2, width * 1.2);
+    const stepSize = Math.max(2 * sceneScale, width * 1.2);
     let currentDist = 0;
     
     for (let i = 0; i < points.length - 1; i++) {
       const p1 = points[i];
       const p2 = points[i + 1];
       const segDist = Math.hypot(p2.x - p1.x, p2.y - p1.y);
-      const numSubSteps = Math.ceil(segDist / 2); 
+      const numSubSteps = Math.ceil(segDist / (2 * sceneScale)); 
       
       for (let j = 0; j < numSubSteps; j++) {
         currentDist += segDist / numSubSteps;
@@ -136,7 +137,7 @@ function drawYarnLine(graphics, x1, y1, x2, y2, color, width, animated = false, 
           
           const twistSeed = stableSeed + i * 10 + j;
           const twistAngle = angle + (Math.PI / 4) + (pseudoRandom(twistSeed) * 0.2 - 0.1);
-          const randThick = Math.max(1, (width / 2) * (0.8 + pseudoRandom(twistSeed + 1) * 0.4));
+          const randThick = Math.max(1 * sceneScale, (width / 2) * (0.8 + pseudoRandom(twistSeed) * 0.4));
           const randLen = width * (1.0 + pseudoRandom(twistSeed + 2) * 0.4);
           
           graphics.lineStyle(randThick, 0x000000, 0.4);
@@ -152,7 +153,7 @@ function drawYarnLine(graphics, x1, y1, x2, y2, color, width, animated = false, 
     }
 
     // 3. Draw a "Fibrous" highlight (Deterministic)
-    const highlightWidth = Math.max(1, width / 3);
+    const highlightWidth = Math.max(1 * sceneScale, width / 3);
     for (let i = 0; i < points.length - 1; i++) {
       const highlightSeed = stableSeed + i * 7;
       if ((i % 2 === 0) || pseudoRandom(highlightSeed) > 0.5) {
@@ -176,11 +177,11 @@ function drawYarnLine(graphics, x1, y1, x2, y2, color, width, animated = false, 
     graphics.moveTo(x, y);
     graphics.lineTo(ex, ey);
 
-    graphics.lineStyle(Math.max(1, (width / 2) * (0.8 + pseudoRandom(endSeed + 2) * 0.4)), 0x000000, 0.4);
+    graphics.lineStyle(Math.max(1 * sceneScale, (width / 2) * (0.8 + pseudoRandom(endSeed + 2) * 0.4)), 0x000000, 0.4);
     graphics.moveTo(x, y);
     graphics.lineTo(ex, ey);
     
-    graphics.lineStyle(Math.max(1, width / 3), 0xFFFFFF, 0.2);
+    graphics.lineStyle(Math.max(1 * sceneScale, width / 3), 0xFFFFFF, 0.2);
     graphics.moveTo(x, y);
     graphics.lineTo(ex, ey);
   };
@@ -233,6 +234,7 @@ function getRealisticYarnColor(colorInput) {
  */
 export function updatePins() {
   if (!canvas || !canvas.ready || !canvas.drawings) return;
+  const sceneScale = game.settings.get(MODULE_ID, "sceneScale") || 1.0;
 
   if (!pinsContainer || pinsContainer.destroyed) {
     pinsContainer = new PIXI.Container();
@@ -254,6 +256,7 @@ export function updatePins() {
         drawing.pinSprite.cursor = 'pointer';
         drawing.pinSprite.removeAllListeners();
         // Determine width/height for centering (should be small, e.g. 50)
+        // Note: The drawing object itself is already scaled by sceneScale in draw/refresh
         const width = drawing.document.shape.width || 50;
         const height = drawing.document.shape.height || 50;
         drawing.pinSprite.width = width;
@@ -277,24 +280,27 @@ export function updatePins() {
 
       let width, pinY;
       if (isHandout) {
-        width = drawing.document.shape.width || 400;
-        const height = drawing.document.shape.height || 400;
-        pinY = drawing.document.y + (height * 0.05);
+        width = (drawing.document.shape.width || 400);
+        const height = (drawing.document.shape.height || 400);
+        pinY = drawing.document.y + (height * 0.05 * sceneScale);
       } else if (isMedia) {
-        width = drawing.document.shape.width || 400;
-        pinY = drawing.document.y + 3;
+        width = (drawing.document.shape.width || 400);
+        pinY = drawing.document.y + (3 * sceneScale);
       } else {
         if (isPhoto) {
           width = game.settings.get(MODULE_ID, "photoNoteWidth");
         } else if (isIndex) {
-          width = game.settings.get(MODULE_ID, "indexNoteWidth") || 600;
+          width = (game.settings.get(MODULE_ID, "indexNoteWidth") || 600);
         } else {
           width = game.settings.get(MODULE_ID, "stickyNoteWidth");
         }
-        pinY = drawing.document.y + 3;
+        pinY = drawing.document.y + (3 * sceneScale);
       }
 
-      drawing.pinSprite.x = drawing.document.x + width / 2 - 20;
+      // Manually scale and position the global pin sprite
+      drawing.pinSprite.width = 40 * sceneScale;
+      drawing.pinSprite.height = 40 * sceneScale;
+      drawing.pinSprite.x = drawing.document.x + (width * sceneScale) / 2 - (20 * sceneScale);
       drawing.pinSprite.y = pinY;
       drawing.pinSprite.eventMode = 'static';
       drawing.pinSprite.cursor = 'pointer';
@@ -312,6 +318,7 @@ export function updatePins() {
  */
 export function drawAllConnectionLines(animationOffset = 0) {
   if (!canvas || !canvas.ready || !canvas.drawings) return;
+  const sceneScale = game.settings.get(MODULE_ID, "sceneScale") || 1.0;
 
   // Reposition pins if containers are missing or count mismatch (safety check)
   const investigationNotes = canvas.drawings.placeables.filter(d => d.document.flags[MODULE_ID]);
@@ -346,7 +353,7 @@ export function drawAllConnectionLines(animationOffset = 0) {
       const targetPin = targetDrawing._getPinPosition ? targetDrawing._getPinPosition() : { x: targetDrawing.document.x, y: targetDrawing.document.y };
 
       let lineColor = conn.color || game.settings.get(MODULE_ID, "connectionLineColor") || "#FF0000";
-      const lineWidth = conn.width || game.settings.get(MODULE_ID, "connectionLineWidth") || 6;
+      const lineWidth = (conn.width || game.settings.get(MODULE_ID, "connectionLineWidth") || 6) * sceneScale;
       
       let colorNum;
       const realisticColor = getRealisticYarnColor(lineColor);
@@ -385,9 +392,10 @@ export function startConnectionAnimation(drawingId) {
   }
 
   let offset = 0;
+  const sceneScale = game.settings.get(MODULE_ID, "sceneScale") || 1.0;
   animationTickerId = () => {
-    offset += 4;
-    if (offset > 50) offset = 0;
+    offset += (4 * sceneScale);
+    if (offset > (50 * sceneScale)) offset = 0;
     // Only redraw lines, not pins
     drawAllConnectionLines(offset);
   };
@@ -415,6 +423,7 @@ export function showConnectionNumbers(sourceDrawingId) {
   if (!sourceDrawing) return;
 
   const connections = sourceDrawing.document.flags[MODULE_ID]?.connections || [];
+  const sceneScale = game.settings.get(MODULE_ID, "sceneScale") || 1.0;
 
   connections.forEach((conn, index) => {
     const targetDrawing = canvas.drawings.get(conn.targetId);
@@ -428,26 +437,26 @@ export function showConnectionNumbers(sourceDrawingId) {
     let width, height;
 
     if (isPhoto) {
-      width = game.settings.get(MODULE_ID, "photoNoteWidth");
-      height = Math.round(width / (225 / 290));
+      width = game.settings.get(MODULE_ID, "photoNoteWidth") * sceneScale;
+      height = Math.round((width / sceneScale) / (225 / 290)) * sceneScale;
     } else if (isIndex) {
-      width = game.settings.get(MODULE_ID, "indexNoteWidth") || 600;
-      height = Math.round(width / (600 / 400));
+      width = (game.settings.get(MODULE_ID, "indexNoteWidth") || 600) * sceneScale;
+      height = Math.round((width / sceneScale) / (600 / 400)) * sceneScale;
     } else {
-      width = game.settings.get(MODULE_ID, "stickyNoteWidth");
+      width = game.settings.get(MODULE_ID, "stickyNoteWidth") * sceneScale;
       height = width;
     }
 
     const numberText = new PIXI.Text(String(index + 1), {
       fontFamily: "Arial",
-      fontSize: Math.max(48, width / 4),
+      fontSize: Math.max(48 * sceneScale, width / 4),
       fontWeight: "bold",
       fill: "#FFFFFF",
       stroke: "#000000",
-      strokeThickness: 6,
+      strokeThickness: 6 * sceneScale,
       dropShadow: true,
-      dropShadowDistance: 3,
-      dropShadowBlur: 4,
+      dropShadowDistance: 3 * sceneScale,
+      dropShadowBlur: 4 * sceneScale,
       dropShadowAlpha: 0.7
     });
 
@@ -486,7 +495,8 @@ function onMouseMovePreview(event) {
   connectionPreviewLine.clear();
 
   const playerColor = game.user.color || game.settings.get(MODULE_ID, "connectionLineColor") || "#FF0000";
-  const width = game.settings.get(MODULE_ID, "connectionLineWidth") || 3;
+  const sceneScale = game.settings.get(MODULE_ID, "sceneScale") || 1.0;
+  const width = (game.settings.get(MODULE_ID, "connectionLineWidth") || 3) * sceneScale;
 
   drawYarnLine(connectionPreviewLine, firstPin.x, firstPin.y, worldPos.x, worldPos.y, playerColor, width, false, 0);
 }
@@ -558,13 +568,19 @@ export function onPinClick(event, drawing) {
       pinConnectionHighlight.destroy();
     }
 
+    const sceneScale = game.settings.get(MODULE_ID, "sceneScale") || 1.0;
     pinConnectionHighlight = new PIXI.Graphics();
-    pinConnectionHighlight.lineStyle(4, 0x00ff00, 1);
+    pinConnectionHighlight.lineStyle(4 * sceneScale, 0x00ff00, 1);
+    
+    // Draw based on scaled dimensions
+    const highlightW = (drawing.document.shape.width || 50) * sceneScale;
+    const highlightH = (drawing.document.shape.height || 50) * sceneScale;
+    
     pinConnectionHighlight.drawRect(
       drawing.document.x,
       drawing.document.y,
-      drawing.document.shape.width,
-      drawing.document.shape.height
+      highlightW,
+      highlightH
     );
     canvas.controls.addChild(pinConnectionHighlight);
 
