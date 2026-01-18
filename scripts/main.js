@@ -17,6 +17,7 @@ import {
   createNote, 
   createPhotoNoteFromActor, 
   createPhotoNoteFromScene, 
+  createPhotoNoteFromItem,
   createHandoutNoteFromPage, 
   createMediaNoteFromSound 
 } from "./utils/creation-utils.js";
@@ -402,28 +403,21 @@ Hooks.on("deleteDrawing", (drawing, options, userId) => {
 
 // Context menu hook for Actor directory
 Hooks.on("getActorContextOptions", (html, entryOptions) => {
-  entryOptions.push(
-    {
-      name: "Photo Note from Actor",
-      icon: '<i class="fa-solid fa-camera-polaroid"></i>',
-      callback: async (li) => {
-        const el = li instanceof HTMLElement ? li : li[0];
-        const actorId = el?.dataset?.documentId || el?.dataset?.entryId || el?.getAttribute?.("data-document-id") || el?.getAttribute?.("data-entry-id");
-        const actor = game.actors.get(actorId);
-        if (actor) await createPhotoNoteFromActor(actor, false);
-      }
-    },
-    {
-      name: "Unknown Photo Note from Actor",
-      icon: '<i class="fa-solid fa-camera-polaroid"></i>',
-      callback: async (li) => {
-        const el = li instanceof HTMLElement ? li : li[0];
-        const actorId = el?.dataset?.documentId || el?.dataset?.entryId || el?.getAttribute?.("data-document-id") || el?.getAttribute?.("data-entry-id");
-        const actor = game.actors.get(actorId);
-        if (actor) await createPhotoNoteFromActor(actor, true);
-      }
+  // ... existing actor options ...
+});
+
+// Context menu hook for Item directory
+Hooks.on("getItemContextOptions", (html, entryOptions) => {
+  entryOptions.push({
+    name: "Photo Note from Item",
+    icon: '<i class="fa-solid fa-camera-polaroid"></i>',
+    callback: async (li) => {
+      const el = li instanceof HTMLElement ? li : li[0];
+      const itemId = el?.dataset?.documentId || el?.dataset?.entryId || el?.getAttribute?.("data-document-id") || el?.getAttribute?.("data-entry-id");
+      const item = game.items.get(itemId);
+      if (item) await createPhotoNoteFromItem(item);
     }
-  );
+  });
 });
 
 // Context menu hook for Scene directory

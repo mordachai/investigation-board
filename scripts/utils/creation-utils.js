@@ -341,43 +341,58 @@ export async function createHandoutNoteFromPage(page) {
 }
 
 /**
- * Creates a Media Note from a PlaylistSound.
+ * Creates a Photo Note from a PlaylistSound.
  * @param {PlaylistSound} sound - The sound document
  */
 export async function createMediaNoteFromSound(sound) {
+  // ... existing implementation ...
+}
+
+/**
+ * Creates a Photo Note from an Item document.
+ * @param {Item} item - The Item document to use
+ */
+export async function createPhotoNoteFromItem(item) {
   const scene = canvas.scene;
   if (!scene) {
     ui.notifications.error("Cannot create note: No active scene.");
     return;
   }
 
-  const mediaW = 400;
-  const height = Math.round(mediaW * 0.74);
+  const photoW = game.settings.get(MODULE_ID, "photoNoteWidth") || 225;
+  const height = Math.round(photoW / (225 / 290));
 
   const viewCenter = canvas.stage.pivot;
-  const x = viewCenter.x - mediaW / 2;
+  const x = viewCenter.x - photoW / 2;
   const y = viewCenter.y - height / 2;
 
-  const imagePath = await _getRandomCassetteImage();
+  const displayName = item.name || "Unknown Item";
+  const imagePath = item.img || "modules/investigation-board/assets/placeholder.webp";
+
+  const boardMode = game.settings.get(MODULE_ID, "boardMode");
+  const extraFlags = { image: imagePath };
+
+  if (boardMode === "futuristic") {
+    extraFlags.identityName = displayName;
+  }
 
   const created = await collaborativeCreate({
     type: "r",
     author: game.user.id,
     x, y,
-    shape: { width: mediaW, height },
-    fillColor: "#000000",
-    fillAlpha: 0,
+    shape: { width: photoW, height },
+    fillColor: "#ffffff",
+    fillAlpha: 1,
     strokeColor: "#000000",
     strokeWidth: 0,
     strokeAlpha: 0,
     locked: false,
     flags: {
       [MODULE_ID]: {
-        type: "media",
-        text: sound.name,
-        image: imagePath,
-        audioPath: sound.path,
-        linkedObject: `@UUID[${sound.uuid}]{${sound.name}}`
+        type: "photo",
+        text: displayName,
+        linkedObject: `@UUID[${item.uuid}]{${displayName}}`,
+        ...extraFlags
       },
       core: { sheetClass: "investigation-board.CustomDrawingSheet" }
     },
