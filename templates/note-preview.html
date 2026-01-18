@@ -52,10 +52,11 @@
     {{/if}}
 
     {{#if showSeparateText}}
-        <div class="preview-text-container {{fontClass}}">
-            <div class="preview-text" style="font-size: {{previewFontSize}}px;">
-                {{text}}
-            </div>
+        <div class="preview-text-container {{fontClass}} {{#if backgroundPath}}has-background{{/if}}">
+            {{#if backgroundPath}}
+                <img src="{{backgroundPath}}" class="preview-background-img" alt="Background" />
+            {{/if}}
+            <div class="preview-text" style="font-size: {{previewFontSize}}px;">{{text}}</div>
         </div>
     {{/if}}
 

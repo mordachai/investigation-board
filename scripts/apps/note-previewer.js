@@ -50,18 +50,30 @@ export class NotePreviewer extends HandlebarsApplicationMixin(ApplicationV2) {
     const font = noteData?.font || "Rock Salt";
     const fontClass = font.toLowerCase().replace(/\s+/g, '-');
 
-    // Determine the frame path for photo notes
+    // Determine the frame path for photo notes or background for others
     let framePath = "";
+    let backgroundPath = "";
     const boardMode = game.settings.get(MODULE_ID, "boardMode");
+    
     if (noteType === "photo") {
       if (boardMode === "futuristic") framePath = "modules/investigation-board/assets/futuristic_photoFrame.webp";
       else if (boardMode === "custom") framePath = "modules/investigation-board/assets/custom_photoFrame.webp";
       else framePath = "modules/investigation-board/assets/photoFrame.webp";
+    } else if (noteType === "sticky" || noteType === "index") {
+      const isIndex = noteType === "index";
+      if (boardMode === "futuristic") {
+        backgroundPath = isIndex ? "modules/investigation-board/assets/note_index.webp" : "modules/investigation-board/assets/note_white.webp";
+        // Check if futuristic assets exist, otherwise fallback is already set above
+      } else if (boardMode === "custom") {
+        backgroundPath = isIndex ? "modules/investigation-board/assets/note_index.webp" : "modules/investigation-board/assets/note_white.webp";
+      } else {
+        backgroundPath = isIndex ? "modules/investigation-board/assets/note_index.webp" : "modules/investigation-board/assets/note_white.webp";
+      }
     }
 
     // Determine if we should show a separate text container
-    // We DON'T show it for handouts/media (no text) or for standard photo notes (text is on the frame)
-    const showSeparateText = !["handout", "media"].includes(noteType) && !(noteType === "photo" && boardMode !== "futuristic");
+    // We show it for sticky and index notes, and for futuristic photo notes
+    const showSeparateText = ["sticky", "index"].includes(noteType) || (noteType === "photo" && boardMode === "futuristic");
 
     return {
       noteType: noteType,
@@ -69,10 +81,11 @@ export class NotePreviewer extends HandlebarsApplicationMixin(ApplicationV2) {
       image: noteData?.image || "",
       audioPath: noteData?.audioPath || "",
       framePath: framePath,
+      backgroundPath: backgroundPath,
       identityName: noteData?.identityName || "",
       boardMode: boardMode,
       fontClass: fontClass,
-      previewFontSize: (noteData?.fontSize || 15) * 1.5,
+      previewFontSize: (noteData?.fontSize || 15) * 2.5,
       showSeparateText: showSeparateText,
       isGM: game.user.isGM,
       linkedObject: noteData?.linkedObject || "",
