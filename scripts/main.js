@@ -418,6 +418,43 @@ Hooks.on("deleteDrawing", (drawing, options, userId) => {
   drawAllConnectionLines();
 });
 
+/**
+ * Robust helper to resolve a document from a context menu element
+ */
+async function _resolveDocumentFromLi(li, collection) {
+  const el = li instanceof HTMLElement ? li : li[0];
+  if (!el) return null;
+
+  // 1. Try UUID directly (most reliable in v13)
+  const uuid = el.dataset.uuid || el.getAttribute("data-uuid");
+  if (uuid) return await fromUuid(uuid);
+
+  // 2. Try ID and Pack
+  const docId = el.dataset.documentId || el.dataset.entryId || el.dataset.id || el.getAttribute("data-id");
+  const packName = el.closest("[data-pack]")?.dataset.pack || el.closest(".compendium")?.dataset.pack;
+
+  if (docId) {
+    // If we have a pack name, use it
+    if (packName) {
+      return await fromUuid(`Compendium.${packName}.${docId}`);
+    }
+    
+    // Check local collection
+    const localDoc = collection.get(docId);
+    if (localDoc) return localDoc;
+
+    // 3. Fallback: Search all relevant compendiums for this ID
+    const type = collection.documentName;
+    for (let pack of game.packs.filter(p => p.documentName === type)) {
+      if (pack.index.has(docId)) {
+        return await pack.getDocument(docId);
+      }
+    }
+  }
+
+  return null;
+}
+
 // Context menu hook for Actor directory
 Hooks.on("getActorContextOptions", (html, entryOptions) => {
   entryOptions.push(
@@ -425,20 +462,18 @@ Hooks.on("getActorContextOptions", (html, entryOptions) => {
       name: "Photo Note from Actor",
       icon: '<i class="fa-solid fa-camera-polaroid"></i>',
       callback: async (li) => {
-        const el = li instanceof HTMLElement ? li : li[0];
-        const actorId = el?.dataset?.documentId || el?.dataset?.entryId || el?.getAttribute?.("data-document-id") || el?.getAttribute?.("data-entry-id");
-        const actor = game.actors.get(actorId);
+        const actor = await _resolveDocumentFromLi(li, game.actors);
         if (actor) await createPhotoNoteFromActor(actor, false);
+        else ui.notifications.warn("Investigation Board: Could not resolve Actor.");
       }
     },
     {
       name: "Unknown Photo Note from Actor",
       icon: '<i class="fa-solid fa-camera-polaroid"></i>',
       callback: async (li) => {
-        const el = li instanceof HTMLElement ? li : li[0];
-        const actorId = el?.dataset?.documentId || el?.dataset?.entryId || el?.getAttribute?.("data-document-id") || el?.getAttribute?.("data-entry-id");
-        const actor = game.actors.get(actorId);
+        const actor = await _resolveDocumentFromLi(li, game.actors);
         if (actor) await createPhotoNoteFromActor(actor, true);
+        else ui.notifications.warn("Investigation Board: Could not resolve Actor.");
       }
     }
   );
@@ -450,10 +485,9 @@ Hooks.on("getItemContextOptions", (html, entryOptions) => {
     name: "Photo Note from Item",
     icon: '<i class="fa-solid fa-camera-polaroid"></i>',
     callback: async (li) => {
-      const el = li instanceof HTMLElement ? li : li[0];
-      const itemId = el?.dataset?.documentId || el?.dataset?.entryId || el?.getAttribute?.("data-document-id") || el?.getAttribute?.("data-entry-id");
-      const item = game.items.get(itemId);
+      const item = await _resolveDocumentFromLi(li, game.items);
       if (item) await createPhotoNoteFromItem(item);
+      else ui.notifications.warn("Investigation Board: Could not resolve Item.");
     }
   });
 });
@@ -464,10 +498,9 @@ Hooks.on("getSceneContextOptions", (html, entryOptions) => {
     name: "Photo Note from Scene",
     icon: '<i class="fa-solid fa-camera-polaroid"></i>',
     callback: async (li) => {
-      const el = li instanceof HTMLElement ? li : li[0];
-      const sceneId = el?.dataset?.documentId || el?.dataset?.entryId || el?.getAttribute?.("data-document-id") || el?.getAttribute?.("data-entry-id");
-      const scene = game.scenes.get(sceneId);
+      const scene = await _resolveDocumentFromLi(li, game.scenes);
       if (scene) await createPhotoNoteFromScene(scene);
+      else ui.notifications.warn("Investigation Board: Could not resolve Scene.");
     }
   });
 });
@@ -478,10 +511,9 @@ Hooks.on("getSceneNavigationContext", (html, entryOptions) => {
     name: "Photo Note from Scene",
     icon: '<i class="fa-solid fa-camera-polaroid"></i>',
     callback: async (li) => {
-      const el = li instanceof HTMLElement ? li : li[0];
-      const sceneId = el?.dataset?.documentId || el?.getAttribute?.("data-document-id") || (typeof li.data === "function" ? li.data("sceneId") : null);
-      const scene = game.scenes.get(sceneId);
+      const scene = await _resolveDocumentFromLi(li, game.scenes);
       if (scene) await createPhotoNoteFromScene(scene);
+      else ui.notifications.warn("Investigation Board: Could not resolve Scene.");
     }
   });
 });

@@ -59,7 +59,7 @@ export function applyTapeEffectToSound(sound) {
 
     // Use a listener to wait until the sound starts playing and has a node
     const apply = () => {
-        const sourceNode = sound.node;
+        const sourceNode = sound.sourceNode || sound.node;
         if (!sourceNode) return;
 
         try {
