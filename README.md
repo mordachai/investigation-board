@@ -7,7 +7,13 @@ A Foundry VTT module that lets everyone create, edit, and move sticky and photo 
 
 <img width="1200" height="655" alt="image" src="https://github.com/user-attachments/assets/329f44f1-0c5a-455e-b3d1-d585cc3ed665" />
 
-## NEW FEATURE (v 4.4.1) >> Create photo notes from Folder:
+## NEW FEATURE >> Only Pins:
+
+We reach the peak: we now are able to create only pins and connections. its practically Zen at this point.
+
+
+
+## NEW FEATURE >> Create photo notes from Folder:
 
 You can now create photo notes from all items on a folder. It ignores subfolders, if you want to import a subfolder right-click on it and import. it works for Scenes, Actors, Items and Playlits.
 
@@ -15,7 +21,7 @@ You can now create photo notes from all items on a folder. It ignores subfolders
 
 ------
 
-## NEW FEATURE (v 4.3.2) >> Notes From Items:
+## NEW FEATURE >> Notes From Items:
 
 You can now create photo notes from items too. They will be automatically linked to them.
 
@@ -23,14 +29,14 @@ You can now create photo notes from items too. They will be automatically linked
 
 ------
 
-## NEW FEATURE: Old Tape Sound Effects:
+## NEW FEATURE >> Old Tape Sound Effects:
 <img width="609" height="482" alt="image" src="https://github.com/user-attachments/assets/d8a8d34b-8ef8-41f7-9b83-ecb16241fee1" />
 
 Now you can activate a sound effect filter to make the audio even more immersive. This option is on by default in all Media notes created. Remember to edit and uncheck if you want the original audio.
 
 ------
 
-## NEW FEATURE: Connecting Notes:
+## NEW FEATURE >> Connecting Notes:
 
 Click on a pin, click on the other. That's it.
 
