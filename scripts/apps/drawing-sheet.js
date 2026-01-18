@@ -298,18 +298,18 @@ export class CustomDrawingSheet extends DrawingConfig {
                   let targetWidth = texture.width;
                   let targetHeight = texture.height;
 
-                  // Apply 1000px height cap
-                  if (targetHeight > 1000) {
-                    const scale = 1000 / targetHeight;
+                  // Apply 500px height cap
+                  if (targetHeight > 500) {
+                    const scale = 500 / targetHeight;
                     targetWidth = Math.round(targetWidth * scale);
-                    targetHeight = 1000;
+                    targetHeight = 500;
                   }
 
-                  // Apply 2000px width cap
-                  if (targetWidth > 2000) {
-                    const scale = 2000 / targetWidth;
+                  // Apply 500px width cap
+                  if (targetWidth > 500) {
+                    const scale = 500 / targetWidth;
                     targetHeight = Math.round(targetHeight * scale);
-                    targetWidth = 2000;
+                    targetWidth = 500;
                   }
 
                   // Update the drawing document dimensions AND image path (collaborative)

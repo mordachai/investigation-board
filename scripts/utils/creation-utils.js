@@ -148,7 +148,7 @@ export async function createPhotoNoteFromActor(actor, isUnknown = false) {
 
   // Override if isUnknown is true
   if (isUnknown) {
-    displayName = "Unknown";
+    displayName = "???";
   }
 
   const imagePath = actor.img || "modules/investigation-board/assets/placeholder.webp";
@@ -290,16 +290,17 @@ export async function createHandoutNoteFromPage(page) {
       finalWidth = texture.width;
       finalHeight = texture.height;
 
-      // Apply caps similar to FilePicker callback in CustomDrawingSheet
-      if (finalHeight > 1000) {
-        const scale = 1000 / finalHeight;
+      // Apply 500px height cap
+      if (finalHeight > 500) {
+        const scale = 500 / finalHeight;
         finalWidth = Math.round(finalWidth * scale);
-        finalHeight = 1000;
+        finalHeight = 500;
       }
-      if (finalWidth > 2000) {
-        const scale = 2000 / finalWidth;
+      // Apply 500px width cap
+      if (finalWidth > 500) {
+        const scale = 500 / finalWidth;
         finalHeight = Math.round(finalHeight * scale);
-        finalWidth = 2000;
+        finalWidth = 500;
       }
     }
   } catch (err) {
@@ -345,7 +346,54 @@ export async function createHandoutNoteFromPage(page) {
  * @param {PlaylistSound} sound - The sound document
  */
 export async function createMediaNoteFromSound(sound) {
-  // ... existing implementation ...
+  const scene = canvas.scene;
+  if (!scene) {
+    ui.notifications.error("Cannot create note: No active scene.");
+    return;
+  }
+
+  const mediaW = 400;
+  const height = Math.round(mediaW * 0.74);
+
+  const viewCenter = canvas.stage.pivot;
+  const x = viewCenter.x - mediaW / 2;
+  const y = viewCenter.y - height / 2;
+
+  const imagePath = await _getRandomCassetteImage();
+
+  const created = await collaborativeCreate({
+    type: "r",
+    author: game.user.id,
+    x, y,
+    shape: { width: mediaW, height },
+    fillColor: "#000000",
+    fillAlpha: 0,
+    strokeColor: "#000000",
+    strokeWidth: 0,
+    strokeAlpha: 0,
+    locked: false,
+    flags: {
+      [MODULE_ID]: {
+        type: "media",
+        text: sound.name,
+        image: imagePath,
+        audioPath: sound.path,
+        linkedObject: `@UUID[${sound.uuid}]{${sound.name}}`
+      },
+      core: { sheetClass: "investigation-board.CustomDrawingSheet" }
+    },
+    ownership: { default: 3 }
+  }, { skipAutoOpen: true });
+
+  if (InvestigationBoardState.isActive && created?.[0]) {
+    setTimeout(() => {
+      const newDrawing = canvas.drawings.get(created[0].id);
+      if (newDrawing) {
+        newDrawing.eventMode = 'auto';
+        newDrawing.interactiveChildren = true;
+      }
+    }, 250);
+  }
 }
 
 /**

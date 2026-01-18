@@ -106,6 +106,57 @@ export class CustomDrawing extends Drawing {
   }
 
   /**
+   * Override _onHandleDrag to enforce aspect ratio for handout notes during resizing.
+   * Also prevents resizing entirely for non-handout notes.
+   */
+  _onHandleDrag(event) {
+    const noteData = this.document.flags?.[MODULE_ID];
+    if (!noteData?.type) return super._onHandleDrag(event);
+
+    // Only handouts are allowed to be resized
+    if (noteData.type !== "handout") {
+      return; 
+    }
+
+    // Force aspect ratio preservation for handouts by simulating the shift key
+    event.interactionData.shiftKey = true;
+    return super._onHandleDrag(event);
+  }
+
+  /**
+   * Override _refreshFrame to hide selection frame and resize handles for all notes except handouts.
+   */
+  _refreshFrame() {
+    const noteData = this.document.flags?.[MODULE_ID];
+    const isIBNote = !!noteData?.type;
+    const isHandout = noteData?.type === "handout";
+
+    // Call super first to let Foundry do its thing
+    super._refreshFrame();
+
+    // If it's one of our notes but NOT a handout, we hide the selection frame and handles
+    if (isIBNote && !isHandout) {
+      if (this.frame) {
+        this.frame.visible = false;
+        this.frame.renderable = false;
+        if (this.frame.handleContainer) {
+          this.frame.handleContainer.visible = false;
+          this.frame.handleContainer.renderable = false;
+        }
+      }
+    } 
+    // For handouts, we want to ensure handles are visible when controlled
+    else if (isHandout && this.frame && this.controlled) {
+      this.frame.visible = true;
+      this.frame.renderable = true;
+      if (this.frame.handleContainer) {
+        this.frame.handleContainer.visible = true;
+        this.frame.handleContainer.renderable = true;
+      }
+    }
+  }
+
+  /**
    * Override activateListeners to ensure the MouseInteractionManager is configured
    * to allow right-click events even for non-owners.
    */
