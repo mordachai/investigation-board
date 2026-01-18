@@ -840,13 +840,14 @@ export class CustomDrawing extends Drawing {
       // --- Identity Name and Additional Text (Futuristic) ---
       const font = noteData.font || game.settings.get(MODULE_ID, "font");
       const baseFontSize = noteData.fontSize || game.settings.get(MODULE_ID, "baseFontSize");
-      const fontSize = (fullWidth / 200) * baseFontSize;
+      const fontBoost = font === "Caveat" ? 1.5 : 1.0;
+      const fontSize = (fullWidth / 200) * baseFontSize * fontBoost;
       const textStyle = new PIXI.TextStyle({
         fontFamily: font,
         fontSize: fontSize,
         fill: "#000000",
         wordWrap: true,
-        wordWrapWidth: fullWidth - textAreaX - margin,
+        wordWrapWidth: fullWidth - textAreaX - margin + 10, // Added padding for italics
         align: "left",
       });
       if (!this.identityNameText) {
@@ -1094,13 +1095,14 @@ export class CustomDrawing extends Drawing {
     const font = noteData.font || game.settings.get(MODULE_ID, "font");
     const defaultFontSize = isIndex ? 9 : game.settings.get(MODULE_ID, "baseFontSize");
     const baseFontSize = noteData.fontSize || defaultFontSize;
-    const fontSize = (width / 200) * baseFontSize;
+    const fontBoost = font === "Caveat" ? 1.6 : 1.0;
+    const fontSize = (width / 200) * baseFontSize * fontBoost;
     const textStyle = new PIXI.TextStyle({
       fontFamily: font,
       fontSize: fontSize,
       fill: "#000000",
       wordWrap: true,
-      wordWrapWidth: width - 15,
+      wordWrapWidth: width - 2, // Increased from -15 to give more room for italics
       align: "center",
     });
     const truncatedText = truncateText(noteData.text || "Default Text", font, noteData.type, fontSize);

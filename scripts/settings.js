@@ -141,6 +141,7 @@ export const registerSettings = function() {
         type: String,
         choices: {
             "Rock Salt": "Rock Salt",
+            "Caveat": "Caveat",
             "Courier New": "Courier New",
             "Times New Roman": "Times New Roman",
             "Signika": "Signika",
@@ -208,6 +209,7 @@ export const registerSettings = function() {
         type: Object,
         default: {
             "Rock Salt": { sticky: 90, photo: 20, index: 210 },
+            "Caveat": { sticky: 150, photo: 25, index: 400 },
             "Courier New": { sticky: 250, photo: 30, index: 580 },
             "Times New Roman": { sticky: 200, photo: 30, index: 800 },
             "Signika": { sticky: 200, photo: 30, index: 650 },

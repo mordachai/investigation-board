@@ -7,7 +7,7 @@ A Foundry VTT module that lets everyone create, edit, and move sticky and photo 
 
 <img width="1200" height="655" alt="image" src="https://github.com/user-attachments/assets/329f44f1-0c5a-455e-b3d1-d585cc3ed665" />
 
-## NEW FEATURE (v 4.3.1) >> Notes From Items:
+## NEW FEATURE (v 4.3.2) >> Notes From Items:
 
 You can now create photo notes from items too. They will be automatically linked to them.
 

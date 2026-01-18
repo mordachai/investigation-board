@@ -79,6 +79,8 @@ export class NotePreviewer extends HandlebarsApplicationMixin(ApplicationV2) {
     const isGlobalActive = !!(audioPath && activeGlobalSounds.has(audioPath) && activeGlobalSounds.get(audioPath).playing);
     this.globalSoundActive = isGlobalActive;
 
+    const fontBoost = font === "Caveat" ? 1.25 : 1.0;
+
     return {
       noteType: noteType,
       text: noteData?.text || "",
@@ -89,7 +91,7 @@ export class NotePreviewer extends HandlebarsApplicationMixin(ApplicationV2) {
       identityName: noteData?.identityName || "",
       boardMode: boardMode,
       fontClass: fontClass,
-      previewFontSize: (noteData?.fontSize || 15) * 2.5,
+      previewFontSize: (noteData?.fontSize || 15) * 2.5 * fontBoost,
       showSeparateText: showSeparateText,
       isGM: game.user.isGM,
       isGlobalActive: isGlobalActive,

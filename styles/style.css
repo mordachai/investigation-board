@@ -5,6 +5,13 @@
   font-style: normal;
 }
 
+@font-face {
+  font-family: 'Caveat';
+  src: url('..assets/fonts/caveat.ttf') format('ttf');
+  font-weight: normal;
+  font-style: normal;
+}
+
 .custom-drawing-text {
   font-family: 'Rock Salt', Arial, sans-serif;
   color: #000000; /* Black text */
@@ -715,6 +722,10 @@ body.investigation-board-mode .drawing:not([data-investigation-note="true"]) {
 
 /* Font variants for frame text */
 .photo-frame-text.rock-salt { font-family: 'Rock Salt', cursive; }
+.photo-frame-text.caveat { 
+  font-family: 'Caveat', cursive;
+  font-size: 2.2em; /* Increased from 1.4em */
+}
 .photo-frame-text.courier-new { font-family: 'Courier New', monospace; }
 .photo-frame-text.times-new-roman { font-family: 'Times New Roman', serif; }
 .photo-frame-text.signika { font-family: 'Signika', sans-serif; }
@@ -940,7 +951,7 @@ body.investigation-board-mode .drawing:not([data-investigation-note="true"]) {
   z-index: 2;
   text-align: center;
   width: 100%;
-  padding: 0 10px; /* Internal safety margin on paper */
+  padding: 0 60px; /* Increased internal safety margin on paper */
 }
 
 .preview-footer {
@@ -1009,6 +1020,7 @@ body.investigation-board-mode .drawing:not([data-investigation-note="true"]) {
 
 /* Font variants for preview */
 .preview-text-container.rock-salt { font-family: 'Rock Salt', cursive; }
+.preview-text-container.caveat { font-family: 'Caveat', cursive; }
 .preview-text-container.courier-new { font-family: 'Courier New', monospace; }
 .preview-text-container.times-new-roman { font-family: 'Times New Roman', serif; }
 .preview-text-container.signika { font-family: 'Signika', sans-serif; }
