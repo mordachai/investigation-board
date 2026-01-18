@@ -1,6 +1,7 @@
 import { MODULE_ID } from "../config.js";
 import { InvestigationBoardState } from "../state.js";
 import { collaborativeUpdate } from "../utils/socket-handler.js";
+import { getEffectiveScale } from "../utils/helpers.js";
 
 // Pin-click connection state variables
 export let pinConnectionFirstNote = null;
@@ -37,7 +38,7 @@ function pseudoRandom(seed) {
 
 // Helper function to draw a yarn line
 function drawYarnLine(graphics, x1, y1, x2, y2, color, width, animated = false, animationOffset = 0) {
-  const sceneScale = game.settings.get(MODULE_ID, "sceneScale") || 1.0;
+  const sceneScale = getEffectiveScale();
   const midX = (x1 + x2) / 2;
   const midY = (y1 + y2) / 2;
   const distance = Math.sqrt(Math.pow(x2 - x1, 2) + Math.pow(y2 - y1, 2));
@@ -234,7 +235,7 @@ function getRealisticYarnColor(colorInput) {
  */
 export function updatePins() {
   if (!canvas || !canvas.ready || !canvas.drawings) return;
-  const sceneScale = game.settings.get(MODULE_ID, "sceneScale") || 1.0;
+  const sceneScale = getEffectiveScale();
 
   if (!pinsContainer || pinsContainer.destroyed) {
     pinsContainer = new PIXI.Container();
@@ -255,10 +256,10 @@ export function updatePins() {
         drawing.pinSprite.eventMode = 'static';
         drawing.pinSprite.cursor = 'pointer';
         drawing.pinSprite.removeAllListeners();
-        // Determine width/height for centering (should be small, e.g. 50)
+        // Determine width/height for centering (should be small, e.g. 40)
         // Note: The drawing object itself is already scaled by sceneScale in draw/refresh
-        const width = drawing.document.shape.width || 50;
-        const height = drawing.document.shape.height || 50;
+        const width = drawing.document.shape.width || 40;
+        const height = drawing.document.shape.height || 40;
         drawing.pinSprite.width = width;
         drawing.pinSprite.height = height;
         drawing.pinSprite.position.set(0, 0); // Local to drawing
@@ -318,7 +319,7 @@ export function updatePins() {
  */
 export function drawAllConnectionLines(animationOffset = 0) {
   if (!canvas || !canvas.ready || !canvas.drawings) return;
-  const sceneScale = game.settings.get(MODULE_ID, "sceneScale") || 1.0;
+  const sceneScale = getEffectiveScale();
 
   // Reposition pins if containers are missing or count mismatch (safety check)
   const investigationNotes = canvas.drawings.placeables.filter(d => d.document.flags[MODULE_ID]);
@@ -392,7 +393,7 @@ export function startConnectionAnimation(drawingId) {
   }
 
   let offset = 0;
-  const sceneScale = game.settings.get(MODULE_ID, "sceneScale") || 1.0;
+  const sceneScale = getEffectiveScale();
   animationTickerId = () => {
     offset += (4 * sceneScale);
     if (offset > (50 * sceneScale)) offset = 0;
@@ -423,7 +424,7 @@ export function showConnectionNumbers(sourceDrawingId) {
   if (!sourceDrawing) return;
 
   const connections = sourceDrawing.document.flags[MODULE_ID]?.connections || [];
-  const sceneScale = game.settings.get(MODULE_ID, "sceneScale") || 1.0;
+  const sceneScale = getEffectiveScale();
 
   connections.forEach((conn, index) => {
     const targetDrawing = canvas.drawings.get(conn.targetId);
@@ -495,7 +496,7 @@ function onMouseMovePreview(event) {
   connectionPreviewLine.clear();
 
   const playerColor = game.user.color || "#FF0000";
-  const sceneScale = game.settings.get(MODULE_ID, "sceneScale") || 1.0;
+  const sceneScale = getEffectiveScale();
   const width = (game.settings.get(MODULE_ID, "connectionLineWidth") || 3) * sceneScale;
 
   drawYarnLine(connectionPreviewLine, firstPin.x, firstPin.y, worldPos.x, worldPos.y, playerColor, width, false, 0);
@@ -568,13 +569,13 @@ export function onPinClick(event, drawing) {
       pinConnectionHighlight.destroy();
     }
 
-    const sceneScale = game.settings.get(MODULE_ID, "sceneScale") || 1.0;
+    const sceneScale = getEffectiveScale();
     pinConnectionHighlight = new PIXI.Graphics();
     pinConnectionHighlight.lineStyle(4 * sceneScale, 0x00ff00, 1);
     
     // Draw based on scaled dimensions
-    const highlightW = (drawing.document.shape.width || 50) * sceneScale;
-    const highlightH = (drawing.document.shape.height || 50) * sceneScale;
+    const highlightW = (drawing.document.shape.width || 40) * sceneScale;
+    const highlightH = (drawing.document.shape.height || 40) * sceneScale;
     
     pinConnectionHighlight.drawRect(
       drawing.document.x,
@@ -586,6 +587,11 @@ export function onPinClick(event, drawing) {
 
     startConnectionPreview(drawing);
 
+    // Register canvas background click handler
+    canvas.stage.once('click', onCanvasClick);
+    // Also register right click
+    canvas.stage.once('rightclick', onCanvasRightClick);
+
     return;
   }
 
@@ -596,6 +602,135 @@ export function onPinClick(event, drawing) {
 
   createConnection(pinConnectionFirstNote, drawing);
   resetPinConnectionState();
+}
+
+/**
+ * Handle left click on canvas background while dragging yarn
+ */
+async function onCanvasClick(event) {
+  // If connection was cancelled or already finished, do nothing
+  if (!pinConnectionFirstNote) return;
+
+  // Prevent this from firing if we clicked another pin (onPinClick handles that and should stop propagation, 
+  // but just in case, we check if the target is a pin or investigation board note)
+  const target = event.target;
+  if (target && (target.document?.flags?.[MODULE_ID] || target.parent?.document?.flags?.[MODULE_ID])) {
+    return;
+  }
+
+  const worldPos = event.getLocalPosition(canvas.stage);
+  const sceneScale = getEffectiveScale();
+  
+  // Create a new pin note at this location
+  // We need to center it on the mouse, so we subtract half its width
+  const pinW = 40;
+  const pinX = worldPos.x - (pinW * sceneScale) / 2;
+  const pinY = worldPos.y - (pinW * sceneScale) / 2;
+
+  import("../utils/creation-utils.js").then(async (m) => {
+    const newNote = await m.createNote("pin", { x: pinX, y: pinY });
+    
+    if (newNote) {
+      // Inherit pin color from the first note if it has one
+      const firstNoteData = pinConnectionFirstNote.document.flags[MODULE_ID];
+      if (firstNoteData.pinColor) {
+        await collaborativeUpdate(newNote.id, { [`flags.${MODULE_ID}.pinColor`]: firstNoteData.pinColor });
+      }
+
+      // Wait a bit for the drawing to be registered in canvas.drawings
+      setTimeout(() => {
+        const targetDrawing = canvas.drawings.get(newNote.id);
+        if (targetDrawing) {
+          createConnection(pinConnectionFirstNote, targetDrawing);
+          resetPinConnectionState();
+        }
+      }, 100);
+    } else {
+      resetPinConnectionState();
+    }
+  });
+}
+
+/**
+ * Handle right click on canvas background while dragging yarn
+ */
+function onCanvasRightClick(event) {
+  if (!pinConnectionFirstNote) return;
+
+  const worldPos = event.getLocalPosition(canvas.stage);
+  const screenPos = event.data.global;
+
+  // Remove any existing custom context menus
+  document.querySelectorAll('.ib-context-menu').forEach(el => el.remove());
+
+  const menu = document.createElement('div');
+  menu.classList.add('ib-context-menu');
+  menu.style.position = 'fixed';
+  menu.style.top = `${screenPos.y}px`;
+  menu.style.left = `${screenPos.x}px`;
+  menu.style.zIndex = '10000';
+
+  const noteTypes = [
+    { id: 'sticky', label: 'Sticky Note', icon: 'fas fa-sticky-note' },
+    { id: 'photo', label: 'Photo Note', icon: 'fa-solid fa-camera-polaroid' },
+    { id: 'index', label: 'Index Card', icon: 'fa-regular fa-subtitles' },
+    { id: 'media', label: 'Media Note', icon: 'fas fa-cassette-tape' },
+    { id: 'pin', label: 'Pin Only', icon: 'fas fa-thumbtack' }
+  ];
+
+  noteTypes.forEach(type => {
+    const item = document.createElement('div');
+    item.classList.add('ib-context-menu-item');
+    item.innerHTML = `<i class="${type.icon}"></i> Create ${type.label}`;
+    item.onclick = async (e) => {
+      e.stopPropagation();
+      menu.remove();
+      
+      const sceneScale = getEffectiveScale();
+      
+      // Determine default width for this type to center it
+      let width = 200;
+      if (type.id === 'photo') width = 225;
+      else if (type.id === 'index') width = 600;
+      else if (type.id === 'handout' || type.id === 'media') width = 400;
+      else if (type.id === 'pin') width = 40;
+
+      const posX = worldPos.x - (width * sceneScale) / 2;
+      const posY = worldPos.y - (width * sceneScale) / 2; // Approximated square centering
+
+      import("../utils/creation-utils.js").then(async (m) => {
+        const newNote = await m.createNote(type.id, { x: posX, y: posY });
+        if (newNote) {
+          setTimeout(() => {
+            const targetDrawing = canvas.drawings.get(newNote.id);
+            if (targetDrawing) {
+              createConnection(pinConnectionFirstNote, targetDrawing);
+              resetPinConnectionState();
+            }
+          }, 100);
+        } else {
+          resetPinConnectionState();
+        }
+      });
+    };
+    menu.appendChild(item);
+  });
+
+  document.body.appendChild(menu);
+
+  const closeMenu = (e) => { 
+    if (!menu.contains(e.target)) { 
+      menu.remove(); 
+      document.removeEventListener('mousedown', closeMenu); 
+      // If menu closed without selecting, we should probably reset connection state
+      // but let's keep it dragging for now in case they just missed
+    } 
+  };
+  setTimeout(() => { document.addEventListener('mousedown', closeMenu); }, 100);
+  
+  // Stop the connection preview from being weird during menu
+  // (stage.once is already consumed by the right click, but we need to cancel the left click listener too)
+  canvas.stage.off('click', onCanvasClick);
 }
 
 export function resetPinConnectionState() {
@@ -612,6 +747,9 @@ export function resetPinConnectionState() {
     pinConnectionHighlight = null;
   }
   clearConnectionPreview();
+  // Cleanup stage listeners
+  canvas.stage.off('click', onCanvasClick);
+  canvas.stage.off('rightclick', onCanvasRightClick);
 }
 
 export function cleanupConnectionLines() {

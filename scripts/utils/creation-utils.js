@@ -1,6 +1,6 @@
 import { MODULE_ID } from "../config.js";
 import { InvestigationBoardState } from "../state.js";
-import { getActorDisplayName } from "./helpers.js";
+import { getActorDisplayName, getEffectiveScale } from "./helpers.js";
 import { collaborativeCreate, collaborativeCreateMany } from "./socket-handler.js";
 
 /**
@@ -26,14 +26,14 @@ async function _getRandomCassetteImage() {
   return imagePath;
 }
 
-export async function createNote(noteType) {
+export async function createNote(noteType, { x = null, y = null } = {}) {
   const scene = canvas.scene;
   if (!scene) {
     console.error("Cannot create note: No active scene.");
     return;
   }
 
-  const sceneScale = game.settings.get(MODULE_ID, "sceneScale") || 1.0;
+  const sceneScale = getEffectiveScale();
 
   // Retrieve width settings (or use defaults)
   const stickyW = game.settings.get(MODULE_ID, "stickyNoteWidth") || 200;
@@ -42,7 +42,7 @@ export async function createNote(noteType) {
   const handoutW = game.settings.get(MODULE_ID, "handoutNoteWidth") || 400;
   const handoutH = game.settings.get(MODULE_ID, "handoutNoteHeight") || 400;
   const mediaW = 400;
-  const pinW = 50;
+  const pinW = 40;
 
   const width = noteType === "photo" ? photoW
                 : noteType === "index" ? indexW
@@ -57,10 +57,16 @@ export async function createNote(noteType) {
                  : noteType === "pin" ? pinW
                  : stickyW;
 
-  const viewCenter = canvas.stage.pivot;
-  // Account for sceneScale in visual centering
-  const x = viewCenter.x - (width * sceneScale) / 2;
-  const y = viewCenter.y - (height * sceneScale) / 2;
+  // Final coordinates
+  let finalX = x;
+  let finalY = y;
+
+  if (finalX === null || finalY === null) {
+    const viewCenter = canvas.stage.pivot;
+    // Account for sceneScale in visual centering
+    finalX = viewCenter.x - (width * sceneScale) / 2;
+    finalY = viewCenter.y - (height * sceneScale) / 2;
+  }
 
   // Get default text from settings (fallback if missing)
   const defaultText = (noteType === "handout" || noteType === "pin")
@@ -87,8 +93,8 @@ export async function createNote(noteType) {
   const created = await collaborativeCreate({
     type: "r",
     author: game.user.id,
-    x,
-    y,
+    x: finalX,
+    y: finalY,
     shape: { width, height },
     fillColor: noteType === "handout" || noteType === "media" || noteType === "pin" ? "#000000" : "#ffffff",
     fillAlpha: noteType === "handout" || noteType === "media" || noteType === "pin" ? 0 : 1,
@@ -131,6 +137,8 @@ export async function createNote(noteType) {
       ui.controls.render();
     }
   }
+
+  return created?.[0];
 }
 
 /**
@@ -161,7 +169,7 @@ export async function createPhotoNoteFromActor(actor, isUnknown = false) {
 
   const photoW = game.settings.get(MODULE_ID, "photoNoteWidth") || 225;
   const height = Math.round(photoW / (225 / 290));
-  const sceneScale = game.settings.get(MODULE_ID, "sceneScale") || 1.0;
+  const sceneScale = getEffectiveScale();
 
   const viewCenter = canvas.stage.pivot;
   const x = viewCenter.x - (photoW * sceneScale) / 2;
@@ -215,7 +223,7 @@ export async function createPhotoNoteFromScene(targetScene) {
 
   const photoW = game.settings.get(MODULE_ID, "photoNoteWidth") || 225;
   const height = Math.round(photoW / (225 / 290));
-  const sceneScale = game.settings.get(MODULE_ID, "sceneScale") || 1.0;
+  const sceneScale = getEffectiveScale();
 
   const viewCenter = canvas.stage.pivot;
   const x = viewCenter.x - (photoW * sceneScale) / 2;
@@ -273,7 +281,7 @@ export async function createHandoutNoteFromPage(page) {
 
   const handoutW = game.settings.get(MODULE_ID, "handoutNoteWidth") || 400;
   const handoutH = game.settings.get(MODULE_ID, "handoutNoteHeight") || 400;
-  const sceneScale = game.settings.get(MODULE_ID, "sceneScale") || 1.0;
+  const sceneScale = getEffectiveScale();
 
   const viewCenter = canvas.stage.pivot;
   const x = viewCenter.x - (handoutW * sceneScale) / 2;
@@ -354,7 +362,7 @@ export async function createMediaNoteFromSound(sound) {
 
   const mediaW = 400;
   const height = Math.round(mediaW * 0.74);
-  const sceneScale = game.settings.get(MODULE_ID, "sceneScale") || 1.0;
+  const sceneScale = getEffectiveScale();
 
   const viewCenter = canvas.stage.pivot;
   const x = viewCenter.x - (mediaW * sceneScale) / 2;
@@ -410,7 +418,7 @@ export async function createPhotoNoteFromItem(item) {
 
   const photoW = game.settings.get(MODULE_ID, "photoNoteWidth") || 225;
   const height = Math.round(photoW / (225 / 290));
-  const sceneScale = game.settings.get(MODULE_ID, "sceneScale") || 1.0;
+  const sceneScale = getEffectiveScale();
 
   const viewCenter = canvas.stage.pivot;
   const x = viewCenter.x - (photoW * sceneScale) / 2;
@@ -522,7 +530,7 @@ export async function importFolderAsNotes(folder) {
   const photoH = Math.round(photoW / (225 / 290));
   const mediaW = 400;
   const mediaH = Math.round(mediaW * 0.74);
-  const sceneScale = game.settings.get(MODULE_ID, "sceneScale") || 1.0;
+  const sceneScale = getEffectiveScale();
 
   const viewCenter = canvas.stage.pivot;
   const startX = viewCenter.x - (photoW * sceneScale) / 2;
@@ -671,7 +679,7 @@ export async function importPlaylistAsNotes(playlist) {
 
   const mediaW = 400;
   const mediaH = Math.round(mediaW * 0.74);
-  const sceneScale = game.settings.get(MODULE_ID, "sceneScale") || 1.0;
+  const sceneScale = getEffectiveScale();
 
   const viewCenter = canvas.stage.pivot;
   const startX = viewCenter.x - (mediaW * sceneScale) / 2;

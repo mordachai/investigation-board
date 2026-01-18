@@ -1,7 +1,7 @@
 import { MODULE_ID, PIN_COLORS, SOCKET_NAME } from "../config.js";
 import { InvestigationBoardState } from "../state.js";
 import { collaborativeUpdate, collaborativeDelete, socket, activeGlobalSounds } from "../utils/socket-handler.js";
-import { getDynamicCharacterLimits, truncateText } from "../utils/helpers.js";
+import { getDynamicCharacterLimits, truncateText, getEffectiveScale } from "../utils/helpers.js";
 import { NotePreviewer } from "../apps/note-previewer.js";
 import { drawAllConnectionLines } from "./connection-manager.js";
 
@@ -547,7 +547,7 @@ export class CustomDrawing extends Drawing {
     // Mark as investigation board note for CSS filtering
     this.element?.setAttribute("data-investigation-note", "true");
     
-    const sceneScale = game.settings.get(MODULE_ID, "sceneScale") || 1.0;
+    const sceneScale = getEffectiveScale();
     this.scale.set(sceneScale);
     await this._updateSprites();
     // Redraw all connections and reposition pins globally
@@ -564,7 +564,7 @@ export class CustomDrawing extends Drawing {
     // Mark as investigation board note for CSS filtering
     this.element?.setAttribute("data-investigation-note", "true");
     
-    const sceneScale = game.settings.get(MODULE_ID, "sceneScale") || 1.0;
+    const sceneScale = getEffectiveScale();
     this.scale.set(sceneScale);
     await this._updateSprites();
     // Redraw all connections and reposition pins globally
@@ -686,8 +686,8 @@ export class CustomDrawing extends Drawing {
 
     // PIN ONLY LAYOUT
     if (noteData.type === "pin") {
-      const width = this.document.shape.width || 50;
-      const height = this.document.shape.height || 50;
+      const width = this.document.shape.width || 40;
+      const height = this.document.shape.height || 40;
 
       // No background for pin-only
       if (this.bgSprite) {
@@ -1080,7 +1080,7 @@ export class CustomDrawing extends Drawing {
   _getPinPosition() {
     const noteData = this.document.flags[MODULE_ID];
     if (!noteData) return { x: this.document.x, y: this.document.y };
-    const sceneScale = game.settings.get(MODULE_ID, "sceneScale") || 1.0;
+    const sceneScale = getEffectiveScale();
 
     // Handout notes use dynamic positioning based on drawing height
     if (noteData.type === "handout") {
@@ -1103,8 +1103,8 @@ export class CustomDrawing extends Drawing {
     
     // Pin-only notes
     if (noteData.type === "pin") {
-      const width = (this.document.shape.width || 50) * sceneScale;
-      const height = (this.document.shape.height || 50) * sceneScale;
+      const width = (this.document.shape.width || 40) * sceneScale;
+      const height = (this.document.shape.height || 40) * sceneScale;
       return {
         x: this.document.x + width / 2,
         y: this.document.y + height / 2
