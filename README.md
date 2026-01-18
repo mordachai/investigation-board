@@ -5,16 +5,24 @@
 
 A Foundry VTT module that lets everyone create, edit, and move sticky and photo notes on the scene. A must-have for investigative games like City of Mist, Call of Cthulhu, and all your conspiracy adventures.
 
-<img width="1200" height="591" alt="image" src="https://github.com/user-attachments/assets/a38c958e-82b0-49f7-85e1-7fb6fa2f1fa9" />
+<img width="1200" height="655" alt="image" src="https://github.com/user-attachments/assets/329f44f1-0c5a-455e-b3d1-d585cc3ed665" />
 
-## NEW FEATURE: Old Tape Sound Effects
+## NEW FEATURE (v 4.3.1) >> Notes From Items:
+
+You can now create photo notes from items too. They will be automatically linked to them.
+
+<img width="600" height="468" alt="image" src="https://github.com/user-attachments/assets/c6b6715c-0bbe-4706-8c07-91cfb2530d0e" />
+
+------
+
+## NEW FEATURE: Old Tape Sound Effects:
 <img width="609" height="482" alt="image" src="https://github.com/user-attachments/assets/d8a8d34b-8ef8-41f7-9b83-ecb16241fee1" />
 
 Now you can activate a sound effect filter to make the audio even more immersive. This option is on by default in all Media notes created. Remember to edit and uncheck if you want the original audio.
 
 ------
 
-## NEW FEATURE: Connecting Notes
+## NEW FEATURE: Connecting Notes:
 
 Click on a pin, click on the other. That's it.
 
@@ -70,16 +78,13 @@ You can quickly create notes directly from your Foundry sidebars by right-clicki
 
 - **Actors**: Create a Photo Note using the actor's portrait. You can choose to use the actor's name or create an "Unknown" version.
 - **Scenes**: Create a Photo Note using the scene's thumbnail.
+- **Items**: Create a Photo Note using the item name and thumbnail.
 - **Playlists**: Right-click a sound to create a **Media Note** pre-linked to that audio file.
 - **Journals**: Right-click any **Image Page** within a journal to transform it into a **Handout**.
 
 > **Note for Players:** If the GM has granted you drawing and file upload permissions, you can autonomously create Handout notes from Image Pages in the Journal directory to share evidence with the group!
 
 #### **Permissions Note**: Only the GM can assign images to photo notes from the file system unless players are given browser file permissions.
-
-If you click on the **Delete button** in the Drawing tools sidebar, **ALL DRAWINGS ON THE SCENE WILL BE DELETED**. To delete notes individually, select them and use the **Delete** key on your keyboard or use the **Right-click context menu**.
-
-The module's settings contain some pretty straightforward options, so you can better adjust it for your table. 
 
 -----
 
