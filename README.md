@@ -7,9 +7,11 @@ A Foundry VTT module that lets everyone create, edit, and move sticky and photo 
 
 <img width="1200" height="655" alt="image" src="https://github.com/user-attachments/assets/329f44f1-0c5a-455e-b3d1-d585cc3ed665" />
 
-## NEW FEATURE (v 4.4.0) >> Create photo notes from Folder:
+## NEW FEATURE (v 4.4.1) >> Create photo notes from Folder:
 
 You can now create photo notes from all items on a folder. It ignores subfolders, if you want to import a subfolder right-click on it and import. it works for Scenes, Actors, Items and Playlits.
+
+<img width="376" height="427" alt="image" src="https://github.com/user-attachments/assets/34f6229e-3619-4725-9f2e-0673633deafb" />
 
 ------
 
