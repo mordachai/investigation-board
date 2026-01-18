@@ -1,5 +1,5 @@
 <form class="ib-note-config-form">
-  {{#unless (or (eq noteType "handout") (eq noteType "media"))}}
+  {{#unless (or (eq noteType "handout") (eq noteType "media") (eq noteType "pin"))}}
     <div class="form-group">
       <label for="text">Note Text:</label>
       <textarea name="text" rows="4" placeholder="Enter note text...">{{text}}</textarea>

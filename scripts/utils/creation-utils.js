@@ -40,16 +40,19 @@ export async function createNote(noteType) {
   const handoutW = game.settings.get(MODULE_ID, "handoutNoteWidth") || 400;
   const handoutH = game.settings.get(MODULE_ID, "handoutNoteHeight") || 400;
   const mediaW = 400;
+  const pinW = 50;
 
   const width = noteType === "photo" ? photoW
                 : noteType === "index" ? indexW
                 : noteType === "handout" ? handoutW
                 : noteType === "media" ? mediaW
+                : noteType === "pin" ? pinW
                 : stickyW;
   const height = noteType === "photo" ? Math.round(photoW / (225 / 290))
                  : noteType === "index" ? Math.round(indexW / (600 / 400))
                  : noteType === "handout" ? handoutH
                  : noteType === "media" ? Math.round(mediaW * 0.74)
+                 : noteType === "pin" ? pinW
                  : stickyW;
 
   const viewCenter = canvas.stage.pivot;
@@ -57,7 +60,7 @@ export async function createNote(noteType) {
   const y = viewCenter.y - height / 2;
 
   // Get default text from settings (fallback if missing)
-  const defaultText = noteType === "handout"
+  const defaultText = (noteType === "handout" || noteType === "pin")
                     ? ""
                     : (game.settings.get(MODULE_ID, `${noteType}NoteDefaultText`) || "Notes");
 
@@ -90,8 +93,8 @@ export async function createNote(noteType) {
     x,
     y,
     shape: { width, height },
-    fillColor: noteType === "handout" || noteType === "media" ? "#000000" : "#ffffff",
-    fillAlpha: noteType === "handout" || noteType === "media" ? 0 : 1,
+    fillColor: noteType === "handout" || noteType === "media" || noteType === "pin" ? "#000000" : "#ffffff",
+    fillAlpha: noteType === "handout" || noteType === "media" || noteType === "pin" ? 0 : 1,
     strokeColor: "#000000",
     strokeWidth: 0,
     strokeAlpha: 0,
@@ -108,7 +111,7 @@ export async function createNote(noteType) {
       }
     },
     ownership: { default: 3 },
-  });
+  }, { skipAutoOpen: noteType === "pin" });
 
   // If in Investigation Board mode, ensure the new drawing is interactive
   if (InvestigationBoardState.isActive && created && created[0]) {

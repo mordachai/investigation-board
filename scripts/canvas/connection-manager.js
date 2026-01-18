@@ -245,6 +245,25 @@ export function updatePins() {
   canvas.drawings.placeables.forEach(drawing => {
     const noteData = drawing.document.flags[MODULE_ID];
     if (noteData && drawing.pinSprite) {
+      // Special handling for "Only Pin" notes: Keep sprite on drawing, do not move to global container
+      if (noteData.type === "pin") {
+        if (drawing.pinSprite.parent !== drawing) {
+          drawing.addChild(drawing.pinSprite);
+        }
+        drawing.pinSprite.eventMode = 'static';
+        drawing.pinSprite.cursor = 'pointer';
+        drawing.pinSprite.removeAllListeners();
+        // Determine width/height for centering (should be small, e.g. 50)
+        const width = drawing.document.shape.width || 50;
+        const height = drawing.document.shape.height || 50;
+        drawing.pinSprite.width = width;
+        drawing.pinSprite.height = height;
+        drawing.pinSprite.position.set(0, 0); // Local to drawing
+
+        drawing.pinSprite.on('click', (event) => onPinClick(event, drawing));
+        return; // Skip the rest for this drawing
+      }
+
       drawing.zIndex = 0;
       
       if (drawing.pinSprite.parent === drawing) {

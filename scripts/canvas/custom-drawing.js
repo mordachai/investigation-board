@@ -173,6 +173,7 @@ export class CustomDrawing extends Drawing {
    */
   _onClickLeft2(event) {
     const noteData = this.document.flags?.[MODULE_ID];
+    if (noteData?.type === "pin") return;
     if (noteData?.type) {
       // Open the detail view previewer
       new NotePreviewer(this.document).render(true);
@@ -229,6 +230,102 @@ export class CustomDrawing extends Drawing {
     menu.style.top = `${y}px`;
     menu.style.left = `${x}px`;
     menu.style.zIndex = '10000';
+
+    if (noteData.type === "pin") {
+       const editOption = document.createElement('div');
+       editOption.innerHTML = '<i class="fas fa-edit"></i> Edit';
+       editOption.classList.add('ib-context-menu-item');
+       editOption.onclick = (e) => {
+         e.stopPropagation();
+         this.document.sheet.render(true);
+         menu.remove();
+       };
+
+       if (noteData.linkedObject) {
+         const linkMatch = noteData.linkedObject.match(/\[([^\]]+)\](?:\{([^\}]+)\})?/);
+         if (linkMatch) {
+           const uuid = linkMatch[1];
+           const name = linkMatch[2] || "Linked Object";
+           const linkOption = document.createElement('div');
+           linkOption.innerHTML = `<i class="fas fa-link"></i> Open: ${name}`;
+           linkOption.classList.add('ib-context-menu-item');
+           linkOption.onclick = async (e) => {
+             e.stopPropagation();
+             menu.remove();
+             try {
+               const doc = await fromUuid(uuid);
+               if (doc) {
+                 if (doc.testUserPermission(game.user, "LIMITED")) {
+                   doc.sheet.render(true);
+                 } else {
+                   ui.notifications.warn(`You do not have permission to view ${doc.name}.`);
+                 }
+               } else {
+                 ui.notifications.warn(`Could not find linked document.`);
+               }
+             } catch (err) {
+               console.error("Investigation Board: Error opening linked document from menu", err);
+             }
+           };
+           menu.appendChild(linkOption);
+         }
+       }
+
+       const removeConnectionsOption = document.createElement('div');
+       removeConnectionsOption.innerHTML = '<i class="fas fa-cut"></i> Remove Connections';
+       removeConnectionsOption.classList.add('ib-context-menu-item');
+       removeConnectionsOption.onclick = async (e) => {
+         e.stopPropagation();
+         menu.remove();
+         const confirm = await foundry.applications.api.DialogV2.confirm({
+           window: { title: "Remove All Connections" },
+           content: `<p>Are you sure you want to remove ALL yarn connections connected to this note?</p>`,
+           rejectClose: false,
+           modal: true
+         });
+         if (confirm) {
+           const noteId = this.document.id;
+           await collaborativeUpdate(noteId, { [`flags.${MODULE_ID}.connections`]: [] });
+           const otherNotesWithConnections = canvas.drawings.placeables.filter(d => {
+             if (d.document.id === noteId) return false;
+             const conns = d.document.flags[MODULE_ID]?.connections;
+             return conns && conns.some(c => c.targetId === noteId);
+           });
+           for (let otherNote of otherNotesWithConnections) {
+             const currentConns = otherNote.document.flags[MODULE_ID].connections;
+             const updatedConns = currentConns.filter(c => c.targetId !== noteId);
+             await collaborativeUpdate(otherNote.document.id, { [`flags.${MODULE_ID}.connections`]: updatedConns });
+           }
+           drawAllConnectionLines();
+           ui.notifications.info("All related connections removed.");
+         }
+       };
+
+       const deleteOption = document.createElement('div');
+       deleteOption.innerHTML = '<i class="fas fa-trash"></i> Delete';
+       deleteOption.classList.add('ib-context-menu-item');
+       deleteOption.onclick = async (e) => {
+         e.stopPropagation();
+         menu.remove();
+         const confirm = await foundry.applications.api.DialogV2.confirm({
+           window: { title: "Delete Pin" },
+           content: `<p>Are you sure you want to delete this pin?</p>`,
+           rejectClose: false,
+           modal: true
+         });
+         if (confirm) {
+           await collaborativeDelete(this.document.id);
+         }
+       };
+
+       menu.appendChild(editOption);
+       menu.appendChild(removeConnectionsOption);
+       menu.appendChild(deleteOption);
+       document.body.appendChild(menu);
+       const closeMenu = (e) => { if (!menu.contains(e.target)) { menu.remove(); document.removeEventListener('mousedown', closeMenu); window.removeEventListener('wheel', closeMenu); } };
+       setTimeout(() => { document.addEventListener('mousedown', closeMenu); window.addEventListener('wheel', closeMenu); }, 100);
+       return;
+    }
 
     const editOption = document.createElement('div');
     editOption.innerHTML = '<i class="fas fa-edit"></i> Edit';
@@ -583,6 +680,65 @@ export class CustomDrawing extends Drawing {
       if (this.futuristicText) this.futuristicText.visible = false;
 
       return; // Early exit for media notes
+    }
+
+    // PIN ONLY LAYOUT
+    if (noteData.type === "pin") {
+      const width = this.document.shape.width || 50;
+      const height = this.document.shape.height || 50;
+
+      // No background for pin-only
+      if (this.bgSprite) {
+        this.removeChild(this.bgSprite);
+        this.bgSprite.destroy();
+        this.bgSprite = null;
+      }
+      if (this.bgShadow) {
+        this.removeChild(this.bgShadow);
+        this.bgShadow.destroy();
+        this.bgShadow = null;
+      }
+      if (this.photoImageSprite) {
+        this.removeChild(this.photoImageSprite);
+        this.photoImageSprite.destroy();
+        this.photoImageSprite = null;
+      }
+
+      // --- Pin Sprite ---
+      const pinSetting = game.settings.get(MODULE_ID, "pinColor");
+      if (!this.pinSprite || !this.pinSprite.parent) {
+        if (this.pinSprite) this.pinSprite.destroy();
+        this.pinSprite = new PIXI.Sprite();
+        this.addChild(this.pinSprite);
+      }
+
+      let pinColor = noteData.pinColor;
+      if (!pinColor) {
+        pinColor = (pinSetting === "random")
+          ? PIN_COLORS[Math.floor(Math.random() * PIN_COLORS.length)]
+          : (pinSetting === "none" ? "redPin.webp" : `${pinSetting}Pin.webp`);
+        await collaborativeUpdate(this.document.id, { [`flags.${MODULE_ID}.pinColor`]: pinColor });
+      }
+
+      const pinImage = `modules/investigation-board/assets/${pinColor}`;
+      try {
+        const texture = await PIXI.Assets.load(pinImage);
+        if (texture && this.pinSprite && this.pinSprite.parent) {
+          this.pinSprite.texture = texture;
+          this.pinSprite.width = width;
+          this.pinSprite.height = height;
+          this.pinSprite.position.set(0, 0);
+        }
+      } catch (err) {
+        console.error(`Failed to load pin texture: ${pinImage}`, err);
+      }
+
+      // Hide text
+      if (this.noteText) this.noteText.visible = false;
+      if (this.identityNameText) this.identityNameText.visible = false;
+      if (this.futuristicText) this.futuristicText.visible = false;
+
+      return;
     }
 
     // HANDOUT NOTE LAYOUT (Image-only, transparent background)
@@ -1137,6 +1293,16 @@ export class CustomDrawing extends Drawing {
       return {
         x: this.document.x + width / 2,
         y: this.document.y + 23
+      };
+    }
+    
+    // Pin-only notes
+    if (noteData.type === "pin") {
+      const width = this.document.shape.width || 50;
+      const height = this.document.shape.height || 50;
+      return {
+        x: this.document.x + width / 2,
+        y: this.document.y + height / 2
       };
     }
 

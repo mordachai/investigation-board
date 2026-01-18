@@ -53,7 +53,8 @@ export class InvestigationBoardHUD extends HandlebarsApplicationMixin(BasePlacea
       noteType: noteData?.type || "sticky",
       text: noteData?.text || "",
       hasConnections: (noteData?.connections?.length || 0) > 0,
-      canEdit: drawing.document.testUserPermission(game.user, "OWNER")
+      canEdit: drawing.document.testUserPermission(game.user, "OWNER"),
+      isPin: noteData?.type === "pin"
     };
   }
 

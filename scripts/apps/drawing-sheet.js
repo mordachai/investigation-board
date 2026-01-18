@@ -389,8 +389,8 @@ export class CustomDrawingSheet extends DrawingConfig {
         const noteType = this.document.flags[MODULE_ID]?.type;
         const updates = {};
 
-        // Only save text for non-handout notes
-        if (noteType !== "handout") {
+        // Only save text for notes that have text fields
+        if (noteType !== "handout" && noteType !== "media" && noteType !== "pin") {
           updates[`flags.${MODULE_ID}.text`] = data.text || "";
         }
 
@@ -415,8 +415,8 @@ export class CustomDrawingSheet extends DrawingConfig {
           updates[`flags.${MODULE_ID}.identityName`] = data.identityName;
         }
 
-        // Save font and fontSize to note flags (skip for handouts)
-        if (noteType !== "handout") {
+        // Save font and fontSize to note flags (skip for handouts, media, and pins)
+        if (noteType !== "handout" && noteType !== "media" && noteType !== "pin") {
           if (data.font !== undefined) {
             updates[`flags.${MODULE_ID}.font`] = data.font;
           }

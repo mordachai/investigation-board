@@ -5,7 +5,9 @@
 
   {{#if canEdit}}
   <div class="hud-body">
+    {{#unless isPin}}
     <textarea name="quickText" rows="3" placeholder="Quick edit...">{{text}}</textarea>
+    {{/unless}}
   </div>
 
   <div class="hud-controls">

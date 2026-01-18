@@ -190,6 +190,14 @@ Hooks.on("getSceneControlButtons", (controls) => {
       onChange: () => createNote("media"),
       button: true
     };
+
+    controls.drawings.tools.createPinOnly = {
+      name: "createPinOnly",
+      title: "Create Pin Only",
+      icon: "fas fa-thumbtack",
+      onChange: () => createNote("pin"),
+      button: true
+    };
   }
 });
 
