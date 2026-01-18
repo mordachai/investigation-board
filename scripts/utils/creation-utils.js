@@ -67,13 +67,7 @@ export async function createNote(noteType) {
                     ? ""
                     : (game.settings.get(MODULE_ID, `${noteType}NoteDefaultText`) || "Notes");
 
-  // Determine board mode and include identityName if note is a futuristic photo note
-  const boardMode = game.settings.get(MODULE_ID, "boardMode");
   const extraFlags = {};
-  if (noteType === "photo" && boardMode === "futuristic") {
-    extraFlags.identityName = "";
-  }
-
   // Set default font size to 9 for index cards
   if (noteType === "index") {
     extraFlags.fontSize = 9;
@@ -230,12 +224,7 @@ export async function createPhotoNoteFromScene(targetScene) {
   const displayName = targetScene.navName || targetScene.name || "Unknown Location";
   const imagePath = targetScene.background?.src || "modules/investigation-board/assets/placeholder.webp";
 
-  const boardMode = game.settings.get(MODULE_ID, "boardMode");
   const extraFlags = { image: imagePath };
-
-  if (boardMode === "futuristic") {
-    extraFlags.identityName = displayName;
-  }
 
   const created = await collaborativeCreate({
     type: "r",
@@ -430,12 +419,7 @@ export async function createPhotoNoteFromItem(item) {
   const displayName = item.name || "Unknown Item";
   const imagePath = item.img || "modules/investigation-board/assets/placeholder.webp";
 
-  const boardMode = game.settings.get(MODULE_ID, "boardMode");
   const extraFlags = { image: imagePath };
-
-  if (boardMode === "futuristic") {
-    extraFlags.identityName = displayName;
-  }
 
   const created = await collaborativeCreate({
     type: "r",
@@ -548,7 +532,6 @@ export async function importFolderAsNotes(folder) {
   const spacing = 40;
 
   const createDataArray = [];
-  const boardMode = game.settings.get(MODULE_ID, "boardMode");
   
   const cassetteImages = [];
   if (type === "Playlist") {
@@ -592,7 +575,6 @@ export async function importFolderAsNotes(folder) {
         linkedObject: `@UUID[${doc.uuid}]{${displayName}}`,
         image: imagePath
       };
-      if (boardMode === "futuristic") noteData.identityName = displayName;
     } else if (type === "Scene") {
       const displayName = doc.navName || doc.name || "Unknown Location";
       const imagePath = doc.background?.src || "modules/investigation-board/assets/placeholder.webp";
@@ -602,7 +584,6 @@ export async function importFolderAsNotes(folder) {
         linkedObject: `@UUID[${doc.uuid}]{${displayName}}`,
         image: imagePath
       };
-      if (boardMode === "futuristic") noteData.identityName = displayName;
     } else if (type === "Playlist") { // doc is a PlaylistSound
       const imagePath = cassetteImages[i % cassetteImages.length];
       noteData = {

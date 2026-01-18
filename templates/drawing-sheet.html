@@ -84,16 +84,6 @@
   {{/if}}
 
 
-  {{!-- If boardMode is futuristic and noteType is photo, show the extra Identity Name field --}}
-  {{#if (eq noteType "photo")}}
-    {{#if (eq boardMode "futuristic")}}
-      <div class="form-group" style="display: block;">
-        <label for="identityName">Identity Name:</label>
-        <input type="text" name="identityName" value="{{identityName}}" placeholder="Enter identity name" />
-      </div>
-    {{/if}}
-  {{/if}}
-
   {{!-- Connections Section --}}
   {{#if connections.length}}
     <div class="form-group connections-section">

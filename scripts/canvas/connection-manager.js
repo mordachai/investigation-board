@@ -352,7 +352,7 @@ export function drawAllConnectionLines(animationOffset = 0) {
 
       const targetPin = targetDrawing._getPinPosition ? targetDrawing._getPinPosition() : { x: targetDrawing.document.x, y: targetDrawing.document.y };
 
-      let lineColor = conn.color || game.settings.get(MODULE_ID, "connectionLineColor") || "#FF0000";
+      let lineColor = conn.color || "#FF0000";
       const lineWidth = (conn.width || game.settings.get(MODULE_ID, "connectionLineWidth") || 6) * sceneScale;
       
       let colorNum;
@@ -494,7 +494,7 @@ function onMouseMovePreview(event) {
 
   connectionPreviewLine.clear();
 
-  const playerColor = game.user.color || game.settings.get(MODULE_ID, "connectionLineColor") || "#FF0000";
+  const playerColor = game.user.color || "#FF0000";
   const sceneScale = game.settings.get(MODULE_ID, "sceneScale") || 1.0;
   const width = (game.settings.get(MODULE_ID, "connectionLineWidth") || 3) * sceneScale;
 
@@ -535,7 +535,7 @@ async function createConnection(sourceDrawing, targetDrawing) {
     return;
   }
 
-  const playerColor = game.user.color || game.settings.get(MODULE_ID, "connectionLineColor") || "#FF0000";
+  const playerColor = game.user.color || "#FF0000";
   const width = game.settings.get(MODULE_ID, "connectionLineWidth") || 6;
 
   connections.push({

@@ -49,33 +49,6 @@ export const registerSettings = function() {
         }
       }
     });
-  
-    // Register a new setting for board mode selection.
-    game.settings.register(MODULE_ID, "boardMode", {
-      name: "Board Mode",
-      hint: "Select the board mode to change the styling of notes.",
-      scope: "world",
-      config: true,
-      type: String,
-      choices: {
-        modern: "Modern",
-        futuristic: "Futuristic",
-        custom: "Custom"
-      },
-      default: "modern",
-      onChange: () => refreshAllDrawings()
-    });
-
-    // Connection line settings
-    game.settings.register(MODULE_ID, "connectionLineColor", {
-      name: "Connection Line Color",
-      hint: "The color of the connection lines between notes (default: #FF0000).",
-      scope: "world",
-      config: true,
-      type: String,
-      default: "#FF0000",
-      onChange: () => refreshAllDrawings()
-    });
 
     game.settings.register(MODULE_ID, "connectionLineWidth", {
       name: "Connection Line Width",

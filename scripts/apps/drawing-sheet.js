@@ -62,8 +62,6 @@ export class CustomDrawingSheet extends DrawingConfig {
     context.image = customData.image;
     context.audioPath = customData.audioPath;
     context.linkedObject = customData.linkedObject;
-    context.identityName = customData.identityName;
-    context.boardMode = customData.boardMode;
     context.noteTypes = customData.noteTypes;
     context.connections = customData.connections;
     context.font = customData.font;
@@ -116,10 +114,8 @@ export class CustomDrawingSheet extends DrawingConfig {
       audioEffectEnabled: this.document.flags[MODULE_ID]?.audioEffectEnabled !== false, // Default to true
       linkedObject: this.document.flags[MODULE_ID]?.linkedObject || "",
       image: this.document.flags[MODULE_ID]?.image || (noteType === "handout" ? "modules/investigation-board/assets/newhandout.webp" : "modules/investigation-board/assets/placeholder.webp"),
-      identityName: this.document.flags[MODULE_ID]?.identityName || "",
       font: this.document.flags[MODULE_ID]?.font || game.settings.get(MODULE_ID, "font"),
       fontSize: this.document.flags[MODULE_ID]?.fontSize || defaultFontSize,
-      boardMode: game.settings.get(MODULE_ID, "boardMode"),
       connections: formattedConnections,
       noteTypes: {
         sticky: "Sticky Note",
@@ -409,10 +405,6 @@ export class CustomDrawingSheet extends DrawingConfig {
 
         if (data.linkedObject !== undefined) {
           updates[`flags.${MODULE_ID}.linkedObject`] = data.linkedObject;
-        }
-
-        if (data.identityName !== undefined) {
-          updates[`flags.${MODULE_ID}.identityName`] = data.identityName;
         }
 
         // Save font and fontSize to note flags (skip for handouts, media, and pins)

@@ -17,8 +17,6 @@ export class CustomDrawing extends Drawing {
     this.noteText = null;
     this.photoImageSprite = null;
     this.photoMask = null;
-    this.identityNameText = null;
-    this.futuristicText = null;
   }
 
   /**
@@ -585,7 +583,6 @@ export class CustomDrawing extends Drawing {
     const isIndex = noteData.type === "index";
     const isHandout = noteData.type === "handout";
     const isMedia = noteData.type === "media";
-    const mode = game.settings.get(MODULE_ID, "boardMode");
 
     // MEDIA NOTE LAYOUT (Cassette tape)
     if (isMedia) {
@@ -682,7 +679,6 @@ export class CustomDrawing extends Drawing {
 
       // Hide text for media notes on canvas
       if (this.noteText) this.noteText.visible = false;
-      if (this.identityNameText) this.identityNameText.visible = false;
       if (this.futuristicText) this.futuristicText.visible = false;
 
       return; // Early exit for media notes
@@ -741,7 +737,6 @@ export class CustomDrawing extends Drawing {
 
       // Hide text
       if (this.noteText) this.noteText.visible = false;
-      if (this.identityNameText) this.identityNameText.visible = false;
       if (this.futuristicText) this.futuristicText.visible = false;
 
       return;
@@ -865,9 +860,6 @@ export class CustomDrawing extends Drawing {
       if (this.noteText) {
         this.noteText.visible = false;
       }
-      if (this.identityNameText) {
-        this.identityNameText.visible = false;
-      }
       if (this.futuristicText) {
         this.futuristicText.visible = false;
       }
@@ -890,190 +882,6 @@ export class CustomDrawing extends Drawing {
 
       return; // Early exit for handout notes
     }
-
-    // FUTURISTIC PHOTO NOTE LAYOUT
-    if (isPhoto && mode === "futuristic") {
-      const fullWidth = game.settings.get(MODULE_ID, "photoNoteWidth");
-      const margin = 10;
-      const photoImgWidth = fullWidth * 0.4;
-      const photoImgHeight = photoImgWidth * (4 / 3);
-      const textAreaX = margin + photoImgWidth + margin;
-      const fullHeight = photoImgHeight + margin * 2;
-    
-      // --- Background Frame ---
-      if (!this.bgSprite) {
-        this.bgSprite = new PIXI.Sprite();
-        this.addChildAt(this.bgSprite, 0);
-      }
-    
-      // --- Background Shadow ---
-      if (!this.bgShadow) {
-        this.bgShadow = new PIXI.Sprite();
-        this.addChildAt(this.bgShadow, 0); // Behind the frame
-      }
-    
-      try {
-        const texture = await PIXI.Assets.load("modules/investigation-board/assets/photoFrame.webp");
-        if (texture) {
-          // Update shadow
-          if (this.bgShadow) {
-            this.bgShadow.texture = texture;
-            this.bgShadow.width = fullWidth;
-            this.bgShadow.height = fullHeight;
-            this.bgShadow.tint = 0x000000;
-            this.bgShadow.alpha = 0.4;
-            this.bgShadow.position.set(6, 6);
-            this.bgShadow.filters = [new PIXI.BlurFilter(3)];
-          }
-
-          if (this.bgSprite) {
-            this.bgSprite.texture = texture;
-            this.bgSprite.width = fullWidth;
-            this.bgSprite.height = fullHeight;
-          }
-        }
-      } catch (err) {
-        console.error("Failed to load photo frame texture", err);
-        if (this.bgSprite) {
-          this.bgSprite.texture = PIXI.Texture.EMPTY;
-        }
-      }
-
-      // --- Foreground (User-Assigned) Photo ---
-      if (!this.photoImageSprite) {
-        this.photoImageSprite = new PIXI.Sprite();
-        this.addChild(this.photoImageSprite);
-      }
-      try {
-        const imagePath = noteData.image || "modules/investigation-board/assets/placeholder.webp";
-        const texture = await PIXI.Assets.load(imagePath);
-        if (texture && this.photoImageSprite) {
-          this.photoImageSprite.texture = texture;
-          
-          const frameWidth = fullWidth * 0.9;
-          const frameHeight = fullHeight * 0.9;
-          const frameX = fullWidth * 0.05;
-          const frameY = fullHeight * 0.05;
-
-          // Use center-top positioning logic to avoid stretching
-          const textureRatio = texture.width / texture.height;
-          const frameRatio = frameWidth / frameHeight;
-
-          let spriteWidth, spriteHeight, offsetX, offsetY;
-
-          if (textureRatio > frameRatio) {
-            // Case 1: Image is wider than frame - Fit by height, center horizontally
-            spriteHeight = frameHeight;
-            spriteWidth = frameHeight * textureRatio;
-            offsetX = (frameWidth - spriteWidth) / 2;
-            offsetY = 0;
-          } else {
-            // Case 2: Image is taller than frame - Fit by width, top aligned
-            spriteWidth = frameWidth;
-            spriteHeight = frameWidth / textureRatio;
-            offsetX = 0;
-            offsetY = 0;
-          }
-
-          this.photoImageSprite.width = spriteWidth;
-          this.photoImageSprite.height = spriteHeight;
-          this.photoImageSprite.position.set(frameX + offsetX, frameY + offsetY);
-
-          // Apply Mask to clip overflow in futuristic mode too
-          if (!this.photoMask) {
-            this.photoMask = new PIXI.Graphics();
-            this.addChild(this.photoMask);
-          }
-          this.photoMask.clear();
-          this.photoMask.beginFill(0xffffff);
-          this.photoMask.drawRect(frameX, frameY, frameWidth, frameHeight);
-          this.photoMask.endFill();
-          this.photoImageSprite.mask = this.photoMask;
-          this.photoMask.visible = true;
-          this.photoImageSprite.visible = true;
-        }
-      } catch (err) {
-        console.error(`Failed to load user photo: ${noteData.image}`, err);
-        if (this.photoImageSprite) {
-          this.photoImageSprite.texture = PIXI.Texture.EMPTY;
-        }
-      }
-
-      // --- Identity Name and Additional Text (Futuristic) ---
-      const font = noteData.font || game.settings.get(MODULE_ID, "font");
-      const baseFontSize = noteData.fontSize || game.settings.get(MODULE_ID, "baseFontSize");
-      const fontBoost = font === "Caveat" ? 1.5 : 1.0;
-      const fontSize = (fullWidth / 200) * baseFontSize * fontBoost;
-      const textStyle = new PIXI.TextStyle({
-        fontFamily: font,
-        fontSize: fontSize,
-        fill: "#000000",
-        wordWrap: true,
-        wordWrapWidth: fullWidth - textAreaX - margin + 10, // Added padding for italics
-        align: "left",
-      });
-      if (!this.identityNameText) {
-        this.identityNameText = new PIXI.Text("", textStyle);
-        this.addChild(this.identityNameText);
-      }
-      this.identityNameText.text = noteData.identityName || "Name";
-      this.identityNameText.style = textStyle;
-      this.identityNameText.position.set(textAreaX, margin);
-    
-      if (!this.futuristicText) {
-        this.futuristicText = new PIXI.Text("", textStyle);
-        this.addChild(this.futuristicText);
-      }
-      this.futuristicText.text = noteData.text || "";
-      this.futuristicText.style = textStyle;
-      this.futuristicText.position.set(textAreaX, margin + this.identityNameText.height + 5);
-    
-      // Remove default note text if present.
-      if (this.noteText) {
-        this.removeChild(this.noteText);
-        this.noteText.destroy();
-        this.noteText = null;
-      }
-    
-      // --- Pin Handling (Futuristic) ---
-      const pinSetting = game.settings.get(MODULE_ID, "pinColor");
-      if (pinSetting === "none") {
-        if (this.pinSprite) {
-          this.removeChild(this.pinSprite);
-          this.pinSprite.destroy();
-          this.pinSprite = null;
-        }
-      } else {
-        if (!this.pinSprite) {
-          this.pinSprite = new PIXI.Sprite();
-          this.addChild(this.pinSprite);
-        }
-        let pinColor = noteData.pinColor;
-        if (!pinColor) {
-          pinColor = (pinSetting === "random")
-            ? PIN_COLORS[Math.floor(Math.random() * PIN_COLORS.length)]
-            : `${pinSetting}Pin.webp`;
-          // Use collaborative update to save pin color (works for all users)
-          await collaborativeUpdate(this.document.id, { [`flags.${MODULE_ID}.pinColor`]: pinColor });
-        }
-        const pinImage = `modules/investigation-board/assets/${pinColor}`;
-        try {
-          const texture = await PIXI.Assets.load(pinImage);
-          if (texture && this.pinSprite) {
-            this.pinSprite.texture = texture;
-            this.pinSprite.width = 40;
-            this.pinSprite.height = 40;
-            this.pinSprite.position.set(fullWidth / 2 - 20, 3);
-          }
-        } catch (err) {
-          console.error(`Failed to load pin texture: ${pinImage}`, err);
-          if (this.pinSprite) {
-            this.pinSprite.texture = PIXI.Texture.EMPTY;
-          }
-        }
-      }
-      return; // End early for futuristic photo notes.
-    }
     
     // STANDARD LAYOUT (Modern photo notes, sticky, index, etc.)
     const width = isPhoto
@@ -1088,23 +896,10 @@ export class CustomDrawing extends Drawing {
         ? Math.round(width / (600 / 400))
         : width;
     
-    // Background Image based on board mode.
-    const getBackgroundImage = (noteType, mode) => {
-      if (mode === "futuristic") {
-        if (noteType === "photo") return "modules/investigation-board/assets/futuristic_photoFrame.webp";
-        if (noteType === "index") return "modules/investigation-board/assets/futuristic_note_index.webp";
-        return "modules/investigation-board/assets/futuristic_note_white.webp";
-      } else if (mode === "custom") {
-        if (noteType === "photo") return "modules/investigation-board/assets/custom_photoFrame.webp";
-        if (noteType === "index") return "modules/investigation-board/assets/custom_note_index.webp";
-        return "modules/investigation-board/assets/custom_note_white.webp";
-      }
-      // Default "modern" mode:
-      if (noteType === "photo") return "modules/investigation-board/assets/photoFrame.webp";
-      if (noteType === "index") return "modules/investigation-board/assets/note_index.webp";
-      return "modules/investigation-board/assets/note_white.webp";
-    };
-    const bgImage = getBackgroundImage(noteData.type, mode);
+    // Background Image: Always use modern mode assets
+    const bgImage = isPhoto ? "modules/investigation-board/assets/photoFrame.webp" 
+                  : isIndex ? "modules/investigation-board/assets/note_index.webp" 
+                  : "modules/investigation-board/assets/note_white.webp";
     
     if (!this.bgSprite) {
       this.bgSprite = new PIXI.Sprite();
@@ -1144,7 +939,7 @@ export class CustomDrawing extends Drawing {
       }
     }
     
-    // --- Foreground (User-Assigned) Photo for Modern Mode ---
+    // --- Foreground (User-Assigned) Photo ---
     if (isPhoto) {
       const fgImage = noteData.image || "modules/investigation-board/assets/placeholder.webp";
       if (!this.photoImageSprite) {
@@ -1213,7 +1008,7 @@ export class CustomDrawing extends Drawing {
       if (this.photoMask) this.photoMask.visible = false;
     }
     
-    // --- Pin Handling (Standard) ---
+    // --- Pin Handling ---
     {
       const pinSetting = game.settings.get(MODULE_ID, "pinColor");
       if (pinSetting === "none") {
@@ -1253,7 +1048,7 @@ export class CustomDrawing extends Drawing {
       }
     }
 
-    // Default text layout for non-futuristic notes.
+    // Default text layout.
     const font = noteData.font || game.settings.get(MODULE_ID, "font");
     const defaultFontSize = isIndex ? 9 : game.settings.get(MODULE_ID, "baseFontSize");
     const baseFontSize = noteData.fontSize || defaultFontSize;
@@ -1277,6 +1072,9 @@ export class CustomDrawing extends Drawing {
       this.noteText.text = truncatedText;
     }
     this.noteText.position.set(width / 2, isPhoto ? height - 25 : height / 2);
+
+    // Hide futuristic text elements if they exist
+    if (this.futuristicText) this.futuristicText.visible = false;
   }
 
   _getPinPosition() {
