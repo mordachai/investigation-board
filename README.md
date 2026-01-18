@@ -9,9 +9,11 @@ A Foundry VTT module that lets everyone create, edit, and move sticky and photo 
 
 ## NEW FEATURE >> Only Pins:
 
-We reach the peak: we now are able to create only pins and connections. its practically Zen at this point.
+We reach the peak: we are now able to create only pins and connections. Its practically Zen at this point.
 
+<img width="600" height="462" alt="image" src="https://github.com/user-attachments/assets/bba6ed56-ed40-41b8-84cc-dc2f76df178b" />
 
+-----
 
 ## NEW FEATURE >> Create photo notes from Folder:
 
