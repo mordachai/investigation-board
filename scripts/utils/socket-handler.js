@@ -97,7 +97,7 @@ export async function collaborativeDelete(drawingId, sceneId = null) {
 
   // If user is GM or has owner permission, delete directly
   if (game.user.isGM || drawing.testUserPermission(game.user, "OWNER")) {
-    await drawing.delete();
+    await drawing.delete({ ibDelete: true });
     return;
   }
 
@@ -203,7 +203,7 @@ export function handleSocketMessage(data) {
     if (!drawing) return;
 
     console.log("Investigation Board: GM processing socket deletion for drawing", data.drawingId);
-    drawing.delete();
+    drawing.delete({ ibDelete: true });
   }
 }
 

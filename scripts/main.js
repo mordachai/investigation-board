@@ -345,6 +345,23 @@ Hooks.on("preUpdateDrawing", (drawing, changes, options, userId) => {
   return false;
 });
 
+// Hook to prevent bulk deletion of investigation board notes
+Hooks.on("preDeleteDrawing", (drawing, options, userId) => {
+  // Check if this is an investigation board note
+  const noteData = drawing.flags?.[MODULE_ID];
+  if (!noteData?.type) return true;
+
+  // Allow deletion if:
+  // 1. The special ibDelete option is present (from our custom menus)
+  // 2. The note is currently selected/controlled (from keyboard Delete key)
+  const placeable = drawing.object || canvas.drawings.get(drawing.id);
+  if (options.ibDelete || placeable?.controlled) return true;
+
+  // Skip this drawing for bulk deletion (like "Clear Drawings" button)
+  console.log(`Investigation Board: Protected note "${drawing.id}" from bulk deletion.`);
+  return false;
+});
+
 // Hook to redraw lines and refresh visuals when notes change
 Hooks.on("updateDrawing", async (drawing, changes, options, userId) => {
   // Check if this is an investigation board note

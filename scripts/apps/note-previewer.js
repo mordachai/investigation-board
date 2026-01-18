@@ -78,7 +78,7 @@ export class NotePreviewer extends HandlebarsApplicationMixin(ApplicationV2) {
     return {
       noteType: noteType,
       text: noteData?.text || "",
-      image: noteData?.image || "",
+      image: noteData?.image || "modules/investigation-board/assets/placeholder.webp",
       audioPath: noteData?.audioPath || "",
       framePath: framePath,
       backgroundPath: backgroundPath,
