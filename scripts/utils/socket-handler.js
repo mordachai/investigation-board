@@ -86,6 +86,38 @@ export async function collaborativeCreate(createData, options = {}, sceneId = nu
 }
 
 /**
+ * Creates multiple drawing documents, using socket communication if the user doesn't have permission.
+ * @param {object[]} createDataArray - The data for the new drawings
+ * @param {object} options - Options for the creation
+ * @param {string} sceneId - Optional scene ID (defaults to current scene)
+ * @returns {Promise<Document[]>}
+ */
+export async function collaborativeCreateMany(createDataArray, options = {}, sceneId = null) {
+  const scene = sceneId ? game.scenes.get(sceneId) : canvas.scene;
+  if (!scene) return [];
+
+  // If user is GM or has permission to create drawings in the scene, create directly
+  if (game.user.isGM || scene.canUserModify(game.user, "create")) {
+    return await scene.createEmbeddedDocuments("Drawing", createDataArray, options);
+  }
+
+  // Otherwise, request creation via socket
+  if (socket) {
+    socket.emit(SOCKET_NAME, {
+      action: "createManyDrawings",
+      sceneId: scene.id,
+      createDataArray: createDataArray,
+      options: options,
+      requestingUser: game.user.id
+    });
+    console.log(`Investigation Board: Sent socket request to create ${createDataArray.length} drawings`);
+  } else {
+    console.error("Investigation Board: Socket not available for collaborative creation");
+  }
+  return [];
+}
+
+/**
  * Deletes a drawing document, using socket communication if the user doesn't have permission.
  */
 export async function collaborativeDelete(drawingId, sceneId = null) {
@@ -176,6 +208,16 @@ export function handleSocketMessage(data) {
     // Pass along the original requesting userId so we can filter the sheet opening
     const options = { ...data.options, ibRequestingUser: data.requestingUser };
     scene.createEmbeddedDocuments("Drawing", [data.createData], options);
+  }
+
+  if (data.action === "createManyDrawings") {
+    const scene = game.scenes.get(data.sceneId);
+    if (!scene) return;
+    
+    console.log(`Investigation Board: GM processing socket bulk creation (${data.createDataArray.length} items) requested by ${data.requestingUser}`);
+    
+    const options = { ...data.options, ibRequestingUser: data.requestingUser };
+    scene.createEmbeddedDocuments("Drawing", data.createDataArray, options);
   }
 
   if (data.action === "updateDrawing") {

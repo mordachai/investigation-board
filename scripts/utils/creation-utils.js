@@ -1,7 +1,7 @@
 import { MODULE_ID } from "../config.js";
 import { InvestigationBoardState } from "../state.js";
 import { getActorDisplayName } from "./helpers.js";
-import { collaborativeCreate } from "./socket-handler.js";
+import { collaborativeCreate, collaborativeCreateMany } from "./socket-handler.js";
 
 /**
  * Internal helper to find a random cassette image from assets
@@ -10,7 +10,9 @@ async function _getRandomCassetteImage() {
   let imagePath = "modules/investigation-board/assets/cassette1.webp"; // Default fallback
   try {
     const folder = "modules/investigation-board/assets/";
-    const browse = await FilePicker.browse("data", folder);
+    // v13 namespaced FilePicker
+    const FilePickerImpl = foundry.applications.apps.FilePicker.implementation;
+    const browse = await FilePickerImpl.browse("data", folder);
     const cassettes = browse.files.filter(f => {
       const filename = f.split("/").pop();
       return filename.startsWith("cassette") && f.endsWith(".webp");
@@ -457,3 +459,280 @@ export async function createPhotoNoteFromItem(item) {
     }, 250);
   }
 }
+
+/**
+ * Imports all documents from a folder as notes (Top level only).
+ * @param {Folder} folder - The folder to import
+ */
+export async function importFolderAsNotes(folder) {
+  const type = folder.type; // "Actor", "Item", "Scene", "Playlist"
+  
+  // Get documents from top level only
+  let documents = [];
+  if (type === "Playlist") {
+    // folder.contents contains Playlist documents, we want the sounds
+    for (let playlist of folder.contents) {
+      documents.push(...playlist.sounds);
+    }
+  } else {
+    documents.push(...folder.contents);
+  }
+
+  if (documents.length === 0) {
+    ui.notifications.warn(`Investigation Board: No ${type === "Playlist" ? "sounds" : "items"} found in folder "${folder.name}".`);
+    return;
+  }
+
+  // Application V2 Dialog for confirmation with optional checkbox for lo-fi
+  const isPlaylistFolder = type === "Playlist";
+  
+  const result = await foundry.applications.api.DialogV2.wait({
+    window: { title: `Bulk Import: ${folder.name}` },
+    content: `
+      <p>Do you want to import all <b>${documents.length}</b> ${isPlaylistFolder ? "sounds" : "items"} from the folder "<b>${folder.name}</b>" as investigation notes?</p>
+      ${isPlaylistFolder ? `
+        <div class="form-group" style="margin-top: 10px;">
+          <label class="checkbox">
+            <input type="checkbox" name="applyLoFi" checked> Apply lo-fi sound effects to all
+          </label>
+        </div>
+      ` : ""}
+      <p>They will be placed in a grid starting from the center of the screen.</p>
+    `,
+    classes: ["investigation-board-dialog"],
+    buttons: [{
+      action: "import",
+      label: "Import",
+      default: true,
+      callback: (event, button, dialog) => {
+        const applyLoFi = isPlaylistFolder ? dialog.element.querySelector('input[name="applyLoFi"]')?.checked : false;
+        return {
+          confirmed: true,
+          applyLoFi: applyLoFi
+        };
+      }
+    }, {
+      action: "cancel",
+      label: "Cancel",
+      callback: () => ({ confirmed: false })
+    }],
+    rejectClose: false,
+    modal: true
+  });
+
+  if (!result || !result.confirmed) return;
+  const applyLoFi = result.applyLoFi;
+
+  const photoW = game.settings.get(MODULE_ID, "photoNoteWidth") || 225;
+  const photoH = Math.round(photoW / (225 / 290));
+  const mediaW = 400;
+  const mediaH = Math.round(mediaW * 0.74);
+
+  const viewCenter = canvas.stage.pivot;
+  const startX = viewCenter.x - photoW / 2;
+  const startY = viewCenter.y - photoH / 2;
+
+  const cols = Math.ceil(Math.sqrt(documents.length));
+  const spacing = 40;
+
+  const createDataArray = [];
+  const boardMode = game.settings.get(MODULE_ID, "boardMode");
+  
+  const cassetteImages = [];
+  if (type === "Playlist") {
+    // Pre-fetch some random cassette images to avoid too many file browses
+    for(let i=0; i<5; i++) {
+      cassetteImages.push(await _getRandomCassetteImage());
+    }
+  }
+
+  for (let i = 0; i < documents.length; i++) {
+    const doc = documents[i];
+    const col = i % cols;
+    const row = Math.floor(i / cols);
+    
+    let width = photoW;
+    let height = photoH;
+    if (type === "Playlist") {
+      width = mediaW;
+      height = mediaH;
+    }
+
+    const x = startX + col * (width + spacing);
+    const y = startY + row * (height + spacing);
+
+    let noteData = null;
+    if (type === "Actor") {
+      const displayName = getActorDisplayName(doc);
+      const imagePath = doc.img || "modules/investigation-board/assets/placeholder.webp";
+      noteData = {
+        type: "photo",
+        text: displayName,
+        linkedObject: `@UUID[${doc.uuid}]{${displayName}}`,
+        image: imagePath
+      };
+    } else if (type === "Item") {
+      const displayName = doc.name || "Unknown Item";
+      const imagePath = doc.img || "modules/investigation-board/assets/placeholder.webp";
+      noteData = {
+        type: "photo",
+        text: displayName,
+        linkedObject: `@UUID[${doc.uuid}]{${displayName}}`,
+        image: imagePath
+      };
+      if (boardMode === "futuristic") noteData.identityName = displayName;
+    } else if (type === "Scene") {
+      const displayName = doc.navName || doc.name || "Unknown Location";
+      const imagePath = doc.background?.src || "modules/investigation-board/assets/placeholder.webp";
+      noteData = {
+        type: "photo",
+        text: displayName,
+        linkedObject: `@UUID[${doc.uuid}]{${displayName}}`,
+        image: imagePath
+      };
+      if (boardMode === "futuristic") noteData.identityName = displayName;
+    } else if (type === "Playlist") { // doc is a PlaylistSound
+      const imagePath = cassetteImages[i % cassetteImages.length];
+      noteData = {
+        type: "media",
+        text: doc.name,
+        image: imagePath,
+        audioPath: doc.path,
+        linkedObject: `@UUID[${doc.uuid}]{${doc.name}}`,
+        audioEffectEnabled: applyLoFi
+      };
+    }
+
+    if (noteData) {
+      createDataArray.push({
+        type: "r",
+        author: game.user.id,
+        x, y,
+        shape: { width, height },
+        fillColor: type === "Playlist" ? "#000000" : "#ffffff",
+        fillAlpha: type === "Playlist" ? 0 : 1,
+        strokeColor: "#000000",
+        strokeWidth: 0,
+        strokeAlpha: 0,
+        locked: false,
+        flags: {
+          [MODULE_ID]: noteData,
+          core: { sheetClass: "investigation-board.CustomDrawingSheet" }
+        },
+        ownership: { default: 3 }
+      });
+    }
+  }
+
+  if (createDataArray.length > 0) {
+    await collaborativeCreateMany(createDataArray, { skipAutoOpen: true });
+    ui.notifications.info(`Investigation Board: Successfully imported ${createDataArray.length} notes.`);
+  }
+}
+
+/**
+ * Imports all sounds from a Playlist document as notes.
+ * @param {Playlist} playlist - The playlist to import
+ */
+export async function importPlaylistAsNotes(playlist) {
+  const documents = playlist.sounds.contents;
+
+  if (documents.length === 0) {
+    ui.notifications.warn(`Investigation Board: No sounds found in playlist "${playlist.name}".`);
+    return;
+  }
+
+  const result = await foundry.applications.api.DialogV2.wait({
+    window: { title: `Bulk Import: ${playlist.name}` },
+    content: `
+      <p>Do you want to import all <b>${documents.length}</b> sounds from the playlist "<b>${playlist.name}</b>" as investigation notes?</p>
+      <div class="form-group" style="margin-top: 10px;">
+        <label class="checkbox">
+          <input type="checkbox" name="applyLoFi" checked> Apply lo-fi sound effects to all
+        </label>
+      </div>
+      <p>They will be placed in a grid starting from the center of the screen.</p>
+    `,
+    classes: ["investigation-board-dialog"],
+    buttons: [{
+      action: "import",
+      label: "Import",
+      default: true,
+      callback: (event, button, dialog) => {
+        return {
+          confirmed: true,
+          applyLoFi: dialog.element.querySelector('input[name="applyLoFi"]')?.checked
+        };
+      }
+    }, {
+      action: "cancel",
+      label: "Cancel",
+      callback: () => ({ confirmed: false })
+    }],
+    rejectClose: false,
+    modal: true
+  });
+
+  if (!result || !result.confirmed) return;
+  const applyLoFi = result.applyLoFi;
+
+  const mediaW = 400;
+  const mediaH = Math.round(mediaW * 0.74);
+
+  const viewCenter = canvas.stage.pivot;
+  const startX = viewCenter.x - mediaW / 2;
+  const startY = viewCenter.y - mediaH / 2;
+
+  const cols = Math.ceil(Math.sqrt(documents.length));
+  const spacing = 40;
+
+  const createDataArray = [];
+  const cassetteImages = [];
+  for(let i=0; i<5; i++) {
+    cassetteImages.push(await _getRandomCassetteImage());
+  }
+
+  for (let i = 0; i < documents.length; i++) {
+    const doc = documents[i];
+    const col = i % cols;
+    const row = Math.floor(i / cols);
+    
+    const x = startX + col * (mediaW + spacing);
+    const y = startY + row * (mediaH + spacing);
+
+    const imagePath = cassetteImages[i % cassetteImages.length];
+    const noteData = {
+      type: "media",
+      text: doc.name,
+      image: imagePath,
+      audioPath: doc.path,
+      linkedObject: `@UUID[${doc.uuid}]{${doc.name}}`,
+      audioEffectEnabled: applyLoFi
+    };
+
+    createDataArray.push({
+      type: "r",
+      author: game.user.id,
+      x, y,
+      shape: { width: mediaW, height: mediaH },
+      fillColor: "#000000",
+      fillAlpha: 0,
+      strokeColor: "#000000",
+      strokeWidth: 0,
+      strokeAlpha: 0,
+      locked: false,
+      flags: {
+        [MODULE_ID]: noteData,
+        core: { sheetClass: "investigation-board.CustomDrawingSheet" }
+      },
+      ownership: { default: 3 }
+    });
+  }
+
+  if (createDataArray.length > 0) {
+    await collaborativeCreateMany(createDataArray, { skipAutoOpen: true });
+    ui.notifications.info(`Investigation Board: Successfully imported ${createDataArray.length} notes.`);
+  }
+}
+
+

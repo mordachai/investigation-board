@@ -19,7 +19,9 @@ import {
   createPhotoNoteFromScene, 
   createPhotoNoteFromItem,
   createHandoutNoteFromPage, 
-  createMediaNoteFromSound 
+  createMediaNoteFromSound,
+  importFolderAsNotes,
+  importPlaylistAsNotes
 } from "./utils/creation-utils.js";
 
 // v13 namespaced imports
@@ -254,6 +256,7 @@ Hooks.once("init", () => {
 
 // Hook to initialize socket for collaborative editing
 Hooks.once("ready", () => {
+  console.log("Investigation Board: Ready hook fired. v13 detected.");
   initSocket();
 
   // Show setup warning to GM if enabled
@@ -425,13 +428,33 @@ async function _resolveDocumentFromLi(li, collection) {
   const el = li instanceof HTMLElement ? li : li[0];
   if (!el) return null;
 
+  // v13 resolution is much more varied
+  const target = el.closest(".directory-item") || el.closest(".document") || el.closest(".playlist") || el;
+  
+  console.log("Investigation Board DEBUG: Resolving document from element", target);
+  console.log("Investigation Board DEBUG: Target dataset:", JSON.stringify(target.dataset));
+
   // 1. Try UUID directly (most reliable in v13)
-  const uuid = el.dataset.uuid || el.getAttribute("data-uuid");
-  if (uuid) return await fromUuid(uuid);
+  const uuid = target.dataset.uuid || target.getAttribute("data-uuid");
+  if (uuid) {
+    console.log("Investigation Board DEBUG: Found UUID:", uuid);
+    return await fromUuid(uuid);
+  }
 
   // 2. Try ID and Pack
-  const docId = el.dataset.documentId || el.dataset.entryId || el.dataset.id || el.getAttribute("data-id");
-  const packName = el.closest("[data-pack]")?.dataset.pack || el.closest(".compendium")?.dataset.pack;
+  // v13 uses entryId or documentId often. Playlists sometimes use playlistId.
+  const docId = target.dataset.documentId || 
+                target.dataset.entryId || 
+                target.dataset.id || 
+                target.dataset.playlistId ||
+                target.getAttribute("data-document-id") ||
+                target.getAttribute("data-entry-id") ||
+                target.getAttribute("data-id") ||
+                target.getAttribute("data-playlist-id");
+
+  console.log("Investigation Board DEBUG: Resolved docId:", docId);
+
+  const packName = target.closest("[data-pack]")?.dataset.pack || target.closest(".compendium")?.dataset.pack;
 
   if (docId) {
     // If we have a pack name, use it
@@ -550,6 +573,113 @@ Hooks.on("getPlaylistSoundContextOptions", (html, entryOptions) => {
       }
     }
   });
+});
+
+// Context menu hook for Playlist entries
+Hooks.on("getPlaylistContextOptions", (html, entryOptions) => {
+  console.log("Investigation Board: getPlaylistContextOptions fired");
+  entryOptions.push({
+    name: "Import Playlist as Notes",
+    icon: '<i class="fas fa-cassette-tape"></i>',
+    callback: async (li) => {
+      const playlist = await _resolveDocumentFromLi(li, game.playlists);
+      if (playlist) {
+        await importPlaylistAsNotes(playlist);
+      } else {
+        ui.notifications.warn("Investigation Board: Could not resolve Playlist.");
+      }
+    },
+    condition: () => game.user.isGM
+  });
+});
+
+Hooks.on("getPlaylistDirectoryEntryContext", (html, entryOptions) => {
+  // Keeping this as a secondary variation for compatibility
+  if (entryOptions.find(e => e.name === "Import Playlist as Notes")) return;
+  entryOptions.push({
+    name: "Import Playlist as Notes",
+    icon: '<i class="fas fa-cassette-tape"></i>',
+    callback: async (li) => {
+      const playlist = await _resolveDocumentFromLi(li, game.playlists);
+      if (playlist) {
+        await importPlaylistAsNotes(playlist);
+      } else {
+        ui.notifications.warn("Investigation Board: Could not resolve Playlist.");
+      }
+    },
+    condition: () => game.user.isGM
+  });
+});
+
+/**
+ * Shared callback for folder context menu to import content
+ */
+async function _onImportFolderAsNotes(li) {
+  // li might be the jQuery element or the raw element from our manual hook
+  const el = (li instanceof HTMLElement) ? li : (li[0] || li);
+  
+  // v13 resolution is much more varied
+  const folderId = el.dataset.id || 
+                   el.dataset.folderId || 
+                   el.getAttribute("data-id") || 
+                   el.getAttribute("data-folder-id") ||
+                   el.closest(".folder")?.dataset.folderId ||
+                   el.closest(".folder")?.dataset.id ||
+                   el.closest("[data-folder-id]")?.dataset.folderId;
+
+  if (!folderId) {
+    console.warn("Investigation Board: Could not find folder ID on element", el);
+    return;
+  }
+
+  const folder = game.folders.get(folderId);
+  if (folder) {
+    await importFolderAsNotes(folder);
+  } else {
+    console.warn("Investigation Board: Could not find folder with ID", folderId);
+  }
+}
+
+const _folderHookCallback = (html, entryOptions) => {
+  // Avoid duplicate entries
+  if (entryOptions.find(e => e.name === "Import Folder as Notes")) return;
+
+  entryOptions.push({
+    name: "Import Folder as Notes",
+    icon: '<i class="fa-solid fa-camera-polaroid"></i>',
+    callback: (li) => _onImportFolderAsNotes(li),
+    condition: () => game.user.isGM
+  });
+};
+
+// Folder Context Hooks - using multiple variations for v13 compatibility
+Hooks.on("getDirectoryFolderContext", _folderHookCallback);
+Hooks.on("getActorDirectoryFolderContext", _folderHookCallback);
+Hooks.on("getItemDirectoryFolderContext", _folderHookCallback);
+Hooks.on("getSceneDirectoryFolderContext", _folderHookCallback);
+Hooks.on("getPlaylistDirectoryFolderContext", _folderHookCallback);
+Hooks.on("getFolderContextOptions", _folderHookCallback);
+
+// Some v13 sidebars might trigger EntryContext for folders
+Hooks.on("getActorDirectoryEntryContext", (html, entryOptions) => {
+    if (html[0]?.classList.contains("folder") || html[0]?.closest(".folder")) {
+        _folderHookCallback(html, entryOptions);
+    }
+});
+Hooks.on("getItemDirectoryEntryContext", (html, entryOptions) => {
+    if (html[0]?.classList.contains("folder") || html[0]?.closest(".folder")) {
+        _folderHookCallback(html, entryOptions);
+    }
+});
+Hooks.on("getSceneDirectoryEntryContext", (html, entryOptions) => {
+    if (html[0]?.classList.contains("folder") || html[0]?.closest(".folder")) {
+        _folderHookCallback(html, entryOptions);
+    }
+});
+Hooks.on("getPlaylistDirectoryEntryContext", (html, entryOptions) => {
+    if (html[0]?.classList.contains("folder") || html[0]?.closest(".folder")) {
+        _folderHookCallback(html, entryOptions);
+    }
 });
 
 
