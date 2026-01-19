@@ -64,9 +64,12 @@ export async function collaborativeCreate(createData, options = {}, sceneId = nu
   const scene = sceneId ? game.scenes.get(sceneId) : canvas.scene;
   if (!scene) return [];
 
+  // Inject flag to identify this as a tool-initiated creation
+  const createOptions = { ...options, ibCreation: true };
+
   // If user is GM or has permission to create drawings in the scene, create directly
   if (game.user.isGM || scene.canUserModify(game.user, "create")) {
-    return await scene.createEmbeddedDocuments("Drawing", [createData], options);
+    return await scene.createEmbeddedDocuments("Drawing", [createData], createOptions);
   }
 
   // Otherwise, request creation via socket
@@ -75,7 +78,7 @@ export async function collaborativeCreate(createData, options = {}, sceneId = nu
       action: "createDrawing",
       sceneId: scene.id,
       createData: createData,
-      options: options,
+      options: createOptions,
       requestingUser: game.user.id
     });
     console.log("Investigation Board: Sent socket request to create drawing");
@@ -96,9 +99,12 @@ export async function collaborativeCreateMany(createDataArray, options = {}, sce
   const scene = sceneId ? game.scenes.get(sceneId) : canvas.scene;
   if (!scene) return [];
 
+  // Inject flag to identify this as a tool-initiated creation
+  const createOptions = { ...options, ibCreation: true };
+
   // If user is GM or has permission to create drawings in the scene, create directly
   if (game.user.isGM || scene.canUserModify(game.user, "create")) {
-    return await scene.createEmbeddedDocuments("Drawing", createDataArray, options);
+    return await scene.createEmbeddedDocuments("Drawing", createDataArray, createOptions);
   }
 
   // Otherwise, request creation via socket
@@ -107,7 +113,7 @@ export async function collaborativeCreateMany(createDataArray, options = {}, sce
       action: "createManyDrawings",
       sceneId: scene.id,
       createDataArray: createDataArray,
-      options: options,
+      options: createOptions,
       requestingUser: game.user.id
     });
     console.log(`Investigation Board: Sent socket request to create ${createDataArray.length} drawings`);

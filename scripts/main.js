@@ -20,6 +20,7 @@ import {
   createPhotoNoteFromItem,
   createHandoutNoteFromPage, 
   createMediaNoteFromSound,
+  createHandoutNoteFromImage,
   importFolderAsNotes,
   importPlaylistAsNotes
 } from "./utils/creation-utils.js";
@@ -281,7 +282,116 @@ Hooks.once("ready", () => {
       new SetupWarningDialog().render(true);
     }
   }
+
+  // Paste Listener for Handout Notes
+  document.addEventListener("paste", async (e) => {
+    if (!InvestigationBoardState.isActive) return;
+
+    // Ignore if focus is on an input element
+    if (e.target.tagName === "INPUT" || e.target.tagName === "TEXTAREA" || e.target.isContentEditable) {
+      return;
+    }
+
+    const items = (e.clipboardData || e.originalEvent.clipboardData).items;
+    for (let i = 0; i < items.length; i++) {
+      const item = items[i];
+      if (item.type.indexOf("image") !== -1) {
+        e.preventDefault();
+        const file = item.getAsFile();
+        if (!file) continue;
+
+        ui.notifications.info("Investigation Board: Processing clipboard image...");
+
+        const folderPath = "assets/ib-handouts";
+
+        try {
+          // 1. Ensure directories exist (assets -> assets/ib-handouts)
+          try {
+            await FilePicker.browse("data", "assets");
+          } catch {
+            await FilePicker.createDirectory("data", "assets");
+          }
+          
+          try {
+            await FilePicker.browse("data", folderPath);
+          } catch {
+            await FilePicker.createDirectory("data", folderPath);
+          }
+
+          // 2. Upload file
+          const timestamp = Date.now();
+          const uniqueId = foundry.utils.randomID();
+          
+          // Use original name extension if available, defaulting to png
+          let ext = "png";
+          if (file.name) {
+             const parts = file.name.split(".");
+             if (parts.length > 1) ext = parts.pop();
+          }
+          const newFileName = `pasted_handout_${timestamp}_${uniqueId}.${ext}`;
+          
+          // Create a new File object with the correct name to ensure it's respected
+          const renamedFile = new File([file], newFileName, { type: file.type });
+          
+          const response = await FilePicker.upload("data", folderPath, renamedFile, { fileName: newFileName });
+          
+          // 3. Create Note
+          if (response.path) {
+            await createHandoutNoteFromImage(response.path);
+            ui.notifications.info("Investigation Board: Created handout from clipboard.");
+          }
+          
+        } catch (err) {
+          console.error("Investigation Board: Paste failed", err);
+          ui.notifications.warn("Investigation Board: Failed to upload pasted image. Check console for details.");
+        }
+
+        // Only handle the first image
+        return;
+      }
+    }
+  });
 });
+
+// Hook to intercept drawing creation to handle Copy/Paste logic
+Hooks.on("preCreateDrawing", (drawing, data, options, userId) => {
+  // Only affect Investigation Board notes
+  if (!drawing.flags[MODULE_ID]) return;
+
+  // If the creation does NOT have an ID (meaning it's a new unique creation, like Paste or New Tool)
+  // AND it does NOT have our tool's signature flag...
+  // Then it must be a manual Paste or Duplicate operation.
+  if (!data._id && !options.ibCreation) {
+    // 1. Clear connections so the new note doesn't point to old targets
+    drawing.updateSource({ [`flags.${MODULE_ID}.connections`]: [] });
+
+    // 2. Suppress the auto-open sheet behavior
+    options.skipAutoOpen = true;
+    
+    console.log("Investigation Board: Detected pasted/duplicated note. Cleared connections and suppressed sheet.");
+  }
+});
+
+
+// Hook to intercept drawing creation to handle Copy/Paste logic
+Hooks.on("preCreateDrawing", (drawing, data, options, userId) => {
+  // Only affect Investigation Board notes
+  if (!drawing.flags[MODULE_ID]) return;
+
+  // If the creation does NOT have an ID (meaning it's a new unique creation, like Paste or New Tool)
+  // AND it does NOT have our tool's signature flag...
+  // Then it must be a manual Paste or Duplicate operation.
+  if (!data._id && !options.ibCreation) {
+    // 1. Clear connections so the new note doesn't point to old targets
+    drawing.updateSource({ [`flags.${MODULE_ID}.connections`]: [] });
+
+    // 2. Suppress the auto-open sheet behavior
+    options.skipAutoOpen = true;
+    
+    console.log("Investigation Board: Detected pasted/duplicated note. Cleared connections and suppressed sheet.");
+  }
+});
+
 
 // Hook to ensure newly created notes are interactive in Investigation Board mode
 Hooks.on("createDrawing", (drawing, options, userId) => {

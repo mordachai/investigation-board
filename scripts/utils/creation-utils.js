@@ -737,4 +737,83 @@ export async function importPlaylistAsNotes(playlist) {
   }
 }
 
+/**
+ * Creates a Handout Note from a raw image path (e.g. uploaded from clipboard).
+ * @param {string} imagePath - The path to the uploaded image
+ */
+export async function createHandoutNoteFromImage(imagePath) {
+  const scene = canvas.scene;
+  if (!scene) {
+    ui.notifications.error("Cannot create note: No active scene.");
+    return;
+  }
+
+  const handoutW = game.settings.get(MODULE_ID, "handoutNoteWidth") || 400;
+  const handoutH = game.settings.get(MODULE_ID, "handoutNoteHeight") || 400;
+  const sceneScale = getEffectiveScale();
+
+  const viewCenter = canvas.stage.pivot;
+  const x = viewCenter.x - (handoutW * sceneScale) / 2;
+  const y = viewCenter.y - (handoutH * sceneScale) / 2;
+
+  // Attempt to get natural dimensions for better initial sizing
+  let finalWidth = handoutW;
+  let finalHeight = handoutH;
+  try {
+    const texture = await PIXI.Assets.load(imagePath);
+    if (texture) {
+      finalWidth = texture.width;
+      finalHeight = texture.height;
+
+      // Apply 500px height cap
+      if (finalHeight > 500) {
+        const scale = 500 / finalHeight;
+        finalWidth = Math.round(finalWidth * scale);
+        finalHeight = 500;
+      }
+      // Apply 500px width cap
+      if (finalWidth > 500) {
+        const scale = 500 / finalWidth;
+        finalHeight = Math.round(finalHeight * scale);
+        finalWidth = 500;
+      }
+    }
+  } catch (err) {
+    console.error("Investigation Board: Failed to get image dimensions for handout", err);
+  }
+
+  const created = await collaborativeCreate({
+    type: "r",
+    author: game.user.id,
+    x, y,
+    shape: { width: finalWidth, height: finalHeight },
+    fillColor: "#000000",
+    fillAlpha: 0,
+    strokeColor: "#000000",
+    strokeWidth: 0,
+    strokeAlpha: 0,
+    locked: false,
+    flags: {
+      [MODULE_ID]: {
+        type: "handout",
+        text: "",
+        linkedObject: "",
+        image: imagePath
+      },
+      core: { sheetClass: "investigation-board.CustomDrawingSheet" }
+    },
+    ownership: { default: 3 }
+  }, { skipAutoOpen: true });
+
+  if (InvestigationBoardState.isActive && created?.[0]) {
+    setTimeout(() => {
+      const newDrawing = canvas.drawings.get(created[0].id);
+      if (newDrawing) {
+        newDrawing.eventMode = 'auto';
+        newDrawing.interactiveChildren = true;
+      }
+    }, 250);
+  }
+}
+
 
