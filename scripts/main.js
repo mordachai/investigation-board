@@ -28,6 +28,7 @@ import {
 // v13 namespaced imports
 const DocumentSheetConfig = foundry.applications.apps.DocumentSheetConfig;
 const DrawingDocument = foundry.documents.DrawingDocument;
+const FilePicker = foundry.applications.apps.FilePicker.implementation;
 
 /**
  * Helper function to refresh interactive properties of all drawings
@@ -352,26 +353,6 @@ Hooks.once("ready", () => {
     }
   });
 });
-
-// Hook to intercept drawing creation to handle Copy/Paste logic
-Hooks.on("preCreateDrawing", (drawing, data, options, userId) => {
-  // Only affect Investigation Board notes
-  if (!drawing.flags[MODULE_ID]) return;
-
-  // If the creation does NOT have an ID (meaning it's a new unique creation, like Paste or New Tool)
-  // AND it does NOT have our tool's signature flag...
-  // Then it must be a manual Paste or Duplicate operation.
-  if (!data._id && !options.ibCreation) {
-    // 1. Clear connections so the new note doesn't point to old targets
-    drawing.updateSource({ [`flags.${MODULE_ID}.connections`]: [] });
-
-    // 2. Suppress the auto-open sheet behavior
-    options.skipAutoOpen = true;
-    
-    console.log("Investigation Board: Detected pasted/duplicated note. Cleared connections and suppressed sheet.");
-  }
-});
-
 
 // Hook to intercept drawing creation to handle Copy/Paste logic
 Hooks.on("preCreateDrawing", (drawing, data, options, userId) => {

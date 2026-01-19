@@ -11,6 +11,18 @@ https://github.com/user-attachments/assets/9d578c0b-380e-4942-91fc-0a43d6c27296
 
 <img width="1200" height="655" alt="image" src="https://github.com/user-attachments/assets/329f44f1-0c5a-455e-b3d1-d585cc3ed665" />
 
+## NEW FEATURE >> Handout Notes from Images in Journals:
+
+Journals, specially the ones containing adventures are full of images. Now instead of just showing the pretty images to the players you can pass them around as handout notes.
+
+------
+
+## NEW FEATURE >> Handout Notes from Clipboard buffer:
+
+If you Ctrl+C an area in your screen and Ctrl+V while in Drawing mode a note will appear. Even better, if you copy an image file in your file explorer and Control+V in canvas a note will be created with the correct transparency set if the image has transparency.
+
+------
+
 ## NEW FEATURE >> Automatic Scene Scale:
 
 The module now automatically adapts to your map size. Whether you are on a small 1280px map or a massive 5000px scene, your notes, pins, and yarn connections will stay proportional. You can even set a global multiplier if you want them a bit larger or smaller on all maps.
