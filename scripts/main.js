@@ -20,6 +20,7 @@ import {
   createPhotoNoteFromItem,
   createHandoutNoteFromPage, 
   createMediaNoteFromSound,
+  createHandoutNoteFromImage,
   importFolderAsNotes,
   importPlaylistAsNotes
 } from "./utils/creation-utils.js";
@@ -27,6 +28,7 @@ import {
 // v13 namespaced imports
 const DocumentSheetConfig = foundry.applications.apps.DocumentSheetConfig;
 const DrawingDocument = foundry.documents.DrawingDocument;
+const FilePicker = foundry.applications.apps.FilePicker.implementation;
 
 /**
  * Helper function to refresh interactive properties of all drawings
@@ -281,7 +283,96 @@ Hooks.once("ready", () => {
       new SetupWarningDialog().render(true);
     }
   }
+
+  // Paste Listener for Handout Notes
+  document.addEventListener("paste", async (e) => {
+    if (!InvestigationBoardState.isActive) return;
+
+    // Ignore if focus is on an input element
+    if (e.target.tagName === "INPUT" || e.target.tagName === "TEXTAREA" || e.target.isContentEditable) {
+      return;
+    }
+
+    const items = (e.clipboardData || e.originalEvent.clipboardData).items;
+    for (let i = 0; i < items.length; i++) {
+      const item = items[i];
+      if (item.type.indexOf("image") !== -1) {
+        e.preventDefault();
+        const file = item.getAsFile();
+        if (!file) continue;
+
+        ui.notifications.info("Investigation Board: Processing clipboard image...");
+
+        const folderPath = "assets/ib-handouts";
+
+        try {
+          // 1. Ensure directories exist (assets -> assets/ib-handouts)
+          try {
+            await FilePicker.browse("data", "assets");
+          } catch {
+            await FilePicker.createDirectory("data", "assets");
+          }
+          
+          try {
+            await FilePicker.browse("data", folderPath);
+          } catch {
+            await FilePicker.createDirectory("data", folderPath);
+          }
+
+          // 2. Upload file
+          const timestamp = Date.now();
+          const uniqueId = foundry.utils.randomID();
+          
+          // Use original name extension if available, defaulting to png
+          let ext = "png";
+          if (file.name) {
+             const parts = file.name.split(".");
+             if (parts.length > 1) ext = parts.pop();
+          }
+          const newFileName = `pasted_handout_${timestamp}_${uniqueId}.${ext}`;
+          
+          // Create a new File object with the correct name to ensure it's respected
+          const renamedFile = new File([file], newFileName, { type: file.type });
+          
+          const response = await FilePicker.upload("data", folderPath, renamedFile, { fileName: newFileName });
+          
+          // 3. Create Note
+          if (response.path) {
+            await createHandoutNoteFromImage(response.path);
+            ui.notifications.info("Investigation Board: Created handout from clipboard.");
+          }
+          
+        } catch (err) {
+          console.error("Investigation Board: Paste failed", err);
+          ui.notifications.warn("Investigation Board: Failed to upload pasted image. Check console for details.");
+        }
+
+        // Only handle the first image
+        return;
+      }
+    }
+  });
 });
+
+// Hook to intercept drawing creation to handle Copy/Paste logic
+Hooks.on("preCreateDrawing", (drawing, data, options, userId) => {
+  // Only affect Investigation Board notes
+  if (!drawing.flags[MODULE_ID]) return;
+
+  // If the creation does NOT have an ID (meaning it's a new unique creation, like Paste or New Tool)
+  // AND it does NOT have our tool's signature flag...
+  // Then it must be a manual Paste or Duplicate operation.
+  if (!data._id && !options.ibCreation) {
+    // 1. Clear connections so the new note doesn't point to old targets
+    drawing.updateSource({ [`flags.${MODULE_ID}.connections`]: [] });
+
+    // 2. Suppress the auto-open sheet behavior
+    options.skipAutoOpen = true;
+    
+    console.log("Investigation Board: Detected pasted/duplicated note. Cleared connections and suppressed sheet.");
+  }
+});
+
 
 // Hook to ensure newly created notes are interactive in Investigation Board mode
 Hooks.on("createDrawing", (drawing, options, userId) => {
@@ -715,4 +806,96 @@ Hooks.on("canvasReady", () => {
     updatePins();
     drawAllConnectionLines();
   }, 100);
+});
+
+/**
+ * Adds "Create Handout Note" to the existing context menu of images in Journal Sheets.
+ * Modifies the existing ContextMenu instance found in the app.
+ */
+function _addJournalImageContext(app, html, data) {
+  if (!game.user.isGM) return;
+
+  // Wait for the next tick to ensure context menus are fully registered by the sheet
+  setTimeout(() => {
+    if (!app.contextMenus) return;
+
+    // Find the menu that has "Show to Players"
+    const menu = app.contextMenus.find(m => m.menuItems.some(i => i.name === "Show to Players" || i.name === "OWNERSHIP.ShowAll"));
+    
+    if (menu) {
+      // Avoid duplicates
+      if (menu.menuItems.find(i => i.name === "Create Handout Note")) return;
+
+      menu.menuItems.push({
+        name: "Create Handout Note",
+        icon: '<i class="fas fa-file-image"></i>',
+        callback: (li) => {
+          const el = li[0] || li;
+          // The target might be the img itself or a wrapper depending on Foundry version/sheet
+          const img = el.tagName === "IMG" ? el : el.querySelector("img");
+          const src = img?.getAttribute("src") || img?.src;
+          
+          if (src) {
+             createHandoutNoteFromImage(src);
+          } else {
+             ui.notifications.warn("Investigation Board: Could not find image source.");
+          }
+        },
+        condition: (li) => {
+          const el = li[0] || li;
+          const img = el.tagName === "IMG" ? el : el.querySelector("img");
+          return !!img;
+        }
+      });
+    }
+  }, 100);
+}
+
+// Hooks to attach the context menu to Journals
+Hooks.on("renderJournalSheet", _addJournalImageContext);
+Hooks.on("renderJournalPageSheet", _addJournalImageContext);
+
+/**
+ * Adds "Create Handout Note" to the Image Popout header menu (the ellipsis/3-dots menu).
+ */
+Hooks.on("renderImagePopout", (app, html, data) => {
+  if (!game.user.isGM) return;
+
+  const element = html[0] || html;
+  const menu = element.querySelector("menu.controls-dropdown");
+  if (!menu) return;
+
+  // Avoid duplicates
+  if (menu.querySelector('[data-action="createHandoutNote"]')) return;
+
+  const li = document.createElement("li");
+  li.classList.add("header-control");
+  li.setAttribute("data-action", "createHandoutNote");
+  li.innerHTML = `
+    <button type="button" class="control">
+      <i class="control-icon fa-fw fa-solid fa-file-image"></i>
+      <span class="control-label">Create Handout Note</span>
+    </button>
+  `;
+
+  // Insert the new option
+  menu.appendChild(li);
+
+  // Add click listener
+  li.addEventListener("click", (event) => {
+    event.preventDefault();
+    event.stopPropagation();
+    
+    // Find the image source within the popout
+    const img = element.querySelector("section.window-content img") || element.querySelector("img");
+    const src = img?.getAttribute("src") || img?.src;
+    
+    if (src) {
+      createHandoutNoteFromImage(src);
+      // Optional: close the dropdown after clicking
+      menu.classList.remove("expanded");
+    } else {
+      ui.notifications.warn("Investigation Board: Could not resolve image source from popout.");
+    }
+  });
 });

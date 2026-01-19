@@ -53,7 +53,7 @@ export function getEffectiveScale() {
   const autoFactor = width / 3070;
   
   // Return combined scale, clamped to reasonable range
-  return Math.clamped(baseScale * autoFactor, 0.1, 5.0);
+  return Math.clamp(baseScale * autoFactor, 0.1, 5.0);
 }
 
 export function truncateText(text, font, noteType, currentFontSize) {

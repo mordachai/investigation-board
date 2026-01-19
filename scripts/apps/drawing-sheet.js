@@ -337,7 +337,7 @@ export class CustomDrawingSheet extends DrawingConfig {
               }
             }
           }
-        }).browse();
+        }).render(true);
       });
     }
 
