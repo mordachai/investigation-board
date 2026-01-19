@@ -5,6 +5,10 @@
 
 A Foundry VTT module that lets everyone create, edit, and move sticky and photo notes on the scene. A must-have for investigative games like City of Mist, Call of Cthulhu, and all your conspiracy adventures.
 
+## CHECK OUT THE VIDEO ↓ 
+
+https://github.com/user-attachments/assets/9d578c0b-380e-4942-91fc-0a43d6c27296
+
 <img width="1200" height="655" alt="image" src="https://github.com/user-attachments/assets/329f44f1-0c5a-455e-b3d1-d585cc3ed665" />
 
 ## NEW FEATURE >> Automatic Scene Scale:
@@ -64,10 +68,6 @@ Connecting lines will always have the player's Foundry color initially. You can 
 **REMEMBER: YOU NEED TO BE IN DRAW MODE TO MAKE ALL OF THIS**
 
 -----
-
-## CHECK OUT THE VIDEO ↓ 
-
-https://github.com/user-attachments/assets/ee486ed2-040f-4d93-a379-e162cf052986
 
 ## How to Use
 
