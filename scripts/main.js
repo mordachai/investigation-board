@@ -826,3 +826,95 @@ Hooks.on("canvasReady", () => {
     drawAllConnectionLines();
   }, 100);
 });
+
+/**
+ * Adds "Create Handout Note" to the existing context menu of images in Journal Sheets.
+ * Modifies the existing ContextMenu instance found in the app.
+ */
+function _addJournalImageContext(app, html, data) {
+  if (!game.user.isGM) return;
+
+  // Wait for the next tick to ensure context menus are fully registered by the sheet
+  setTimeout(() => {
+    if (!app.contextMenus) return;
+
+    // Find the menu that has "Show to Players"
+    const menu = app.contextMenus.find(m => m.menuItems.some(i => i.name === "Show to Players" || i.name === "OWNERSHIP.ShowAll"));
+    
+    if (menu) {
+      // Avoid duplicates
+      if (menu.menuItems.find(i => i.name === "Create Handout Note")) return;
+
+      menu.menuItems.push({
+        name: "Create Handout Note",
+        icon: '<i class="fas fa-file-image"></i>',
+        callback: (li) => {
+          const el = li[0] || li;
+          // The target might be the img itself or a wrapper depending on Foundry version/sheet
+          const img = el.tagName === "IMG" ? el : el.querySelector("img");
+          const src = img?.getAttribute("src") || img?.src;
+          
+          if (src) {
+             createHandoutNoteFromImage(src);
+          } else {
+             ui.notifications.warn("Investigation Board: Could not find image source.");
+          }
+        },
+        condition: (li) => {
+          const el = li[0] || li;
+          const img = el.tagName === "IMG" ? el : el.querySelector("img");
+          return !!img;
+        }
+      });
+    }
+  }, 100);
+}
+
+// Hooks to attach the context menu to Journals
+Hooks.on("renderJournalSheet", _addJournalImageContext);
+Hooks.on("renderJournalPageSheet", _addJournalImageContext);
+
+/**
+ * Adds "Create Handout Note" to the Image Popout header menu (the ellipsis/3-dots menu).
+ */
+Hooks.on("renderImagePopout", (app, html, data) => {
+  if (!game.user.isGM) return;
+
+  const element = html[0] || html;
+  const menu = element.querySelector("menu.controls-dropdown");
+  if (!menu) return;
+
+  // Avoid duplicates
+  if (menu.querySelector('[data-action="createHandoutNote"]')) return;
+
+  const li = document.createElement("li");
+  li.classList.add("header-control");
+  li.setAttribute("data-action", "createHandoutNote");
+  li.innerHTML = `
+    <button type="button" class="control">
+      <i class="control-icon fa-fw fa-solid fa-file-image"></i>
+      <span class="control-label">Create Handout Note</span>
+    </button>
+  `;
+
+  // Insert the new option
+  menu.appendChild(li);
+
+  // Add click listener
+  li.addEventListener("click", (event) => {
+    event.preventDefault();
+    event.stopPropagation();
+    
+    // Find the image source within the popout
+    const img = element.querySelector("section.window-content img") || element.querySelector("img");
+    const src = img?.getAttribute("src") || img?.src;
+    
+    if (src) {
+      createHandoutNoteFromImage(src);
+      // Optional: close the dropdown after clicking
+      menu.classList.remove("expanded");
+    } else {
+      ui.notifications.warn("Investigation Board: Could not resolve image source from popout.");
+    }
+  });
+});
