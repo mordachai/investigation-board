@@ -13,7 +13,9 @@ https://github.com/user-attachments/assets/9d578c0b-380e-4942-91fc-0a43d6c27296
 
 ## NEW FEATURE >> Handout Notes from Images in Journals:
 
-Journals, specially the ones containing adventures are full of images. Now instead of just showing the pretty images to the players you can pass them around as handout notes.
+Journals, specially the ones containing adventures can be full of images. Now instead of just showing the pretty images to the players you can pass them around as handout notes.
+
+<img width="900" height="692" alt="image" src="https://github.com/user-attachments/assets/d752e887-e9be-4c37-b50a-1c6b6b7c4d1a" />
 
 ------
 
