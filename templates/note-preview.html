@@ -53,12 +53,13 @@
     {{/if}}
 
     {{#if showSeparateText}}
-        <div class="preview-text-container {{fontClass}} {{#if backgroundPath}}has-background{{/if}} {{#if (eq noteType "sticky")}}sticky-note-tinted{{/if}}"
-             style="{{#if (eq noteType "sticky")}}--sticky-tint: {{tint}};{{/if}}">
+        <div class="preview-text-container {{fontClass}} {{#if backgroundPath}}has-background{{/if}}">
             {{#if backgroundPath}}
                 {{#if (eq noteType "sticky")}}
-                    <div class="sticky-tint-layer">
-                        <img src="{{backgroundPath}}" alt="Background" />
+                    <div class="sticky-paper-container">
+                        <div class="sticky-tint-mask" style="background-color: {{tint}}; -webkit-mask-image: url('{{backgroundPath}}'); mask-image: url('{{backgroundPath}}'); --sticky-tint: {{tint}};">
+                            <img src="{{backgroundPath}}" class="sticky-texture-overlay" alt="Sticky Note Texture" />
+                        </div>
                     </div>
                 {{else}}
                     <img src="{{backgroundPath}}" class="preview-background-img" alt="Background" />

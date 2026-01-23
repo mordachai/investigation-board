@@ -1,4 +1,4 @@
-import { MODULE_ID } from "./config.js";
+import { MODULE_ID, STICKY_TINTS, INK_COLORS } from "./config.js";
 
 export const registerSettings = function() {
 
@@ -222,5 +222,31 @@ export const registerSettings = function() {
         config: true,
         type: Boolean,
         default: true
+    });
+
+    game.settings.register(MODULE_ID, "defaultNoteColor", {
+        name: "Default Note Color (Sticky)",
+        hint: "The default color for newly created sticky notes.",
+        scope: "client",
+        config: true,
+        type: String,
+        choices: Object.keys(STICKY_TINTS).reduce((acc, key) => {
+            acc[STICKY_TINTS[key]] = key.charAt(0).toUpperCase() + key.slice(1);
+            return acc;
+        }, {}),
+        default: "#ffffff"
+    });
+
+    game.settings.register(MODULE_ID, "defaultInkColor", {
+        name: "Default Ink Color",
+        hint: "The default ink color for text on newly created notes.",
+        scope: "client",
+        config: true,
+        type: String,
+        choices: Object.keys(INK_COLORS).reduce((acc, key) => {
+            acc[INK_COLORS[key]] = key.charAt(0).toUpperCase() + key.slice(1);
+            return acc;
+        }, {}),
+        default: "#000000"
     });
 };

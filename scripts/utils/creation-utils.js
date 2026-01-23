@@ -74,6 +74,13 @@ export async function createNote(noteType, { x = null, y = null } = {}) {
                     : (game.settings.get(MODULE_ID, `${noteType}NoteDefaultText`) || "Notes");
 
   const extraFlags = {};
+  
+  // Apply default colors from settings
+  if (noteType !== "handout" && noteType !== "pin") {
+    extraFlags.tint = game.settings.get(MODULE_ID, "defaultNoteColor") || "#ffffff";
+    extraFlags.textColor = game.settings.get(MODULE_ID, "defaultInkColor") || "#000000";
+  }
+
   // Set default font size to 9 for index cards
   if (noteType === "index") {
     extraFlags.fontSize = 9;
@@ -164,6 +171,7 @@ export async function createPhotoNoteFromActor(actor, isUnknown = false) {
   const imagePath = actor.img || "modules/investigation-board/assets/placeholder.webp";
   const extraFlags = {
     image: imagePath,
+    textColor: game.settings.get(MODULE_ID, "defaultInkColor") || "#000000",
     ...(isUnknown ? { unknown: true } : {})
   };
 
@@ -232,7 +240,10 @@ export async function createPhotoNoteFromScene(targetScene) {
   const displayName = targetScene.navName || targetScene.name || "Unknown Location";
   const imagePath = targetScene.background?.src || "modules/investigation-board/assets/placeholder.webp";
 
-  const extraFlags = { image: imagePath };
+  const extraFlags = { 
+    image: imagePath,
+    textColor: game.settings.get(MODULE_ID, "defaultInkColor") || "#000000"
+  };
 
   const created = await collaborativeCreate({
     type: "r",
@@ -427,7 +438,10 @@ export async function createPhotoNoteFromItem(item) {
   const displayName = item.name || "Unknown Item";
   const imagePath = item.img || "modules/investigation-board/assets/placeholder.webp";
 
-  const extraFlags = { image: imagePath };
+  const extraFlags = { 
+    image: imagePath,
+    textColor: game.settings.get(MODULE_ID, "defaultInkColor") || "#000000"
+  };
 
   const created = await collaborativeCreate({
     type: "r",
@@ -565,6 +579,9 @@ export async function importFolderAsNotes(folder) {
     const y = startY + row * (height + spacing);
 
     let noteData = null;
+    const defaultTint = game.settings.get(MODULE_ID, "defaultNoteColor") || "#ffffff";
+    const defaultInk = game.settings.get(MODULE_ID, "defaultInkColor") || "#000000";
+
     if (type === "Actor") {
       const displayName = getActorDisplayName(doc);
       const imagePath = doc.img || "modules/investigation-board/assets/placeholder.webp";
@@ -572,7 +589,9 @@ export async function importFolderAsNotes(folder) {
         type: "photo",
         text: displayName,
         linkedObject: `@UUID[${doc.uuid}]{${displayName}}`,
-        image: imagePath
+        image: imagePath,
+        textColor: defaultInk,
+        tint: "#ffffff"
       };
     } else if (type === "Item") {
       const displayName = doc.name || "Unknown Item";
@@ -581,7 +600,9 @@ export async function importFolderAsNotes(folder) {
         type: "photo",
         text: displayName,
         linkedObject: `@UUID[${doc.uuid}]{${displayName}}`,
-        image: imagePath
+        image: imagePath,
+        textColor: defaultInk,
+        tint: "#ffffff"
       };
     } else if (type === "Scene") {
       const displayName = doc.navName || doc.name || "Unknown Location";
@@ -590,7 +611,9 @@ export async function importFolderAsNotes(folder) {
         type: "photo",
         text: displayName,
         linkedObject: `@UUID[${doc.uuid}]{${displayName}}`,
-        image: imagePath
+        image: imagePath,
+        textColor: defaultInk,
+        tint: "#ffffff"
       };
     } else if (type === "Playlist") { // doc is a PlaylistSound
       const imagePath = cassetteImages[i % cassetteImages.length];
@@ -600,7 +623,8 @@ export async function importFolderAsNotes(folder) {
         image: imagePath,
         audioPath: doc.path,
         linkedObject: `@UUID[${doc.uuid}]{${doc.name}}`,
-        audioEffectEnabled: applyLoFi
+        audioEffectEnabled: applyLoFi,
+        textColor: defaultInk
       };
     }
 
@@ -694,6 +718,8 @@ export async function importPlaylistAsNotes(playlist) {
     cassetteImages.push(await _getRandomCassetteImage());
   }
 
+  const defaultInk = game.settings.get(MODULE_ID, "defaultInkColor") || "#000000";
+
   for (let i = 0; i < documents.length; i++) {
     const doc = documents[i];
     const col = i % cols;
@@ -709,7 +735,8 @@ export async function importPlaylistAsNotes(playlist) {
       image: imagePath,
       audioPath: doc.path,
       linkedObject: `@UUID[${doc.uuid}]{${doc.name}}`,
-      audioEffectEnabled: applyLoFi
+      audioEffectEnabled: applyLoFi,
+      textColor: defaultInk
     };
 
     createDataArray.push({
