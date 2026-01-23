@@ -80,6 +80,8 @@ export class NotePreviewer extends HandlebarsApplicationMixin(ApplicationV2) {
       fontClass: fontClass,
       previewFontSize: (noteData?.fontSize || 15) * 2.5 * fontBoost,
       showSeparateText: showSeparateText,
+      tint: noteData?.tint || "#ffffff",
+      textColor: noteData?.textColor || "#000000",
       isGM: game.user.isGM,
       isGlobalActive: isGlobalActive,
       linkedObject: noteData?.linkedObject || "",

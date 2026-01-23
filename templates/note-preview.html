@@ -9,7 +9,7 @@
                     </div>
                     
                     {{#if (ne boardMode "futuristic")}}
-                        <div class="photo-frame-text {{fontClass}}">
+                        <div class="photo-frame-text {{fontClass}}" style="color: {{textColor}};">
                             {{text}}
                         </div>
                     {{/if}}
@@ -53,15 +53,23 @@
     {{/if}}
 
     {{#if showSeparateText}}
-        <div class="preview-text-container {{fontClass}} {{#if backgroundPath}}has-background{{/if}}">
+        <div class="preview-text-container {{fontClass}} {{#if backgroundPath}}has-background{{/if}} {{#if (eq noteType "sticky")}}sticky-note-tinted{{/if}}"
+             style="{{#if (eq noteType "sticky")}}--sticky-tint: {{tint}};{{/if}}">
             {{#if backgroundPath}}
-                <img src="{{backgroundPath}}" class="preview-background-img" alt="Background" />
+                {{#if (eq noteType "sticky")}}
+                    <div class="sticky-tint-layer">
+                        <img src="{{backgroundPath}}" alt="Background" />
+                    </div>
+                {{else}}
+                    <img src="{{backgroundPath}}" class="preview-background-img" alt="Background" />
+                {{/if}}
             {{/if}}
-            <div class="preview-text" style="font-size: {{previewFontSize}}px;">{{text}}</div>
+            <div class="preview-text" style="font-size: {{previewFontSize}}px; color: {{textColor}};">{{text}}</div>
         </div>
     {{/if}}
 
-    {{#if enrichedLinkedObject}}
+        
+        {{#if enrichedLinkedObject}}
         <div class="preview-footer">
             <div class="preview-link-label">Linked Reference:</div>
             <div class="preview-link">

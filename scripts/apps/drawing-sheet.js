@@ -1,4 +1,4 @@
-import { MODULE_ID, PIN_COLORS } from "../config.js";
+import { MODULE_ID, PIN_COLORS, STICKY_TINTS, INK_COLORS } from "../config.js";
 import { collaborativeUpdate } from "../utils/socket-handler.js";
 import { applyTapeEffectToSound } from "../utils/audio-utils.js";
 import { 
@@ -67,6 +67,10 @@ export class CustomDrawingSheet extends DrawingConfig {
     context.font = customData.font;
     context.fontSize = customData.fontSize;
     context.audioEffectEnabled = customData.audioEffectEnabled;
+    context.tint = customData.tint;
+    context.textColor = customData.textColor;
+    context.stickyTints = customData.stickyTints;
+    context.inkColors = customData.inkColors;
 
     // Enrich the linked object for display
     context.enrichedLinkedObject = context.linkedObject ? await TextEditor.enrichHTML(context.linkedObject, { async: true }) : "";
@@ -116,6 +120,10 @@ export class CustomDrawingSheet extends DrawingConfig {
       image: this.document.flags[MODULE_ID]?.image || (noteType === "handout" ? "modules/investigation-board/assets/newhandout.webp" : "modules/investigation-board/assets/placeholder.webp"),
       font: this.document.flags[MODULE_ID]?.font || game.settings.get(MODULE_ID, "font"),
       fontSize: this.document.flags[MODULE_ID]?.fontSize || defaultFontSize,
+      tint: this.document.flags[MODULE_ID]?.tint || "#ffffff",
+      textColor: this.document.flags[MODULE_ID]?.textColor || "#000000",
+      stickyTints: STICKY_TINTS,
+      inkColors: INK_COLORS,
       connections: formattedConnections,
       noteTypes: {
         sticky: "Sticky Note",
@@ -341,6 +349,35 @@ export class CustomDrawingSheet extends DrawingConfig {
       });
     }
 
+    // Handle color selection
+    this.element.querySelectorAll(".color-option").forEach(opt => {
+      opt.addEventListener("click", async (ev) => {
+        ev.preventDefault();
+        const color = opt.dataset.color;
+        const type = opt.dataset.type; // 'tint' or 'textColor'
+        const hiddenInput = this.element.querySelector(`input[name='${type}']`);
+        
+        if (hiddenInput) {
+          hiddenInput.value = color;
+          
+          // Update UI
+          opt.parentElement.querySelectorAll(".color-option").forEach(o => o.classList.remove("active"));
+          opt.classList.add("active");
+
+          // Real-time update (collaborative)
+          await collaborativeUpdate(this.document.id, {
+            [`flags.${MODULE_ID}.${type}`]: color
+          });
+
+          // Refresh the drawing on canvas
+          const drawing = canvas.drawings.get(this.document.id);
+          if (drawing) {
+            await drawing.refresh();
+          }
+        }
+      });
+    });
+
     const form = this.element.querySelector("form");
     if (form) {
       // Handle cancel button
@@ -416,6 +453,14 @@ export class CustomDrawingSheet extends DrawingConfig {
           if (data.fontSize !== undefined) {
             updates[`flags.${MODULE_ID}.fontSize`] = parseInt(data.fontSize);
           }
+        }
+
+        if (data.tint !== undefined) {
+          updates[`flags.${MODULE_ID}.tint`] = data.tint;
+        }
+
+        if (data.textColor !== undefined) {
+          updates[`flags.${MODULE_ID}.textColor`] = data.textColor;
         }
 
         // Process connection color changes

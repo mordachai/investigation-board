@@ -617,7 +617,7 @@ export class CustomDrawing extends Drawing {
             this.bgShadow.texture = texture;
             this.bgShadow.width = drawingWidth;
             this.bgShadow.height = drawingHeight;
-            this.bgShadow.tint = 0x000000;
+            try { this.bgShadow.tint = 0x000000; } catch(e) {}
             this.bgShadow.alpha = 0.4;
             this.bgShadow.position.set(6, 6); // Offset shadow
             this.bgShadow.filters = [new PIXI.BlurFilter(2)];
@@ -920,7 +920,7 @@ export class CustomDrawing extends Drawing {
           this.bgShadow.texture = texture;
           this.bgShadow.width = width;
           this.bgShadow.height = height;
-          this.bgShadow.tint = 0x000000;
+          try { this.bgShadow.tint = 0x000000; } catch(e) {}
           this.bgShadow.alpha = 0.4;
           this.bgShadow.position.set(6, 6);
           this.bgShadow.filters = [new PIXI.BlurFilter(3)];
@@ -930,6 +930,18 @@ export class CustomDrawing extends Drawing {
           this.bgSprite.texture = texture;
           this.bgSprite.width = width;
           this.bgSprite.height = height;
+
+          // Apply tint for sticky notes
+          if (noteData.type === "sticky") {
+            const tintColor = noteData.tint || "#ffffff";
+            try {
+              this.bgSprite.tint = tintColor;
+            } catch (e) {
+              this.bgSprite.tint = 0xFFFFFF;
+            }
+          } else {
+            this.bgSprite.tint = 0xFFFFFF;
+          }
         }
       }
     } catch (err) {
@@ -1057,7 +1069,7 @@ export class CustomDrawing extends Drawing {
     const textStyle = new PIXI.TextStyle({
       fontFamily: font,
       fontSize: fontSize,
-      fill: "#000000",
+      fill: noteData.textColor || "#000000",
       wordWrap: true,
       wordWrapWidth: width - 2, // Increased from -15 to give more room for italics
       align: "center",

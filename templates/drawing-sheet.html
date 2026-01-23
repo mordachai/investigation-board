@@ -5,6 +5,39 @@
       <textarea name="text" rows="4" placeholder="Enter note text...">{{text}}</textarea>
     </div>
 
+    {{!-- Color Selection --}}
+    <div class="form-group color-settings">
+      {{#if (eq noteType "sticky")}}
+      <div class="color-mosaic-group">
+        <label>Note Color:</label>
+        <div class="color-mosaic sticky-tints">
+          {{#each stickyTints}}
+            <div class="color-option {{#if (eq ../tint this)}}active{{/if}}" 
+                 data-color="{{this}}" 
+                 data-type="tint"
+                 style="background-color: {{this}};" 
+                 title="{{@key}}"></div>
+          {{/each}}
+          <input type="hidden" name="tint" value="{{tint}}" />
+        </div>
+      </div>
+      {{/if}}
+
+      <div class="color-mosaic-group">
+        <label>Ink Color:</label>
+        <div class="color-mosaic ink-colors">
+          {{#each inkColors}}
+            <div class="color-option {{#if (eq ../textColor this)}}active{{/if}}" 
+                 data-color="{{this}}" 
+                 data-type="textColor"
+                 style="background-color: {{this}};" 
+                 title="{{@key}}"></div>
+          {{/each}}
+          <input type="hidden" name="textColor" value="{{textColor}}" />
+        </div>
+      </div>
+    </div>
+
     {{!-- Font Settings --}}
     <div class="form-group font-settings">
       <div class="font-select-group">
