@@ -11,6 +11,12 @@ https://github.com/user-attachments/assets/9d578c0b-380e-4942-91fc-0a43d6c27296
 
 <img width="1200" height="655" alt="image" src="https://github.com/user-attachments/assets/329f44f1-0c5a-455e-b3d1-d585cc3ed665" />
 
+## NEW FEATURE >> Note Colors:
+
+Sticky notes now have color options. You can also choose the ink color for any note. Included options in game settings to let each player set their own default color set.
+
+------
+
 ## NEW FEATURE >> Handout Notes from Images in Journals:
 
 Journals, specially the ones containing adventures can be full of images. Now instead of just showing the pretty images to the players you can pass them around as handout notes.
