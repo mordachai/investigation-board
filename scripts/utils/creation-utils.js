@@ -502,9 +502,10 @@ export async function importFolderAsNotes(folder) {
 
   // Application V2 Dialog for confirmation with optional checkbox for lo-fi
   const isPlaylistFolder = type === "Playlist";
-  
+
+  const title = game.i18n.localize("investigation-board.bulkImport")+' '+'${folder.name}';
   const result = await foundry.applications.api.DialogV2.wait({
-    window: { title: `Bulk Import: ${folder.name}` },
+    window: { title: title },
     content: `
       <p>Do you want to import all <b>${documents.length}</b> ${isPlaylistFolder ? "sounds" : "items"} from the folder "<b>${folder.name}</b>" as investigation notes?</p>
       ${isPlaylistFolder ? `
@@ -667,8 +668,9 @@ export async function importPlaylistAsNotes(playlist) {
     return;
   }
 
+  const title = game.i18n.localize("investigation-board.bulkImport")+' '+'${playlist.name}';
   const result = await foundry.applications.api.DialogV2.wait({
-    window: { title: `Bulk Import: ${playlist.name}` },
+    window: { title: title },
     content: `
       <p>Do you want to import all <b>${documents.length}</b> sounds from the playlist "<b>${playlist.name}</b>" as investigation notes?</p>
       <div class="form-group" style="margin-top: 10px;">

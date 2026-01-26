@@ -1,38 +1,38 @@
 <div class="ib-setup-warning">
-    <p>To allow <strong>all players</strong> to fully use the Investigation Board, consider updating World Permissions in <b>Game Settings >> User Management >> Configure Permissions</b>.</p>
+    <p>{{{ localize "investigation-board.html.toAllowAllPlayers" }}}</p>
 
     <div class="permissions-summary">
         <div class="permission-item {{#if drawingPerm}}enabled{{else}}disabled{{/if}}">
             <i class="fas {{#if drawingPerm}}fa-check-circle{{else}}fa-exclamation-triangle{{/if}}"></i>
-            <span><strong>Use Drawing Tools</strong> (Needed to create notes/connections)</span>
+            <span>{{{ localize "investigation-board.html.useDrawingTools" }}}</span>
         </div>
         <div class="permission-item {{#if browsePerm}}enabled{{else}}disabled{{/if}}">
             <i class="fas {{#if browsePerm}}fa-check-circle{{else}}fa-exclamation-triangle{{/if}}"></i>
-            <span><strong>Browse Files</strong> (Needed to select assets)</span>
+            <span>{{{ localize "investigation-board.html.browseFiles" }}}</span>
         </div>
         <div class="permission-item {{#if uploadPerm}}enabled{{else}}disabled{{/if}}">
             <i class="fas {{#if uploadPerm}}fa-check-circle{{else}}fa-exclamation-triangle{{/if}}"></i>
-            <span><strong>Upload Files</strong> (Needed to upload assets)</span>
+            <span>{{{ localize "investigation-board.html.uploadFiles" }}}</span>
         </div>
     </div>
 
     <p class="permission-explanation">
         <i class="fas fa-info-circle"></i>
-        To allow players to <strong>move, edit, and connect</strong> notes, you only need to enable <strong>Use Drawing Tools</strong>. This permission is harmless as it only affects canvas drawings and does not grant access to your server files.
+        {{{ localize "investigation-board.html.toAllowPlayersToMove" }}}
     </p>
 
     <hr>
 
-    <h3>Users with Missing Permissions:</h3>
+    <h3>{{ localize "investigation-board.html.UsersWithMissingPermissions" }}</h3>
     <div class="user-permissions-table-container">
         <table class="ib-permissions-table">
             <thead>
                 <tr>
-                    <th>User</th>
-                    <th>Role</th>
-                    <th class="text-center">Draw</th>
-                    <th class="text-center">Browse</th>
-                    <th class="text-center">Upload</th>
+                    <th>{{ localize "investigation-board.html.user" }}</th>
+                    <th>{{ localize "investigation-board.html.role" }}</th>
+                    <th class="text-center">{{ localize "investigation-board.html.draw" }}</th>
+                    <th class="text-center">{{ localize "investigation-board.html.browse" }}</th>
+                    <th class="text-center">{{ localize "investigation-board.html.upload" }}</th>
                 </tr>
             </thead>
             <tbody>
@@ -46,7 +46,7 @@
                 </tr>
                 {{else}}
                 <tr>
-                    <td colspan="5" class="text-center">No active players missing permissions.</td>
+                    <td colspan="5" class="text-center">{{ localize "investigation-board.html.noActivePlayerMisssingPerm" }}</td>
                 </tr>
                 {{/each}}
             </tbody>
@@ -55,15 +55,15 @@
 
     <p class="security-note">
         <i class="fas fa-user-shield"></i>
-        <strong>Security Note:</strong> Enabling file permissions gives players access to your server's file system through the File Picker.
+        {{{ localize "investigation-board.html.securityNote" }}}
     </p>
 
     <div class="ib-dialog-buttons">
         <button type="button" class="ib-btn ok" data-action="ok">
-            <i class="fas fa-check"></i> Understood
+            <i class="fas fa-check"></i> {{ localize "investigation-board.html.understood" }}
         </button>
         <button type="button" class="ib-btn disable" data-action="disable">
-            <i class="fas fa-times"></i> Don't show again
+            <i class="fas fa-times"></i> {{ localize "investigation-board.html.dontShowAgain" }}
         </button>
     </div>
 </div>

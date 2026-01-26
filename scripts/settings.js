@@ -13,8 +13,8 @@ export const registerSettings = function() {
     };
 
     game.settings.register(MODULE_ID, "autoScale", {
-        name: "Automatic Scale per Scene",
-        hint: "If enabled, the module automatically calculates the ideal scale based on map width. The 'Scene Scale' slider then acts as a global multiplier.",
+        name: game.i18n.localize("investigation-board.settings.autoScale"),
+        hint: game.i18n.localize("investigation-board.settings.autoScaleHint"),
         scope: "world",
         config: true,
         type: Boolean,
@@ -23,8 +23,8 @@ export const registerSettings = function() {
     });
 
     game.settings.register(MODULE_ID, "sceneScale", {
-        name: "Scene Scale / Multiplier",
-        hint: "The fixed scale for notes (if Auto-Scale is OFF) or a global multiplier (if Auto-Scale is ON).",
+        name: game.i18n.localize("investigation-board.settings.sceneScale"),
+        hint: game.i18n.localize("investigation-board.settings.sceneScaleHint"),
         scope: "world",
         config: true,
         type: Number,
@@ -39,18 +39,18 @@ export const registerSettings = function() {
   
     // Update the pinColor setting to include a "No Pins" option.
     game.settings.register(MODULE_ID, "pinColor", {
-      name: "Pin Color",
-      hint: "Choose the color of the pin for notes. Selecting 'Random' will randomly assign a pin color. Select 'No Pins' to disable pin display.",
+      name: game.i18n.localize("investigation-board.settings.pinColor"),
+      hint: game.i18n.localize("investigation-board.settings.pinColorHint"),
       scope: "world",
       config: true,
       type: String,
       choices: {
-        random: "Random",
-        red: "Red",
-        blue: "Blue",
-        yellow: "Yellow",
-        green: "Green",
-        none: "No Pins"
+        random: game.i18n.localize("investigation-board.settings.color.random"),
+        red: game.i18n.localize("investigation-board.settings.color.red"),
+        blue: game.i18n.localize("investigation-board.settings.color.blue"),
+        yellow: game.i18n.localize("investigation-board.settings.color.yellow"),
+        green: game.i18n.localize("investigation-board.settings.color.green"),
+        none: game.i18n.localize("investigation-board.settings.color.none")
       },
       default: "random",
       onChange: () => {
@@ -61,8 +61,8 @@ export const registerSettings = function() {
     });
 
     game.settings.register(MODULE_ID, "connectionLineWidth", {
-      name: "Connection Line Width",
-      hint: "The width (in pixels) of the connection lines between notes (default: 7).",
+      name: game.i18n.localize("investigation-board.settings.connectionLineWidth"),
+      hint: game.i18n.localize("investigation-board.settings.connectionLineWidthHint"),
       scope: "world",
       config: true,
       type: Number,
@@ -70,10 +70,10 @@ export const registerSettings = function() {
       onChange: () => refreshAllDrawings()
     });
 
-    // Register existing settings
+    // Register existing investigation-board.settings
     game.settings.register(MODULE_ID, "stickyNoteWidth", {
-        name: "Sticky Note Width",
-        hint: "The width (in pixels) for all newly created sticky notes (default: 200).",
+        name: game.i18n.localize("investigation-board.settings.stickyNoteWidth"),
+        hint: game.i18n.localize("investigation-board.settings.stickyNoteWidthHint"),
         scope: "world",
         config: true,
         type: Number,
@@ -82,8 +82,8 @@ export const registerSettings = function() {
     });
 
     game.settings.register(MODULE_ID, "photoNoteWidth", {
-        name: "Photo Note Width",
-        hint: "The width (in pixels) for all newly created photo notes (default: 225).",
+        name: game.i18n.localize("investigation-board.settings.photoNoteWidth"),
+        hint: game.i18n.localize("investigation-board.settings.photoNoteWidthHint"),
         scope: "world",
         config: true,
         type: Number,
@@ -92,8 +92,8 @@ export const registerSettings = function() {
     });
 
     game.settings.register(MODULE_ID, "indexNoteWidth", {
-        name: "Index Note Width",
-        hint: "The width (in pixels) for all newly created index cards (default: 600).",
+        name: game.i18n.localize("investigation-board.settings.indexNoteWidth"),
+        hint: game.i18n.localize("investigation-board.settings.indexNoteWidthHint"),
         scope: "world",
         config: true,
         type: Number,
@@ -102,8 +102,8 @@ export const registerSettings = function() {
     });
 
     game.settings.register(MODULE_ID, "handoutNoteWidth", {
-        name: "Handout Note Width",
-        hint: "The default width (in pixels) for newly created handout notes (default: 400).",
+        name: game.i18n.localize("investigation-board.settings.handoutNoteWidth"),
+        hint: game.i18n.localize("investigation-board.settings.handoutNoteWidthHint"),
         scope: "world",
         config: true,
         type: Number,
@@ -112,8 +112,8 @@ export const registerSettings = function() {
     });
 
     game.settings.register(MODULE_ID, "handoutNoteHeight", {
-        name: "Handout Note Height",
-        hint: "The default height (in pixels) for newly created handout notes (default: 400).",
+        name: game.i18n.localize("investigation-board.settings.handoutNoteHeight"),
+        hint: game.i18n.localize("investigation-board.settings.handoutNoteHeightHint"),
         scope: "world",
         config: true,
         type: Number,
@@ -122,8 +122,8 @@ export const registerSettings = function() {
     });
 
     game.settings.register(MODULE_ID, "baseFontSize", {
-        name: "Base Font Size",
-        hint: "The font size (in pixels) for text when the note width is at its default size (default: 16).",
+        name: game.i18n.localize("investigation-board.settings.baseFontSize"),
+        hint: game.i18n.localize("investigation-board.settings.baseFontSizeHint"),
         scope: "world",
         config: true,
         type: Number,
@@ -132,8 +132,8 @@ export const registerSettings = function() {
     });
 
     game.settings.register(MODULE_ID, "font", {
-        name: "Font",
-        hint: "Choose the font to be used in notes.",
+        name: game.i18n.localize("investigation-board.settings.font"),
+        hint: game.i18n.localize("investigation-board.settings.fontHint"),
         scope: "world",
         config: true,
         type: String,
@@ -150,8 +150,8 @@ export const registerSettings = function() {
     });
 
     game.settings.register(MODULE_ID, "characterNameKey", {
-        name: "Character Name Key",
-        hint: "Specify the key path to retrieve the name (e.g., 'prototypeToken.name' or 'system.alias' for Blades in the Dark). If empty, defaults to 'name'.",
+        name: game.i18n.localize("investigation-board.settings.characterNameKey"),
+        hint: game.i18n.localize("investigation-board.settings.characterNameKeyHint"),
         scope: "world",
         config: true,
         default: "prototypeToken.name",
@@ -159,8 +159,8 @@ export const registerSettings = function() {
       });
 
     game.settings.register(MODULE_ID, "stickyNoteDefaultText", {
-        name: "Default Sticky Note Text",
-        hint: "The default text to use for new sticky notes.",
+        name: game.i18n.localize("investigation-board.settings.stickyNoteDefaultText"),
+        hint: game.i18n.localize("investigation-board.settings.stickyNoteDefaultTextHint"),
         scope: "world",
         config: true,
         type: String,
@@ -169,8 +169,8 @@ export const registerSettings = function() {
     });
 
     game.settings.register(MODULE_ID, "photoNoteDefaultText", {
-        name: "Default Photo Note Text",
-        hint: "The default text to use for new photo notes.",
+        name: game.i18n.localize("investigation-board.settings.photoNoteDefaultText"),
+        hint: game.i18n.localize("investigation-board.settings.photoNoteDefaultTextHint"),
         scope: "world",
         config: true,
         type: String,
@@ -179,8 +179,8 @@ export const registerSettings = function() {
     });
 
     game.settings.register(MODULE_ID, "indexNoteDefaultText", {
-        name: "Default Index Note Text",
-        hint: "The default text to use for new index notes.",
+        name: game.i18n.localize("investigation-board.settings.indexNoteDefaultText"),
+        hint: game.i18n.localize("investigation-board.settings.indexNoteDefaultTextHint"),
         scope: "world",
         config: true,
         type: String,
@@ -189,8 +189,8 @@ export const registerSettings = function() {
     });
 
     game.settings.register(MODULE_ID, "mediaNoteDefaultText", {
-        name: "Default Media Note Text",
-        hint: "The default text to use for new media notes.",
+        name: game.i18n.localize("investigation-board.settings.mediaNoteDefaultText"),
+        hint: game.i18n.localize("investigation-board.settings.mediaNoteDefaultTextHint"),
         scope: "world",
         config: true,
         type: String,
@@ -200,10 +200,10 @@ export const registerSettings = function() {
 
     // Register base font size and character limits
     game.settings.register(MODULE_ID, "baseCharacterLimits", {
-        name: "Base Character Limits",
-        hint: "The base character limits for each font and note type. Edit this JSON to customize.",
+        name: game.i18n.localize("investigation-board.settings.baseCharacterLimits"),
+        hint: game.i18n.localize("investigation-board.settings.baseCharacterLimitsHint"),
         scope: "world",
-        config: false, // Hidden from the settings UI
+        config: false, // Hidden from the investigation-board.settings UI
         type: Object,
         default: {
             "Rock Salt": { sticky: 90, photo: 20, index: 210 },
@@ -216,8 +216,8 @@ export const registerSettings = function() {
     });
 
     game.settings.register(MODULE_ID, "showSetupWarning", {
-        name: "Show Setup Warning",
-        hint: "Whether to show the setup warning for GMs about player permissions.",
+        name: game.i18n.localize("investigation-board.settings.showSetupWarning"),
+        hint: game.i18n.localize("investigation-board.settings.showSetupWarningHint"),
         scope: "world",
         config: true,
         type: Boolean,
@@ -225,21 +225,22 @@ export const registerSettings = function() {
     });
 
     game.settings.register(MODULE_ID, "defaultNoteColor", {
-        name: "Default Note Color (Sticky)",
-        hint: "The default color for newly created sticky notes.",
+        name: game.i18n.localize("investigation-board.settings.defaultNoteColor"),
+        hint: game.i18n.localize("investigation-board.settings.defaultNoteColorHint"),
         scope: "client",
         config: true,
         type: String,
         choices: Object.keys(STICKY_TINTS).reduce((acc, key) => {
-            acc[STICKY_TINTS[key]] = key.charAt(0).toUpperCase() + key.slice(1);
+            acc[STICKY_TINTS[key]] = game.i18n.localize("investigation-board.settings.color." + key);
+            // acc[STICKY_TINTS[key]] = game.i18n.localize("investigation-board.settings.color." + key.charAt(0).toUpperCase() + key.slice(1));
             return acc;
         }, {}),
         default: "#ffffff"
     });
 
     game.settings.register(MODULE_ID, "defaultInkColor", {
-        name: "Default Ink Color",
-        hint: "The default ink color for text on newly created notes.",
+        name: game.i18n.localize("investigation-board.settings.defaultInkColor"),
+        hint: game.i18n.localize("investigation-board.settings.defaultInkColorHint"),
         scope: "client",
         config: true,
         type: String,

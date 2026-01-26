@@ -155,7 +155,7 @@ Hooks.on("getSceneControlButtons", (controls) => {
     // Add a separator for visual grouping (optional)
     controls.drawings.tools.createStickyNote = {
       name: "createStickyNote",
-      title: "Create Sticky Note",
+      title: game.i18n.localize("investigation-board.createStickyNote"),
       icon: "fas fa-sticky-note",
       onChange: () => createNote("sticky"),
       button: true
@@ -163,7 +163,7 @@ Hooks.on("getSceneControlButtons", (controls) => {
 
     controls.drawings.tools.createPhotoNote = {
       name: "createPhotoNote",
-      title: "Create Photo Note",
+      title: game.i18n.localize("investigation-board.createPhotoNote"),
       icon: "fa-solid fa-camera-polaroid",
       onChange: () => createNote("photo"),
       button: true
@@ -171,7 +171,7 @@ Hooks.on("getSceneControlButtons", (controls) => {
 
     controls.drawings.tools.createIndexCard = {
       name: "createIndexCard",
-      title: "Create Index Card",
+      title: game.i18n.localize("investigation-board.createIndexCard"),
       icon: "fa-regular fa-subtitles",
       onChange: () => createNote("index"),
       button: true
@@ -179,7 +179,7 @@ Hooks.on("getSceneControlButtons", (controls) => {
 
     controls.drawings.tools.createHandout = {
       name: "createHandout",
-      title: "Create Handout Note",
+      title: game.i18n.localize("investigation-board.createHandout"),
       icon: "fas fa-file-image",
       onChange: () => createNote("handout"),
       button: true
@@ -187,7 +187,7 @@ Hooks.on("getSceneControlButtons", (controls) => {
 
     controls.drawings.tools.createMediaNote = {
       name: "createMediaNote",
-      title: "Create Media Note",
+      title: game.i18n.localize("investigation-board.createMediaNote"),
       icon: "fas fa-cassette-tape",
       onChange: () => createNote("media"),
       button: true
@@ -195,7 +195,7 @@ Hooks.on("getSceneControlButtons", (controls) => {
 
     controls.drawings.tools.createPinOnly = {
       name: "createPinOnly",
-      title: "Create Pin Only",
+      title: game.i18n.localize("investigation-board.createPinOnly"),
       icon: "fas fa-thumbtack",
       onChange: () => createNote("pin"),
       button: true
@@ -301,7 +301,7 @@ Hooks.once("ready", () => {
         const file = item.getAsFile();
         if (!file) continue;
 
-        ui.notifications.info("Investigation Board: Processing clipboard image...");
+        ui.notifications.info(game.i18n.localize("Info.IB:PCI")); // Investigation Board: Processing clipboard image...
 
         const folderPath = "assets/ib-handouts";
 
@@ -339,12 +339,12 @@ Hooks.once("ready", () => {
           // 3. Create Note
           if (response.path) {
             await createHandoutNoteFromImage(response.path);
-            ui.notifications.info("Investigation Board: Created handout from clipboard.");
+            ui.notifications.info(game.i18n.localize("info.IB:CHFCB")); // Investigation Board: Created handout from clipboard
           }
           
         } catch (err) {
           console.error("Investigation Board: Paste failed", err);
-          ui.notifications.warn("Investigation Board: Failed to upload pasted image. Check console for details.");
+          ui.notifications.warn(game.i18n.localize("warn.IB:FTUPI")); // Investigation Board: Failed to upload pasted image. Check console for details.");
         }
 
         // Only handle the first image
@@ -581,21 +581,21 @@ async function _resolveDocumentFromLi(li, collection) {
 Hooks.on("getActorContextOptions", (html, entryOptions) => {
   entryOptions.push(
     {
-      name: "Photo Note from Actor",
+      name: game.i18n.localize("investigation-board.photoNoteFromActor"), // Photo Note from Actor
       icon: '<i class="fa-solid fa-camera-polaroid"></i>',
       callback: async (li) => {
         const actor = await _resolveDocumentFromLi(li, game.actors);
         if (actor) await createPhotoNoteFromActor(actor, false);
-        else ui.notifications.warn("Investigation Board: Could not resolve Actor.");
+        else ui.notifications.warn(game.i18n.localize("investigation-board.warn.IB:CNRA")); // Investigation Board: Could not resolve Actor.
       }
     },
     {
-      name: "Unknown Photo Note from Actor",
+      name: game.i18n.localize("investigation-board.unknownPhotoNoteFromActor"), // Unknown Photo Note from Actor
       icon: '<i class="fa-solid fa-camera-polaroid"></i>',
       callback: async (li) => {
         const actor = await _resolveDocumentFromLi(li, game.actors);
         if (actor) await createPhotoNoteFromActor(actor, true);
-        else ui.notifications.warn("Investigation Board: Could not resolve Actor.");
+        else ui.notifications.warn(game.i18n.localize("investigation-board.warn.IB:CNRA")); // Investigation Board: Could not resolve Actor.
       }
     }
   );
@@ -604,12 +604,12 @@ Hooks.on("getActorContextOptions", (html, entryOptions) => {
 // Context menu hook for Item directory
 Hooks.on("getItemContextOptions", (html, entryOptions) => {
   entryOptions.push({
-    name: "Photo Note from Item",
+    name: game.i18n.localize("investigation-board.photoNoteFromItem"), // Photo Note from Item
     icon: '<i class="fa-solid fa-camera-polaroid"></i>',
     callback: async (li) => {
       const item = await _resolveDocumentFromLi(li, game.items);
       if (item) await createPhotoNoteFromItem(item);
-      else ui.notifications.warn("Investigation Board: Could not resolve Item.");
+      else ui.notifications.warn(game.i18n.localize("investigation-board.warn.IB:CNRI")); // Investigation Board: Could not resolve Item.
     }
   });
 });
@@ -617,12 +617,12 @@ Hooks.on("getItemContextOptions", (html, entryOptions) => {
 // Context menu hook for Scene directory
 Hooks.on("getSceneContextOptions", (html, entryOptions) => {
   entryOptions.push({
-    name: "Photo Note from Scene",
+    name: game.i18n.localize("investigation-board.photoNoteFromScene"), // Photo Note from Scene
     icon: '<i class="fa-solid fa-camera-polaroid"></i>',
     callback: async (li) => {
       const scene = await _resolveDocumentFromLi(li, game.scenes);
       if (scene) await createPhotoNoteFromScene(scene);
-      else ui.notifications.warn("Investigation Board: Could not resolve Scene.");
+      else ui.notifications.warn(game.i18n.localize("investigation-board.warn.IB:CNRS")); // Investigation Board: Could not resolve Scene.
     }
   });
 });
@@ -630,12 +630,12 @@ Hooks.on("getSceneContextOptions", (html, entryOptions) => {
 // Also add hook for Scene Navigation at the top
 Hooks.on("getSceneNavigationContext", (html, entryOptions) => {
   entryOptions.push({
-    name: "Photo Note from Scene",
+    name: game.i18n.localize("investigation-board.photoNoteFromScene"), // Photo Note from Scene
     icon: '<i class="fa-solid fa-camera-polaroid"></i>',
     callback: async (li) => {
       const scene = await _resolveDocumentFromLi(li, game.scenes);
       if (scene) await createPhotoNoteFromScene(scene);
-      else ui.notifications.warn("Investigation Board: Could not resolve Scene.");
+      else ui.notifications.warn(game.i18n.localize("investigation-board.warn.IB:CNRS")); // Investigation Board: Could not resolve Scene.
     }
   });
 });
@@ -643,14 +643,14 @@ Hooks.on("getSceneNavigationContext", (html, entryOptions) => {
 // Context menu hook for Journal pages
 Hooks.on("getJournalEntryPageContextOptions", (html, entryOptions) => {
   entryOptions.push({
-    name: "Create Handout Note",
+    name: game.i18n.localize("investigation-board.createHandout"), // Create Handout Note
     icon: '<i class="fas fa-file-image"></i>',
     callback: async (li) => {
       const page = _getJournalPageFromLi(li);
       if (page?.type === "image") {
         await createHandoutNoteFromPage(page);
       } else {
-        ui.notifications.warn("Only image-type journal pages can be turned into handouts.");
+        ui.notifications.warn(game.i18n.localize("investigation-board.warn.OITJP2H")); // Only image-type journal pages can be turned into handouts.
       }
     },
     condition: (li) => {
@@ -663,7 +663,7 @@ Hooks.on("getJournalEntryPageContextOptions", (html, entryOptions) => {
 // Context menu hook for Playlist sounds
 Hooks.on("getPlaylistSoundContextOptions", (html, entryOptions) => {
   entryOptions.push({
-    name: "Create Media Note",
+    name: game.i18n.localize("investigation-board.createMediaNote"), // Create Media Note
     icon: '<i class="fas fa-cassette-tape"></i>',
     callback: async (li) => {
       const sound = _getPlaylistSoundFromLi(li);
@@ -678,14 +678,14 @@ Hooks.on("getPlaylistSoundContextOptions", (html, entryOptions) => {
 Hooks.on("getPlaylistContextOptions", (html, entryOptions) => {
   console.log("Investigation Board: getPlaylistContextOptions fired");
   entryOptions.push({
-    name: "Import Playlist as Notes",
+    name: game.i18n.localize("investigation-board.importPlaylistAsNotes"), // Import Playlist as Notes
     icon: '<i class="fas fa-cassette-tape"></i>',
     callback: async (li) => {
       const playlist = await _resolveDocumentFromLi(li, game.playlists);
       if (playlist) {
         await importPlaylistAsNotes(playlist);
       } else {
-        ui.notifications.warn("Investigation Board: Could not resolve Playlist.");
+        ui.notifications.warn(game.i18n.localize("investigation-board.warn.IB:CNRPL")); // Investigation Board: Could not resolve Playlist.
       }
     },
     condition: () => game.user.isGM
@@ -694,16 +694,16 @@ Hooks.on("getPlaylistContextOptions", (html, entryOptions) => {
 
 Hooks.on("getPlaylistDirectoryEntryContext", (html, entryOptions) => {
   // Keeping this as a secondary variation for compatibility
-  if (entryOptions.find(e => e.name === "Import Playlist as Notes")) return;
+  if (entryOptions.find(e => e.name === game.i18n.localize("investigation-board.importPlaylistAsNotes"))) return;
   entryOptions.push({
-    name: "Import Playlist as Notes",
+    name: game.i18n.localize("investigation-board.importPlaylistAsNotes"), // Import Playlist as Notes
     icon: '<i class="fas fa-cassette-tape"></i>',
     callback: async (li) => {
       const playlist = await _resolveDocumentFromLi(li, game.playlists);
       if (playlist) {
         await importPlaylistAsNotes(playlist);
       } else {
-        ui.notifications.warn("Investigation Board: Could not resolve Playlist.");
+        ui.notifications.warn(game.i18n.localize("investigation-board.warn.IB:CNRPL")); // Investigation Board: Could not resolve Playlist.
       }
     },
     condition: () => game.user.isGM
@@ -727,7 +727,7 @@ async function _onImportFolderAsNotes(li) {
                    el.closest("[data-folder-id]")?.dataset.folderId;
 
   if (!folderId) {
-    console.warn("Investigation Board: Could not find folder ID on element", el);
+    console.warn(game.i18n.localize("investigation-board.warn.IB:CNFFIDOE"), el); // Investigation Board: Could not find folder ID on element.
     return;
   }
 
@@ -735,16 +735,17 @@ async function _onImportFolderAsNotes(li) {
   if (folder) {
     await importFolderAsNotes(folder);
   } else {
-    console.warn("Investigation Board: Could not find folder with ID", folderId);
+    console.warn(game.i18n.localize("investigation-board.warn.IB:CNFFWID"), folderId); // Investigation Board: Could not find folder with ID.
   }
 }
 
 const _folderHookCallback = (html, entryOptions) => {
   // Avoid duplicate entries
-  if (entryOptions.find(e => e.name === "Import Folder as Notes")) return;
+if (entryOptions.find(e => e.name === game.i18n.localize("investigation-board.importFolderAsNotes"))) return;
+
 
   entryOptions.push({
-    name: "Import Folder as Notes",
+    name: game.i18n.localize("investigation-board.importFolderAsNotes"), // Import Folder as Notes
     icon: '<i class="fa-solid fa-camera-polaroid"></i>',
     callback: (li) => _onImportFolderAsNotes(li),
     condition: () => game.user.isGM
@@ -824,10 +825,10 @@ function _addJournalImageContext(app, html, data) {
     
     if (menu) {
       // Avoid duplicates
-      if (menu.menuItems.find(i => i.name === "Create Handout Note")) return;
+      if (menu.menuItems.find(i => i.name === game.i18n.localize("investigation-board.createHandout"))) return;
 
       menu.menuItems.push({
-        name: "Create Handout Note",
+        name: game.i18n.localize("investigation-board.createHandout"), // Create Handout Note
         icon: '<i class="fas fa-file-image"></i>',
         callback: (li) => {
           const el = li[0] || li;
@@ -838,7 +839,7 @@ function _addJournalImageContext(app, html, data) {
           if (src) {
              createHandoutNoteFromImage(src);
           } else {
-             ui.notifications.warn("Investigation Board: Could not find image source.");
+             ui.notifications.warn(game.i18n.localize("investigation-board.warn.IB:CNFIS")); // Investigation Board: Could not find image source.
           }
         },
         condition: (li) => {
@@ -874,7 +875,7 @@ Hooks.on("renderImagePopout", (app, html, data) => {
   li.innerHTML = `
     <button type="button" class="control">
       <i class="control-icon fa-fw fa-solid fa-file-image"></i>
-      <span class="control-label">Create Handout Note</span>
+      <span class="control-label">`+game.i18n.localize("investigation-board.createHandout")+`</span>
     </button>
   `;
 
@@ -895,7 +896,7 @@ Hooks.on("renderImagePopout", (app, html, data) => {
       // Optional: close the dropdown after clicking
       menu.classList.remove("expanded");
     } else {
-      ui.notifications.warn("Investigation Board: Could not resolve image source from popout.");
+      ui.notifications.warn(game.i18n.localize("investigation-board.warn.IB:CNRISFP")); // Investigation Board: Could not resolve image source from popout.
     }
   });
 });

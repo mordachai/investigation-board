@@ -1,3 +1,5 @@
-2026/01/14-15:06:00.145 e580 Recovering log #17
-2026/01/14-15:06:00.147 e580 Delete type=0 #17
-2026/01/14-15:06:00.148 e580 Delete type=3 #15
+2026/01/25-11:21:36.741 1604 Table #13: 1 entries OK
+2026/01/25-11:21:36.741 1604 Table #16: 1 entries OK
+2026/01/25-11:21:36.741 1604 Table #21: 3 entries OK
+2026/01/25-11:21:36.745 1604 Archiving C:\Users\myste\Documents\FoundryVTT\FoundryVTTv13\data\Data\modules\investigation-board\packs\ib-scenes/MANIFEST-000020: OK
+2026/01/25-11:21:36.747 1604 **** Repaired leveldb C:\Users\myste\Documents\FoundryVTT\FoundryVTTv13\data\Data\modules\investigation-board\packs\ib-scenes; recovered 3 files; 4152 bytes. Some data may have been lost. ****

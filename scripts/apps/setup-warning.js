@@ -34,9 +34,9 @@ export class SetupWarningDialog extends HandlebarsApplicationMixin(ApplicationV2
     const uploadPerm = playerRoles.every(role => game.permissions.FILES_UPLOAD.includes(role));
 
     const roleNames = {
-        1: "Player",
-        2: "Trusted Player",
-        3: "Assistant GM"
+        1: game.i18n.localize("investigation-board.player"),
+        2: game.i18n.localize("investigation-board.trustedPlayer"),
+        3: game.i18n.localize("investigation-board.assistantGM")
     };
 
     const missingUsers = users.map(u => {

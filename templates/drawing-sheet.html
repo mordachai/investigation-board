@@ -1,7 +1,7 @@
 <form class="ib-note-config-form">
   {{#unless (or (eq noteType "handout") (eq noteType "media") (eq noteType "pin"))}}
     <div class="form-group">
-      <label for="text">Note Text:</label>
+      <label for="text">{{ localize "investigation-board.html.noteText" }}</label>
       <textarea name="text" rows="4" placeholder="Enter note text...">{{text}}</textarea>
     </div>
 
@@ -24,7 +24,7 @@
       {{/if}}
 
       <div class="color-mosaic-group">
-        <label>Ink Color:</label>
+        <label>{{ localize "investigation-board.html.inkColor" }}</label>
         <div class="color-mosaic ink-colors">
           {{#each inkColors}}
             <div class="color-option {{#if (eq ../textColor this)}}active{{/if}}" 
@@ -41,7 +41,7 @@
     {{!-- Font Settings --}}
     <div class="form-group font-settings">
       <div class="font-select-group">
-        <label for="font">Font:</label>
+        <label for="font">{{ localize "investigation-board.html.font" }}</label>
         <select name="font">
           <option value="Rock Salt" {{#if (eq font "Rock Salt")}}selected{{/if}}>Rock Salt</option>
           <option value="Caveat" {{#if (eq font "Caveat")}}selected{{/if}}>Caveat</option>
@@ -52,7 +52,7 @@
         </select>
       </div>
       <div class="font-size-group">
-        <label for="fontSize">Font Size:</label>
+        <label for="fontSize">{{ localize "investigation-board.html.fontSize" }}</label>
         <input type="number" name="fontSize" value="{{fontSize}}" min="8" max="48" step="1" />
       </div>
     </div>
@@ -60,7 +60,7 @@
 
   {{!-- Linked Object field --}}
   <div class="form-group ib-drop-zone">
-    <label for="linkedObject">Linked Object:</label>
+    <label for="linkedObject">{{ localize "investigation-board.html.linkedObject" }}</label>
     <div class="linked-object-row">
       <div class="linked-object-display">
         {{#if linkedObject}}
@@ -68,12 +68,12 @@
             {{{enrichedLinkedObject}}}
           </div>
         {{else}}
-          <span class="no-link">No object linked. Drag and drop here to link.</span>
+          <span class="no-link">{{ localize "investigation-board.html.noObjectLinked" }}</span>
         {{/if}}
         <input type="hidden" name="linkedObject" value="{{linkedObject}}" />
       </div>
       {{#if linkedObject}}
-        <button type="button" class="remove-link-btn" title="Remove link">
+        <button type="button" class="remove-link-btn" title="{{ localize 'investigation-board.html.removeLink' }}">
           <i class="fas fa-trash"></i>
         </button>
       {{/if}}
@@ -83,32 +83,33 @@
   {{!-- Media Audio Path --}}
   {{#if (eq noteType "media")}}
     <div class="form-group">
-      <label for="audioPath">Audio File:</label>
+      <label for="audioPath">{{ localize "investigation-board.html.audioFile" }}</label>
       <div class="file-picker">
-        <input type="text" name="audioPath" value="{{audioPath}}" placeholder="Select audio file..." readonly />
-        <button type="button" class="audio-picker-button" title="Browse Audio">
+        <input type="text" name="audioPath" value="{{audioPath}}" placeholder="{{ localize 'investigation-board.html.selectAudioFile' }}" readonly />
+        <button type="button" class="audio-picker-button" title="{{ localize 'investigation-board.html.browseAudio' }}">
           <i class="fas fa-music"></i>
         </button>
-        <button type="button" class="preview-audio-btn" title="Preview Audio" {{#unless audioPath}}disabled{{/unless}}>
+        <button type="button" class="preview-audio-btn" title="{{ localize 'investigation-board.html.previewAudio' }}" {{#unless audioPath}}disabled{{/unless}}>
           <i class="fas fa-play"></i>
         </button>
       </div>
     </div>
     <div class="form-group">
-      <label for="audioEffectEnabled">Apply Tape Effect:</label>
+      <label for="audioEffectEnabled">{{ localize "investigation-board.html.applyTapeEffect" }}</label>
       <input type="checkbox" name="audioEffectEnabled" {{#if audioEffectEnabled}}checked{{/if}} />
-      <p class="notes">Old tape recording (High-pass filter).</p>
+      <p class="notes">{{ localize "investigation-board.html.oldTapeRecording" }}</p>
     </div>
   {{/if}}
 
   {{!-- Show Image Path field for photo notes and handouts --}}
   {{#if (or (eq noteType "photo") (eq noteType "handout"))}}
     <div class="form-group" style="display: block;">
-      <label for="image">Image Path:</label>
+      <label for="image">{{ localize "investigation-board.html.imagePath" }}</label>
+      
       <div class="file-picker">
         <input type="text" name="image" value="{{image}}" placeholder="Enter image path" readonly />
         <button type="button" class="file-picker-button">
-          <i class="fas fa-folder-open"></i> Browse
+          <i class="fas fa-folder-open"></i> {{ localize "investigation-board.html.browse" }}
         </button>
       </div>
     </div>
@@ -120,7 +121,7 @@
   {{!-- Connections Section --}}
   {{#if connections.length}}
     <div class="form-group connections-section">
-      <label class="connections-header">Connections from this note:</label>
+      <label class="connections-header">{{ localize "investigation-board.html.connectionsFromThisNote" }}</label>
       <div class="connections-list">
         {{#each connections}}
           <div class="connection-item" data-index="{{@index}}">
@@ -139,10 +140,10 @@
 
   <div class="form-group button-group">
     <button type="submit" class="save-button">
-      <i class="fas fa-save"></i> Save
+      <i class="fas fa-save"></i>{{ localize "investigation-board.html.save" }}
     </button>
     <button type="button" class="cancel-button">
-      <i class="fas fa-times"></i> Cancel
+      <i class="fas fa-times"></i>{{ localize "investigation-board.html.cancel" }}
     </button>
   </div>
 </form>
