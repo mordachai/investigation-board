@@ -86,7 +86,7 @@
     },
     "html": {
       "toAllowAllPlayers": "Pour autoriser <strong>tous les joueurs</strong> à utiliser pleinenement l'Investigation Board, veuillez mettre à jour les droits du Monde dans <b>Paramètres de la partie >> Gestion des joueurs >> Configurer les droits</b>.",
-      "useDrawingTools": "<strong>Utiliser les outils de dessin</strong> (nécessaire pour créer des notes/connections)",
+      "useDrawingTools": "<strong>Utiliser les outils de dessin</strong> (nécessaire pour créer des notes/connexions)",
       "browseFiles": "<strong>Parcourir l'explorateur de fichiers</strong> (nécessaire pour sélectionner les assets)",
       "uploadFiles": "<strong>Télécharger des fichiers</strong> (nécessaire pour téléverser des assets)",
       "toAllowPlayersToMove": "Afin de permettre aux joueurs de <strong>déplacer, éditer et connecter</strong> des notes, vous aurez seulement besoin d'activer <strong>Utiliser les outils de dessin</strong>. Cette permission est sans danger car elle n'affecte que les dessins sur le canevas et n'autorise pas l'accès aux fichiers de votre serveur.",
