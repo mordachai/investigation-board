@@ -9,7 +9,7 @@
     <div class="form-group color-settings">
       {{#if (eq noteType "sticky")}}
       <div class="color-mosaic-group">
-        <label>Note Color:</label>
+        <label>{{ localize "investigation-board.html.noteColor" }}</label>
         <div class="color-mosaic sticky-tints">
           {{#each stickyTints}}
             <div class="color-option {{#if (eq ../tint this)}}active{{/if}}" 
@@ -127,8 +127,8 @@
           <div class="connection-item" data-index="{{@index}}">
             <span class="connection-target">{{this.displayNumber}}: {{this.targetLabel}}</span>
             <div class="connection-controls">
-              <input type="color" name="connection-color-{{@index}}" value="{{this.color}}" title="Change yarn color" />
-              <button type="button" class="remove-connection-btn" data-index="{{@index}}" title="Remove connection">
+              <input type="color" name="connection-color-{{@index}}" value="{{this.color}}" title="{{ localize 'investigation-board.html.changeYarnColor' }}" />
+              <button type="button" class="remove-connection-btn" data-index="{{@index}}" title="{{ localize 'investigation-board.html.removeConnection' }}">
                 <i class="fas fa-unlink"></i>
               </button>
             </div>
