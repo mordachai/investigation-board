@@ -122,6 +122,7 @@
       "oldTapeRecording": "Vieil enregistrement de bande (filtre High-pass).",
       "imagePath": "Chemin de l'image :",
       "connectionsFromThisNote": "Connexions depuis cette note :",
+      "notePreview": "Note Preview",
 
       "edit": "Modifier",
       "close": "Fermer",

@@ -121,6 +121,7 @@
       "oldTapeRecording": "Old tape recording (High-pass filter).",
       "imagePath": "Image Path:",
       "connectionsFromThisNote": "Connections from this note:",
+      "notePreview": "Note Preview",
 
       "edit": "Edit",
       "close": "Close",
