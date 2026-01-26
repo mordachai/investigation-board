@@ -231,7 +231,7 @@ export class CustomDrawing extends Drawing {
 
     if (noteData.type === "pin") {
        const editOption = document.createElement('div');
-       editOption.innerHTML = '<i class="fas fa-edit"></i> Edit';
+       editOption.innerHTML = '<i class="fas fa-edit"></i>'+game.i18n.localize("investigation-board.html.edit");
        editOption.classList.add('ib-context-menu-item');
        editOption.onclick = (e) => {
          e.stopPropagation();
@@ -245,7 +245,7 @@ export class CustomDrawing extends Drawing {
            const uuid = linkMatch[1];
            const name = linkMatch[2] || "Linked Object";
            const linkOption = document.createElement('div');
-           linkOption.innerHTML = `<i class="fas fa-link"></i> Open: ${name}`;
+           linkOption.innerHTML = `<i class="fas fa-link"></i>`+game.i18n.localize("investigation-board.open")+`${name}`;
            linkOption.classList.add('ib-context-menu-item');
            linkOption.onclick = async (e) => {
              e.stopPropagation();
@@ -270,14 +270,16 @@ export class CustomDrawing extends Drawing {
        }
 
        const removeConnectionsOption = document.createElement('div');
-       removeConnectionsOption.innerHTML = '<i class="fas fa-cut"></i> Remove Connections';
+       removeConnectionsOption.innerHTML = '<i class="fas fa-cut"></i>'+game.i18n.localize("investigation-board.removeConnections");
        removeConnectionsOption.classList.add('ib-context-menu-item');
        removeConnectionsOption.onclick = async (e) => {
          e.stopPropagation();
          menu.remove();
+
+         const title = game.i18n.localize("investigation-board.removeAllConnections");
          const confirm = await foundry.applications.api.DialogV2.confirm({
-           window: { title: "Remove All Connections" },
-           content: `<p>Are you sure you want to remove ALL yarn connections connected to this note?</p>`,
+           window: { title: title }, // Remove All Connections
+           content: `<p>`+game.i18n.localize("investigation-board.aysywRemoveALLconnections")+`</p>`,
            rejectClose: false,
            modal: true
          });
@@ -300,14 +302,17 @@ export class CustomDrawing extends Drawing {
        };
 
        const deleteOption = document.createElement('div');
-       deleteOption.innerHTML = '<i class="fas fa-trash"></i> Delete';
+       deleteOption.innerHTML = '<i class="fas fa-trash"></i>'+game.i18n.localize("investigation-board.delete");
        deleteOption.classList.add('ib-context-menu-item');
        deleteOption.onclick = async (e) => {
          e.stopPropagation();
          menu.remove();
+
+         const title = game.i18n.localize("investigation-board.deletePin");
          const confirm = await foundry.applications.api.DialogV2.confirm({
-           window: { title: "Delete Pin" },
-           content: `<p>Are you sure you want to delete this pin?</p>`,
+           window: { title: title }, // Delete Pin
+           content: `<p>`+game.i18n.localize("investigation-board.aysywDeletethisPin")+`</p>`,
+
            rejectClose: false,
            modal: true
          });
@@ -326,7 +331,7 @@ export class CustomDrawing extends Drawing {
     }
 
     const editOption = document.createElement('div');
-    editOption.innerHTML = '<i class="fas fa-edit"></i> Edit';
+    editOption.innerHTML = '<i class="fas fa-edit"></i>'+game.i18n.localize("investigation-board.html.edit");
     editOption.classList.add('ib-context-menu-item');
     editOption.onclick = (e) => {
       e.stopPropagation();
@@ -346,7 +351,7 @@ export class CustomDrawing extends Drawing {
       const playMeOption = document.createElement('div');
       
       if (isPlaying) {
-        playMeOption.innerHTML = '<i class="fas fa-stop"></i> Stop for Me';
+        playMeOption.innerHTML = '<i class="fas fa-stop"></i>'+game.i18n.localize("investigation-board.html.stopForMe"); // Stop for Me
         playMeOption.onclick = (e) => {
           e.stopPropagation();
           // Stop App Audio
@@ -357,7 +362,7 @@ export class CustomDrawing extends Drawing {
           menu.remove();
         };
       } else {
-        playMeOption.innerHTML = '<i class="fas fa-volume-up"></i> Play for Me';
+        playMeOption.innerHTML = '<i class="fas fa-volume-up"></i>'+game.i18n.localize("investigation-board.html.playForMe"); // Play for Me
         playMeOption.onclick = (e) => {
           e.stopPropagation();
           // Open Preview with autoplay
@@ -373,7 +378,7 @@ export class CustomDrawing extends Drawing {
         const playAllOption = document.createElement('div');
         
         if (isGlobalActive) {
-          playAllOption.innerHTML = '<i class="fas fa-stop"></i> Stop for All';
+          playAllOption.innerHTML = '<i class="fas fa-stop"></i>'+game.i18n.localize("investigation-board.html.stopForAll"); // Stop for All
           playAllOption.onclick = (e) => {
             e.stopPropagation();
             // Try to use App control first
@@ -401,7 +406,7 @@ export class CustomDrawing extends Drawing {
             menu.remove();
           };
         } else {
-          playAllOption.innerHTML = '<i class="fas fa-broadcast-tower"></i> Play for All';
+          playAllOption.innerHTML = '<i class="fas fa-broadcast-tower"></i>'+game.i18n.localize("investigation-board.html.playForAll"); // Play for All
           playAllOption.onclick = (e) => {
             e.stopPropagation();
             // Unified: Open Preview and broadcast
@@ -415,7 +420,7 @@ export class CustomDrawing extends Drawing {
     }
 
     const viewOption = document.createElement('div');
-    viewOption.innerHTML = '<i class="fas fa-eye"></i> View';
+    viewOption.innerHTML = '<i class="fas fa-eye"></i>'+game.i18n.localize("investigation-board.view");
     viewOption.classList.add('ib-context-menu-item');
     viewOption.onclick = (e) => {
       e.stopPropagation();
@@ -424,15 +429,16 @@ export class CustomDrawing extends Drawing {
     };
 
     const removeConnectionsOption = document.createElement('div');
-    removeConnectionsOption.innerHTML = '<i class="fas fa-cut"></i> Remove Connections';
+    removeConnectionsOption.innerHTML = '<i class="fas fa-cut"></i>'+game.i18n.localize("investigation-board.removeConnections");
     removeConnectionsOption.classList.add('ib-context-menu-item');
     removeConnectionsOption.onclick = async (e) => {
       e.stopPropagation();
       menu.remove();
 
+      const title = game.i18n.localize("investigation-board.removeAllConnections");
       const confirm = await foundry.applications.api.DialogV2.confirm({
-        window: { title: "Remove All Connections" },
-        content: `<p>Are you sure you want to remove ALL yarn connections connected to this note (incoming and outgoing)?</p>`,
+        window: { title: title }, // Remove All Connections
+        content: `<p>`+game.i18n.localize("investigation-board.aysywRemoveALLconnectionsIO")+`</p>`,
         rejectClose: false,
         modal: true
       });
@@ -477,7 +483,7 @@ export class CustomDrawing extends Drawing {
         const name = linkMatch[2] || "Linked Object";
         
         const linkOption = document.createElement('div');
-        linkOption.innerHTML = `<i class="fas fa-link"></i> Open: ${name}`;
+        linkOption.innerHTML = `<i class="fas fa-link"></i>`+game.i18n.localize("investigation-board.open")+`${name}`;
         linkOption.classList.add('ib-context-menu-item');
         linkOption.onclick = async (e) => {
           e.stopPropagation();
@@ -503,15 +509,16 @@ export class CustomDrawing extends Drawing {
     }
 
     const deleteOption = document.createElement('div');
-    deleteOption.innerHTML = '<i class="fas fa-trash"></i> Delete';
+    deleteOption.innerHTML = '<i class="fas fa-trash"></i>'+game.i18n.localize("investigation-board.delete");;
     deleteOption.classList.add('ib-context-menu-item');
     deleteOption.onclick = async (e) => {
       e.stopPropagation();
       menu.remove();
 
+      const title = game.i18n.localize("investigation-board.deleteNote");
       const confirm = await foundry.applications.api.DialogV2.confirm({
-        window: { title: "Delete Note" },
-        content: `<p>Are you sure you want to delete this note?</p>`,
+        window: { title: title }, // Delete Note
+        content: `<p>`+game.i18n.localize("investigation-board.aysywDeleteThisNote")+`</p>`,
         rejectClose: false,
         modal: true
       });

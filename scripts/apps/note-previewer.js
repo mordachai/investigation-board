@@ -169,7 +169,7 @@ export class NotePreviewer extends HandlebarsApplicationMixin(ApplicationV2) {
           }
           this.globalSoundActive = false;
           icon.className = "fas fa-broadcast-tower";
-          span.innerText = "Play for All";
+          span.innerText = game.i18n.localize("investigation-board.html.playForAll"); // Play for All
           playGlobalBtn.classList.remove("active");
           if (localAudio?.paused) cassette.classList.remove("playing");
           return;
@@ -211,7 +211,7 @@ export class NotePreviewer extends HandlebarsApplicationMixin(ApplicationV2) {
 
           this.globalSoundActive = true;
           icon.className = "fas fa-stop";
-          span.innerText = "Stop for All";
+          span.innerText = game.i18n.localize("investigation-board.html.stopForAll"); // Stop for All
           playGlobalBtn.classList.add("active");
           cassette.classList.add("playing");
 
@@ -219,7 +219,7 @@ export class NotePreviewer extends HandlebarsApplicationMixin(ApplicationV2) {
             if (!sound.playing) {
               this.globalSoundActive = false;
               icon.className = "fas fa-broadcast-tower";
-              span.innerText = "Play for All";
+              span.innerText = game.i18n.localize("investigation-board.html.playForAll"); // Play for All
               playGlobalBtn.classList.remove("active");
               const current = activeGlobalSounds.get(audioPath);
               if (current === sound) activeGlobalSounds.delete(audioPath);

@@ -35,15 +35,15 @@
                             
                             {{#if isGM}}
                                 <div class="gm-broadcast-section">
-                                    <button type="button" class="play-btn global-toggle {{#if isGlobalActive}}active{{/if}}" data-type="global" title="Play for all players">
+                                    <button type="button" class="play-btn global-toggle {{#if isGlobalActive}}active{{/if}}" data-type="global" title="{{ localize 'investigation-board.html.playForAll' }}">
                                         <i class="fas {{#if isGlobalActive}}fa-stop{{else}}fa-broadcast-tower{{/if}}"></i> 
-                                        <span>{{#if isGlobalActive}}Stop for All{{else}}Play for All{{/if}}</span>
+                                        <span>{{#if isGlobalActive}}{{ localize "investigation-board.html.stopForAll" }}{{else}}{{ localize "investigation-board.html.playForAll" }}{{/if}}</span>
                                     </button>
                                 </div>
                             {{/if}}
                         </div>
                     {{else}}
-                        <div class="no-audio-msg">No audio file linked to this note.</div>
+                        <div class="no-audio-msg">{{ localize "investigation-board.html.noAudioFile" }}</div>
                     {{/if}}
                 </div>
             {{else}}
@@ -72,7 +72,7 @@
         
         {{#if enrichedLinkedObject}}
         <div class="preview-footer">
-            <div class="preview-link-label">Linked Reference:</div>
+            <div class="preview-link-label">{{ localize "investigation-board.html.linkedReference" }}</div>
             <div class="preview-link">
                 {{{enrichedLinkedObject}}}
             </div>
@@ -80,7 +80,7 @@
     {{/if}}
 
     <div class="preview-controls">
-        <button type="button" class="edit-note-btn"><i class="fas fa-edit"></i> Edit</button>
-        <button type="button" class="close-preview-btn">Close</button>
+        <button type="button" class="edit-note-btn"><i class="fas fa-edit"></i> {{ localize "investigation-board.html.edit" }}</button>
+        <button type="button" class="close-preview-btn">{{ localize "investigation-board.html.close" }}</button>
     </div>
 </div>

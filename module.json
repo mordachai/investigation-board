@@ -23,6 +23,16 @@
       "src": "styles/style.css"
     }
   ],
+  "languages": [
+    {
+      "lang": "en",
+      "path": "lang/en.json"
+    },
+      {
+      "lang": "fr",
+      "path": "lang/fr.json"
+    }
+  ],
   "packs": [
     {
       "name": "ib-scenes",

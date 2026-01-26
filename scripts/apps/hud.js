@@ -83,9 +83,10 @@ export class InvestigationBoardHUD extends HandlebarsApplicationMixin(BasePlacea
     html.querySelector(".delete-note")?.addEventListener("click", async (event) => {
       event.preventDefault();
 
+      const title = game.i18n.localize("investigation-board.deleteNote");
       const confirm = await foundry.applications.api.DialogV2.confirm({
-        window: { title: "Delete Note" },
-        content: "<p>Are you sure you want to delete this note?</p>",
+        window: { title:  title }, // Delete Note
+        content: `<p>`+game.i18n.localize("investigation-board.aysywDeleteThisNote")+`</p>`,
         rejectClose: false,
         modal: true
       });
