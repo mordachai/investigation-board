@@ -8,6 +8,7 @@ A Foundry VTT module that lets everyone create, edit, and move sticky and photo 
 ## NEW FEATURE >> Extra Fonts: Typewriter & Special Elite
 Added these two new fonts as options. Also fixed a bug that prevented fonts to load on systems that not have them installed locally.
 
+<img width="1227" height="758" alt="image" src="https://github.com/user-attachments/assets/ac32a62e-e4b0-4641-90cf-ff0d519d1941" />
 
 ## CHECK OUT THE VIDEO ↓ 
 
