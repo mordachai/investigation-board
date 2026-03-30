@@ -61,7 +61,6 @@ function activateInvestigationBoardMode() {
     return;
   }
 
-  console.log("Investigation Board: Activating mode...");
   InvestigationBoardState.isActive = true;
 
   // Filter visible placeables using helper function
@@ -69,8 +68,6 @@ function activateInvestigationBoardMode() {
 
   // Add CSS class for visual styling
   document.body.classList.add("investigation-board-mode");
-
-  console.log("Investigation Board: Mode ACTIVE");
 }
 
 /**
@@ -79,7 +76,6 @@ function activateInvestigationBoardMode() {
 function deactivateInvestigationBoardMode() {
   if (!InvestigationBoardState.isActive) return;
 
-  console.log("Investigation Board: Deactivating mode...");
   InvestigationBoardState.isActive = false;
 
   // Clear pin connection state
@@ -99,8 +95,6 @@ function deactivateInvestigationBoardMode() {
 
   // Remove CSS class
   document.body.classList.remove("investigation-board-mode");
-
-  console.log("Investigation Board: Mode INACTIVE");
 }
 
 /**
@@ -261,12 +255,10 @@ Hooks.once("init", () => {
     }
   });
 
-  console.log("Investigation Board module initialized.");
 });
 
 // Hook to initialize socket for collaborative editing
 Hooks.once("ready", () => {
-  console.log("Investigation Board: Ready hook fired. v13 detected.");
   initSocket();
 
   // Show setup warning to GM if enabled
@@ -368,8 +360,6 @@ Hooks.on("preCreateDrawing", (drawing, data, options, userId) => {
 
     // 2. Suppress the auto-open sheet behavior
     options.skipAutoOpen = true;
-    
-    console.log("Investigation Board: Detected pasted/duplicated note. Cleared connections and suppressed sheet.");
   }
 });
 
@@ -412,7 +402,6 @@ Hooks.on("createDrawing", (drawing, options, userId) => {
     setTimeout(() => {
       updatePins();
       refreshDrawingsInteractivity();
-      console.log("Investigation Board: Refreshed interactivity and pins for new note", drawing.id);
     }, 300);
   }
 });
@@ -440,7 +429,6 @@ Hooks.on("preUpdateDrawing", (drawing, changes, options, userId) => {
       updateData: changes,
       requestingUser: game.user.id
     });
-    console.log("Investigation Board: Routed update through socket for", drawing.id);
   }
 
   // Return false to prevent the normal update (socket will handle it)
@@ -459,8 +447,6 @@ Hooks.on("preDeleteDrawing", (drawing, options, userId) => {
   const placeable = drawing.object || canvas.drawings.get(drawing.id);
   if (options.ibDelete || placeable?.controlled) return true;
 
-  // Skip this drawing for bulk deletion (like "Clear Drawings" button)
-  console.log(`Investigation Board: Protected note "${drawing.id}" from bulk deletion.`);
   return false;
 });
 
@@ -530,13 +516,9 @@ async function _resolveDocumentFromLi(li, collection) {
   // v13 resolution is much more varied
   const target = el.closest(".directory-item") || el.closest(".document") || el.closest(".playlist") || el;
   
-  console.log("Investigation Board DEBUG: Resolving document from element", target);
-  console.log("Investigation Board DEBUG: Target dataset:", JSON.stringify(target.dataset));
-
   // 1. Try UUID directly (most reliable in v13)
   const uuid = target.dataset.uuid || target.getAttribute("data-uuid");
   if (uuid) {
-    console.log("Investigation Board DEBUG: Found UUID:", uuid);
     return await fromUuid(uuid);
   }
 
@@ -550,8 +532,6 @@ async function _resolveDocumentFromLi(li, collection) {
                 target.getAttribute("data-entry-id") ||
                 target.getAttribute("data-id") ||
                 target.getAttribute("data-playlist-id");
-
-  console.log("Investigation Board DEBUG: Resolved docId:", docId);
 
   const packName = target.closest("[data-pack]")?.dataset.pack || target.closest(".compendium")?.dataset.pack;
 
@@ -676,7 +656,6 @@ Hooks.on("getPlaylistSoundContextOptions", (html, entryOptions) => {
 
 // Context menu hook for Playlist entries
 Hooks.on("getPlaylistContextOptions", (html, entryOptions) => {
-  console.log("Investigation Board: getPlaylistContextOptions fired");
   entryOptions.push({
     name: "Import Playlist as Notes",
     icon: '<i class="fas fa-cassette-tape"></i>',
@@ -783,7 +762,22 @@ Hooks.on("getPlaylistDirectoryEntryContext", (html, entryOptions) => {
 
 
 // Hook to deactivate connect mode on scene change and initialize connection lines
-Hooks.on("canvasReady", () => {
+Hooks.on("canvasReady", async () => {
+  // Migrate legacy IB notes that have fillAlpha: 0 — Foundry v13 rejects any drawing update
+  // where the stored document has no visible fill, stroke, or text. We fix this in the database
+  // once so subsequent updates (drag/release, etc.) don't trigger the validation error.
+  if (game.user.isGM && canvas.scene) {
+    const toMigrate = canvas.scene.drawings.filter(d =>
+      d.flags?.[MODULE_ID]?.type &&
+      d.fillAlpha === 0 &&
+      d.strokeWidth === 0
+    );
+    if (toMigrate.length) {
+      const updates = toMigrate.map(d => ({ _id: d.id, fillAlpha: 0.001 }));
+      await canvas.scene.updateEmbeddedDocuments("Drawing", updates);
+    }
+  }
+
   // Properly destroy and remove old containers before clearing references
   cleanupConnectionLines();
 
@@ -795,7 +789,6 @@ Hooks.on("canvasReady", () => {
 
   // Reapply Investigation Board mode if it was active before canvas recreation
   if (InvestigationBoardState.isActive) {
-    console.log("Investigation Board: Canvas recreated, reapplying mode...");
     // Force reset then reactivate to be safe
     InvestigationBoardState.isActive = false;
     activateInvestigationBoardMode();

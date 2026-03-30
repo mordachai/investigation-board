@@ -143,7 +143,9 @@ export const registerSettings = function() {
             "Courier New": "Courier New",
             "Times New Roman": "Times New Roman",
             "Signika": "Signika",
-            "Arial": "Arial"
+            "Arial": "Arial",
+            "Typewriter Condensed": "Typewriter Condensed",
+            "Special Elite": "Special Elite"
         },
         default: "Rock Salt",
         onChange: () => refreshAllDrawings()
@@ -211,7 +213,9 @@ export const registerSettings = function() {
             "Courier New": { sticky: 250, photo: 30, index: 580 },
             "Times New Roman": { sticky: 200, photo: 30, index: 800 },
             "Signika": { sticky: 200, photo: 30, index: 650 },
-            "Arial": { sticky: 200, photo: 30, index: 650 }
+            "Arial": { sticky: 200, photo: 30, index: 650 },
+            "Typewriter Condensed": { sticky: 320, photo: 48, index: 1000 },
+            "Special Elite": { sticky: 130, photo: 18, index: 320 }
         }
     });
 

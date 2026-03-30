@@ -576,6 +576,25 @@ export class CustomDrawing extends Drawing {
   }
 
   async _updateSprites() {
+    // Guard against concurrent execution. If a call is already in progress, queue one
+    // re-run for when it finishes so the latest data is always applied.
+    if (this._spriteUpdateRunning) {
+      this._spriteUpdateQueued = true;
+      return;
+    }
+    this._spriteUpdateRunning = true;
+    try {
+      await this._doUpdateSprites();
+    } finally {
+      this._spriteUpdateRunning = false;
+      if (this._spriteUpdateQueued) {
+        this._spriteUpdateQueued = false;
+        this._updateSprites();
+      }
+    }
+  }
+
+  async _doUpdateSprites() {
     const noteData = this.document.flags[MODULE_ID];
     if (!noteData) return;
 
@@ -759,7 +778,8 @@ export class CustomDrawing extends Drawing {
       if (!this.photoImageSprite || !this.photoImageSprite.parent) {
         // Destroy old sprite if it exists
         if (this.photoImageSprite) {
-          this.photoImageSprite.destroy();
+          try { this.photoImageSprite.destroy(); } catch(e) {}
+          this.photoImageSprite = null;
         }
         this.photoImageSprite = new PIXI.Sprite();
         this.addChild(this.photoImageSprite);
@@ -916,7 +936,7 @@ export class CustomDrawing extends Drawing {
       const texture = await PIXI.Assets.load(bgImage);
       if (texture) {
         // Update shadow
-        if (this.bgShadow) {
+        if (this.bgShadow && !this.bgShadow.destroyed) {
           this.bgShadow.texture = texture;
           this.bgShadow.width = width;
           this.bgShadow.height = height;
@@ -925,8 +945,8 @@ export class CustomDrawing extends Drawing {
           this.bgShadow.position.set(6, 6);
           this.bgShadow.filters = [new PIXI.BlurFilter(3)];
         }
-        
-        if (this.bgSprite) {
+
+        if (this.bgSprite && !this.bgSprite.destroyed) {
           this.bgSprite.texture = texture;
           this.bgSprite.width = width;
           this.bgSprite.height = height;
@@ -954,13 +974,14 @@ export class CustomDrawing extends Drawing {
     // --- Foreground (User-Assigned) Photo ---
     if (isPhoto) {
       const fgImage = noteData.image || "modules/investigation-board/assets/placeholder.webp";
-      if (!this.photoImageSprite) {
+      if (!this.photoImageSprite || this.photoImageSprite.destroyed) {
+        if (this.photoImageSprite) this.photoImageSprite = null;
         this.photoImageSprite = new PIXI.Sprite();
         this.addChild(this.photoImageSprite);
       }
       try {
         const texture = await PIXI.Assets.load(fgImage);
-        if (texture && this.photoImageSprite) {
+        if (texture && this.photoImageSprite && !this.photoImageSprite.destroyed) {
           this.photoImageSprite.texture = texture;
           
           // Calculate available frame space inside the polaroid
@@ -1075,7 +1096,7 @@ export class CustomDrawing extends Drawing {
       align: "center",
     });
     const truncatedText = truncateText(noteData.text || "Default Text", font, noteData.type, fontSize);
-    if (!this.noteText) {
+    if (!this.noteText || this.noteText.destroyed) {
       this.noteText = new PIXI.Text(truncatedText, textStyle);
       this.noteText.anchor.set(0.5);
       this.addChild(this.noteText);
@@ -1083,7 +1104,9 @@ export class CustomDrawing extends Drawing {
       this.noteText.style = textStyle;
       this.noteText.text = truncatedText;
     }
-    this.noteText.position.set(width / 2, isPhoto ? height - 25 : height / 2);
+    if (this.noteText && !this.noteText.destroyed) {
+      this.noteText.position.set(width / 2, isPhoto ? height - 25 : height / 2);
+    }
 
     // Hide futuristic text elements if they exist
     if (this.futuristicText) this.futuristicText.visible = false;

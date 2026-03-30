@@ -8,14 +8,14 @@ export function getBaseCharacterLimits() {
   };
 }
 
-export function getDynamicCharacterLimits(noteType, currentFontSize) {
+export function getDynamicCharacterLimits(font, noteType, currentFontSize) {
   const baseLimits = getBaseCharacterLimits();
   const scaleFactor = BASE_FONT_SIZE / currentFontSize;
-  const limits = baseLimits[noteType] || { sticky: 60, photo: 15, index: 200 };
+  const fontLimits = baseLimits[font] || baseLimits["Arial"] || { sticky: 200, photo: 30, index: 650 };
   return {
-    sticky: Math.round(limits.sticky * scaleFactor),
-    photo: Math.round(limits.photo * scaleFactor),
-    index: Math.round(limits.index * scaleFactor),
+    sticky: Math.round(fontLimits.sticky * scaleFactor),
+    photo: Math.round(fontLimits.photo * scaleFactor),
+    index: Math.round(fontLimits.index * scaleFactor),
   };
 }
 
@@ -57,7 +57,7 @@ export function getEffectiveScale() {
 }
 
 export function truncateText(text, font, noteType, currentFontSize) {
-    const limits = getDynamicCharacterLimits(noteType, currentFontSize);
+    const limits = getDynamicCharacterLimits(font, noteType, currentFontSize);
     const charLimit = limits[noteType] || 100;
     return text.length <= charLimit ? text : text.slice(0, charLimit).trim() + "...";
 }

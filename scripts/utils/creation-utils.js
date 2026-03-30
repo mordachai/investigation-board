@@ -104,7 +104,7 @@ export async function createNote(noteType, { x = null, y = null } = {}) {
     y: finalY,
     shape: { width, height },
     fillColor: noteType === "handout" || noteType === "media" || noteType === "pin" ? "#000000" : "#ffffff",
-    fillAlpha: noteType === "handout" || noteType === "media" || noteType === "pin" ? 0 : 1,
+    fillAlpha: noteType === "handout" || noteType === "media" || noteType === "pin" ? 0.001 : 1,
     strokeColor: "#000000",
     strokeWidth: 0,
     strokeAlpha: 0,
@@ -131,7 +131,6 @@ export async function createNote(noteType, { x = null, y = null } = {}) {
       if (newDrawing) {
         newDrawing.eventMode = 'auto';
         newDrawing.interactiveChildren = true;
-        console.log("Investigation Board: New note made interactive immediately", created[0].id);
       }
     }, 250);
   }

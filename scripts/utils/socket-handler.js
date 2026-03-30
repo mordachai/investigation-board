@@ -34,6 +34,10 @@ export async function collaborativeUpdate(drawingId, updateData, sceneId = null)
 
   // If user is GM or has owner permission, update directly
   if (game.user.isGM || drawing.testUserPermission(game.user, "OWNER")) {
+    // Foundry v13 requires a visible fill, stroke, or text. Migrate legacy notes that used fillAlpha: 0.
+    if (drawing.fillAlpha === 0 && drawing.strokeWidth === 0) {
+      updateData = { ...updateData, fillAlpha: 0.001 };
+    }
     await drawing.update(updateData);
     return;
   }
@@ -47,7 +51,6 @@ export async function collaborativeUpdate(drawingId, updateData, sceneId = null)
       updateData: updateData,
       requestingUser: game.user.id
     });
-    console.log("Investigation Board: Sent socket request to update drawing", drawingId);
   } else {
     console.error("Investigation Board: Socket not available for collaborative update");
   }
@@ -81,7 +84,6 @@ export async function collaborativeCreate(createData, options = {}, sceneId = nu
       options: createOptions,
       requestingUser: game.user.id
     });
-    console.log("Investigation Board: Sent socket request to create drawing");
   } else {
     console.error("Investigation Board: Socket not available for collaborative creation");
   }
@@ -116,7 +118,6 @@ export async function collaborativeCreateMany(createDataArray, options = {}, sce
       options: createOptions,
       requestingUser: game.user.id
     });
-    console.log(`Investigation Board: Sent socket request to create ${createDataArray.length} drawings`);
   } else {
     console.error("Investigation Board: Socket not available for collaborative creation");
   }
@@ -164,7 +165,6 @@ export function handleSocketMessage(data) {
         activeGlobalSounds.delete(data.audioPath);
       }
 
-      console.log("Investigation Board: Playing global audio", data.audioPath, "at offset", data.offset || 0);
       (async () => {
         const sound = await game.audio.play(data.audioPath, { 
           volume: 0.8,
@@ -196,7 +196,6 @@ export function handleSocketMessage(data) {
       if (sound) {
         sound.stop();
         activeGlobalSounds.delete(data.audioPath);
-        console.log("Investigation Board: Stopped global audio", data.audioPath);
       }
     }
     return;
@@ -209,8 +208,6 @@ export function handleSocketMessage(data) {
     const scene = game.scenes.get(data.sceneId);
     if (!scene) return;
     
-    console.log("Investigation Board: GM processing socket creation requested by", data.requestingUser);
-    
     // Pass along the original requesting userId so we can filter the sheet opening
     const options = { ...data.options, ibRequestingUser: data.requestingUser };
     scene.createEmbeddedDocuments("Drawing", [data.createData], options);
@@ -219,8 +216,6 @@ export function handleSocketMessage(data) {
   if (data.action === "createManyDrawings") {
     const scene = game.scenes.get(data.sceneId);
     if (!scene) return;
-    
-    console.log(`Investigation Board: GM processing socket bulk creation (${data.createDataArray.length} items) requested by ${data.requestingUser}`);
     
     const options = { ...data.options, ibRequestingUser: data.requestingUser };
     scene.createEmbeddedDocuments("Drawing", data.createDataArray, options);
@@ -246,9 +241,13 @@ export function handleSocketMessage(data) {
       return;
     }
 
-    // Perform the update on behalf of the requesting user
-    console.log("Investigation Board: GM processing socket update for drawing", data.drawingId, "requested by", data.requestingUser);
-    drawing.update(data.updateData);
+    // Perform the update on behalf of the requesting user.
+    // Also patch fillAlpha for legacy notes that have fillAlpha: 0, which fails Foundry v13 validation.
+    const updateData = data.updateData;
+    if (drawing.fillAlpha === 0 && drawing.strokeWidth === 0 && !("fillAlpha" in updateData)) {
+      updateData.fillAlpha = 0.001;
+    }
+    drawing.update(updateData);
   }
 
   if (data.action === "deleteDrawing") {
@@ -257,7 +256,6 @@ export function handleSocketMessage(data) {
     const drawing = scene.drawings.get(data.drawingId);
     if (!drawing) return;
 
-    console.log("Investigation Board: GM processing socket deletion for drawing", data.drawingId);
     drawing.delete({ ibDelete: true });
   }
 }
@@ -265,5 +263,4 @@ export function handleSocketMessage(data) {
 export function initSocket() {
     socket = game.socket;
     socket.on(SOCKET_NAME, handleSocketMessage);
-    console.log("Investigation Board: Socket listener registered for collaborative editing.");
 }

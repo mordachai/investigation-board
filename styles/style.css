@@ -12,6 +12,20 @@
   font-style: normal;
 }
 
+@font-face {
+  font-family: 'Typewriter Condensed';
+  src: url('..assets/fonts/typewcond_regular.otf') format('opentype');
+  font-weight: normal;
+  font-style: normal;
+}
+
+@font-face {
+  font-family: 'Special Elite';
+  src: url('..assets/fonts/SpecialElite-Regular.ttf') format('truetype');
+  font-weight: normal;
+  font-style: normal;
+}
+
 .custom-drawing-text {
   font-family: 'Rock Salt', Arial, sans-serif;
   color: #000000; /* Black text */
@@ -794,7 +808,7 @@ body.investigation-board-mode .drawing:not([data-investigation-note="true"]) {
 
 /* Font variants for frame text */
 .photo-frame-text.rock-salt { font-family: 'Rock Salt', cursive; }
-.photo-frame-text.caveat { 
+.photo-frame-text.caveat {
   font-family: 'Caveat', cursive;
   font-size: 2.2em; /* Increased from 1.4em */
 }
@@ -802,6 +816,8 @@ body.investigation-board-mode .drawing:not([data-investigation-note="true"]) {
 .photo-frame-text.times-new-roman { font-family: 'Times New Roman', serif; }
 .photo-frame-text.signika { font-family: 'Signika', sans-serif; }
 .photo-frame-text.arial { font-family: 'Arial', sans-serif; }
+.photo-frame-text.typewriter-condensed { font-family: 'Typewriter Condensed', monospace; }
+.photo-frame-text.special-elite { font-family: 'Special Elite', cursive; }
 
 /* Futuristic mode overrides for preview */
 .futuristic-mode.photo-preview {
@@ -1148,6 +1164,8 @@ body.investigation-board-mode .drawing:not([data-investigation-note="true"]) {
 .preview-text-container.courier-new { font-family: 'Courier New', monospace; }
 .preview-text-container.times-new-roman { font-family: 'Times New Roman', serif; }
 .preview-text-container.signika { font-family: 'Signika', sans-serif; }
+.preview-text-container.typewriter-condensed { font-family: 'Typewriter Condensed', monospace; }
+.preview-text-container.special-elite { font-family: 'Special Elite', cursive; }
 /* ========================= */
 /* Setup Warning Dialog      */
 /* ========================= */

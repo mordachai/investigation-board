@@ -2,7 +2,7 @@
   "id": "investigation-board",
   "title": "Investigation Board",
   "description": "<p>A Foundry VTT module that lets everyone create, edit, and move sticky and photo notes on the scene as collaborative investigation tools.</p>",
-  "version": "4.8.0",
+  "version": "4.9.0",
   "socket": true,
   "authors": [
     {
@@ -48,5 +48,31 @@
   "url": "https://github.com/mordachai/investigation-board",
   "manifest": "https://github.com/mordachai/investigation-board/releases/latest/download/module.json",
   "download": "https://github.com/mordachai/investigation-board/releases/latest/download/module.zip",
+  "fonts": [
+    {
+      "family": "Rock Salt",
+      "fonts": [
+        { "path": "assets/fonts/rock_salt.ttf", "weight": 400, "style": "normal" }
+      ]
+    },
+    {
+      "family": "Caveat",
+      "fonts": [
+        { "path": "assets/fonts/caveat.ttf", "weight": 400, "style": "normal" }
+      ]
+    },
+    {
+      "family": "Typewriter Condensed",
+      "fonts": [
+        { "path": "assets/fonts/typewcond_regular.otf", "weight": 400, "style": "normal" }
+      ]
+    },
+    {
+      "family": "Special Elite",
+      "fonts": [
+        { "path": "assets/fonts/SpecialElite-Regular.ttf", "weight": 400, "style": "normal" }
+      ]
+    }
+  ],
   "flags": {}
 }
