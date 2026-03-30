@@ -20,8 +20,8 @@
 }
 
 @font-face {
-  font-family: 'Special Elite';
-  src: url('..assets/fonts/SpecialElite-Regular.ttf') format('truetype');
+  font-family: 'IB Special Elite';
+  src: url('..assets/fonts/SpecialElite-regular.ttf') format('truetype');
   font-weight: normal;
   font-style: normal;
 }
@@ -817,7 +817,7 @@ body.investigation-board-mode .drawing:not([data-investigation-note="true"]) {
 .photo-frame-text.signika { font-family: 'Signika', sans-serif; }
 .photo-frame-text.arial { font-family: 'Arial', sans-serif; }
 .photo-frame-text.typewriter-condensed { font-family: 'Typewriter Condensed', monospace; }
-.photo-frame-text.special-elite { font-family: 'Special Elite', cursive; }
+.photo-frame-text.special-elite { font-family: 'IB Special Elite', cursive; }
 
 /* Futuristic mode overrides for preview */
 .futuristic-mode.photo-preview {
@@ -1165,7 +1165,7 @@ body.investigation-board-mode .drawing:not([data-investigation-note="true"]) {
 .preview-text-container.times-new-roman { font-family: 'Times New Roman', serif; }
 .preview-text-container.signika { font-family: 'Signika', sans-serif; }
 .preview-text-container.typewriter-condensed { font-family: 'Typewriter Condensed', monospace; }
-.preview-text-container.special-elite { font-family: 'Special Elite', cursive; }
+.preview-text-container.special-elite { font-family: 'IB Special Elite', cursive; }
 /* ========================= */
 /* Setup Warning Dialog      */
 /* ========================= */

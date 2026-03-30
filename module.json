@@ -2,7 +2,7 @@
   "id": "investigation-board",
   "title": "Investigation Board",
   "description": "<p>A Foundry VTT module that lets everyone create, edit, and move sticky and photo notes on the scene as collaborative investigation tools.</p>",
-  "version": "4.9.2",
+  "version": "4.9.3",
   "socket": true,
   "authors": [
     {
@@ -68,9 +68,9 @@
       ]
     },
     {
-      "family": "Special Elite",
+      "family": "IB Special Elite",
       "fonts": [
-        { "path": "assets/fonts/SpecialElite-Regular.ttf", "weight": 400, "style": "normal" }
+        { "path": "assets/fonts/SpecialElite-regular.ttf", "weight": 400, "style": "normal" }
       ]
     }
   ],
