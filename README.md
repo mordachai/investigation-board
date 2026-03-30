@@ -5,6 +5,10 @@
 
 A Foundry VTT module that lets everyone create, edit, and move sticky and photo notes on the scene. A must-have for investigative games like City of Mist, Call of Cthulhu, and all your conspiracy adventures.
 
+## NEW FEATURE >> Extra Fonts: Typewriter & Special Elite
+Added these two new fonts as options. Also fixed a bug that prevented fonts to load on systems that not have them installed locally.
+
+
 ## CHECK OUT THE VIDEO ↓ 
 
 https://github.com/user-attachments/assets/9d578c0b-380e-4942-91fc-0a43d6c27296
