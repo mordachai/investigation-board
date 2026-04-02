@@ -105,18 +105,23 @@ flags['investigation-board'] = {
   type: "sticky" | "photo" | "index" | "handout" | "media" | "pin",
   text: "note content",
   image: "path/to/image.webp",        // photo, handout, media
+  audioPath: "path/to/audio.mp3",     // media only
+  audioEffectEnabled: true,           // media only — lo-fi tape effect
   pinColor: "redPin.webp",
   identityName: "Character Name",      // futuristic photo only
+  unknown: true,                       // photo only — shows "???" instead of name
   font: "Arial",                       // per-note, falls back to global (not handout/media/pin)
   fontSize: 16,                        // per-note, index defaults to 9 (not handout/media/pin)
-  tint: "#ffff99",                     // sticky notes only
-  inkColor: "#000000",                 // sticky/index/photo
+  tint: "#ffff99",                     // sticky notes only (stored as tint in flags, not inkColor)
+  textColor: "#000000",               // sticky/index/photo (stored as textColor in flags)
   linkedObject: "@UUID[...]{Name}",    // any note, set via drag-and-drop
   connections: [
     { targetId: "drawingId", color: "#FF0000", width: 3 }
   ]
 }
 ```
+
+> **Note:** Flag fields `tint` and `textColor` are the canonical names in flags; `inkColor` may appear in older code as an alias. Always write `textColor` for ink color.
 
 ### Connection Lines
 
@@ -144,6 +149,37 @@ Player update → preUpdateDrawing hook → lacks permission?
 GM-side handler in `utils/socket-handler.js` processes the request and performs the update.
 
 `module.json` must have `"socket": true`.
+
+**Socket actions handled by all clients** (not GM-only):
+- `playAudio` — plays audio globally on every connected client (media notes). Stops any existing instance of the same file first.
+- `stopAudio` — stops a playing audio file globally.
+
+**Socket actions handled by GM only** (non-GM clients ignore these):
+- `createDrawing` — create a single IB note on behalf of a player
+- `createManyDrawings` — bulk create notes on behalf of a player
+- `updateDrawing` — update a note on behalf of a player
+- `deleteDrawing` — delete a note on behalf of a player
+
+**Collaborative helper functions** in `utils/socket-handler.js` — always prefer these over direct Foundry API calls:
+- `collaborativeUpdate(drawingId, updateData)` — update, auto-routing via socket if needed
+- `collaborativeCreate(createData, options)` — create single note
+- `collaborativeCreateMany(createDataArray, options)` — bulk create
+- `collaborativeDelete(drawingId)` — delete with `{ ibDelete: true }` to bypass protection
+
+**Creation option flags** used to coordinate behavior across hooks:
+- `ibCreation: true` — injected by `collaborativeCreate`; signals a tool-initiated creation so `preCreateDrawing` skips clearing connections and suppressing auto-open
+- `ibRequestingUser: userId` — passed from socket handler into `createDrawing` hook so the correct client opens the edit dialog
+- `skipAutoOpen: true` — prevents the edit sheet from opening after note creation
+
+### v13 fillAlpha Migration
+
+Foundry v13 rejects updates on drawings where `fillAlpha === 0 && strokeWidth === 0` (no visible content). Legacy IB notes used `fillAlpha: 0` for handout/media/pin types.
+
+Two mitigation points:
+1. `canvasReady` hook — GM scans all scene drawings and batch-updates `fillAlpha: 0` → `0.001` once
+2. `collaborativeUpdate` — patches `fillAlpha: 0.001` into any update touching a legacy note
+
+When creating new notes always use `fillAlpha: 0.001` (not `0`) for transparent types.
 
 ### Investigation Board Mode
 
@@ -222,6 +258,24 @@ In `utils/helpers.js`. Dynamic character limits scale inversely with font size u
 ### Bulk Deletion Protection
 
 `preDeleteDrawing` hook returns `false` for IB notes unless `options.ibDelete` is set or the placeable is currently controlled (selected). This prevents "Clear All Drawings" from deleting IB notes.
+
+### Bulk Import
+
+`importFolderAsNotes(folder)` and `importPlaylistAsNotes(playlist)` in `creation-utils.js` create notes in a grid layout using `collaborativeCreateMany`. Supports Actor, Item, Scene, and Playlist folder types. Uses `foundry.applications.api.DialogV2.wait()` for confirmation, with an optional lo-fi audio effect checkbox for playlist imports.
+
+### Additional Context Menus
+
+Beyond the directory context menus documented above, two more hooks extend creation:
+
+- `renderJournalSheet` / `renderJournalPageSheet` — injects "Create Handout Note" into the existing image context menu within Journal sheets (modifies the ContextMenu instance at `app.contextMenus`)
+- `renderImagePopout` — appends "Create Handout Note" button to the `menu.controls-dropdown` in Image Popout windows
+
+### Clipboard Paste
+
+`ready` hook listens for `paste` events on the document. When an image is pasted while IB mode is active (and focus is not on an input/textarea), it:
+1. Ensures `assets/ib-handouts/` directory exists via `FilePicker.browse`/`createDirectory`
+2. Uploads the pasted image with a timestamped unique filename
+3. Calls `createHandoutNoteFromImage(path)` with the uploaded path
 
 ## Settings
 

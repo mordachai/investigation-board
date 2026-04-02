@@ -258,7 +258,13 @@ Hooks.once("init", () => {
 });
 
 // Hook to initialize socket for collaborative editing
-Hooks.once("ready", () => {
+Hooks.once("ready", async () => {
+  // Force-load module fonts so PIXI.Text can use them before the canvas renders.
+  // CSS @font-face fonts load asynchronously — without this, PIXI falls back to
+  // a system font if it tries to render text before the font download completes.
+  const moduleFonts = ["Rock Salt", "Caveat", "Typewriter Condensed", "IB Special Elite"];
+  await Promise.all(moduleFonts.map(f => document.fonts.load(`16px "${f}"`).catch(() => {})));
+
   initSocket();
 
   // Show setup warning to GM if enabled
