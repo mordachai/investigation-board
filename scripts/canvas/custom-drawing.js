@@ -160,7 +160,9 @@ export class CustomDrawing extends Drawing {
    */
   activateListeners() {
     super.activateListeners();
-    if (this.mouseInteractionManager) {
+    // Only override right-click permissions for IB notes. Applying this to
+    // regular drawings changes their context-menu behavior unexpectedly.
+    if (this.document.flags[MODULE_ID]?.type && this.mouseInteractionManager) {
       this.mouseInteractionManager.permissions.clickRight = () => true;
       this.mouseInteractionManager.permissions.clickRight2 = () => true;
     }
@@ -544,13 +546,17 @@ export class CustomDrawing extends Drawing {
   // Ensure sprites are created when the drawing is first rendered.
   async draw() {
     await super.draw();
-    // Mark as investigation board note for CSS filtering
+    // Only apply IB-specific rendering to IB notes. Regular drawings must not
+    // have their scale or PIXI transform overridden by this module.
+    if (!this.document.flags[MODULE_ID]?.type) {
+      this.scale.set(1, 1); // Clear any leftover scale from old code
+      return this;
+    }
+
     this.element?.setAttribute("data-investigation-note", "true");
-    
     const sceneScale = getEffectiveScale();
     this.scale.set(sceneScale);
     await this._updateSprites();
-    // Redraw all connections and reposition pins globally
     import("./connection-manager.js").then(m => {
       m.updatePins();
       m.drawAllConnectionLines();
@@ -561,13 +567,17 @@ export class CustomDrawing extends Drawing {
   // Ensure sprites update correctly on refresh.
   async refresh() {
     await super.refresh();
-    // Mark as investigation board note for CSS filtering
+    // Only apply IB-specific rendering to IB notes. Regular drawings must not
+    // have their scale or PIXI transform overridden by this module.
+    if (!this.document.flags[MODULE_ID]?.type) {
+      this.scale.set(1, 1); // Clear any leftover scale from old code
+      return this;
+    }
+
     this.element?.setAttribute("data-investigation-note", "true");
-    
     const sceneScale = getEffectiveScale();
     this.scale.set(sceneScale);
     await this._updateSprites();
-    // Redraw all connections and reposition pins globally
     import("./connection-manager.js").then(m => {
       m.updatePins();
       m.drawAllConnectionLines();
