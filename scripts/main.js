@@ -38,16 +38,16 @@ function refreshDrawingsInteractivity() {
 
   canvas.drawings.placeables.forEach(drawing => {
     const isInvestigationNote = drawing.document.flags[MODULE_ID];
-    if (!isInvestigationNote) {
-      drawing.eventMode = 'none';
-      drawing.interactiveChildren = false;
-    } else {
-      // Ensure investigation notes are interactive and selectable
-      // Use 'static' to ensure it receives events even if it's not "owned"
+    if (isInvestigationNote) {
+      // Ensure investigation notes are interactive and selectable.
+      // Use 'static' to ensure it receives events even if it's not "owned".
       drawing.eventMode = 'static';
       drawing.interactiveChildren = true;
       drawing.cursor = 'pointer';
     }
+    // Non-IB drawings are left at their default Foundry state so they remain
+    // selectable in draw mode. Forcing them to 'none' breaks the ability to
+    // select or manipulate regular drawings while IB mode is active.
   });
 }
 
@@ -84,12 +84,15 @@ function deactivateInvestigationBoardMode() {
   // Clear connection numbers
   clearConnectionNumbers();
 
-  // Restore default interactivity to all drawings
+  // Restore IB notes to default interactivity (non-IB drawings were never modified)
   if (canvas.drawings) {
     canvas.drawings.placeables.forEach(drawing => {
-      drawing.eventMode = 'auto';
-      drawing.interactiveChildren = true;
-      drawing.cursor = null;
+      const isInvestigationNote = drawing.document.flags[MODULE_ID];
+      if (isInvestigationNote) {
+        drawing.eventMode = 'auto';
+        drawing.interactiveChildren = true;
+        drawing.cursor = null;
+      }
     });
   }
 
