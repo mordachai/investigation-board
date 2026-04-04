@@ -10,6 +10,8 @@ A Foundry VTT module that lets everyone create, edit, and move sticky and photo 
 
 Added in the context menu of any note the option to hide/reveal the note for the players. Hidden notes appear with reduced opacity for GMs. This should help to prepare notes before hand. Connection stays visible all the time.
 
+<img width="950" height="728" alt="image" src="https://github.com/user-attachments/assets/e35dd203-aa54-4085-840f-141dcf2072ad" />
+
 ## NEW FEATURE >> Extra Fonts: Typewriter & Special Elite
 
 Added these two new fonts as options. Also fixed a bug that prevented fonts to load on systems that not have them installed locally.
