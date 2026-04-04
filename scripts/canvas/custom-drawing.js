@@ -319,6 +319,22 @@ export class CustomDrawing extends Drawing {
        };
 
        menu.appendChild(editOption);
+
+       if (game.user.isGM) {
+         const isHidden = this.document.hidden;
+         const toggleVisOption = document.createElement('div');
+         toggleVisOption.innerHTML = isHidden
+           ? '<i class="fas fa-eye"></i> Reveal to Players'
+           : '<i class="fas fa-eye-slash"></i> Hide from Players';
+         toggleVisOption.classList.add('ib-context-menu-item');
+         toggleVisOption.onclick = async (e) => {
+           e.stopPropagation();
+           menu.remove();
+           await this.document.update({ hidden: !isHidden });
+         };
+         menu.appendChild(toggleVisOption);
+       }
+
        menu.appendChild(removeConnectionsOption);
        menu.appendChild(deleteOption);
        document.body.appendChild(menu);
@@ -470,6 +486,21 @@ export class CustomDrawing extends Drawing {
 
     menu.appendChild(editOption);
     menu.appendChild(viewOption);
+
+    if (game.user.isGM) {
+      const isHidden = this.document.hidden;
+      const toggleVisOption = document.createElement('div');
+      toggleVisOption.innerHTML = isHidden
+        ? '<i class="fas fa-eye"></i> Reveal to Players'
+        : '<i class="fas fa-eye-slash"></i> Hide from Players';
+      toggleVisOption.classList.add('ib-context-menu-item');
+      toggleVisOption.onclick = async (e) => {
+        e.stopPropagation();
+        menu.remove();
+        await this.document.update({ hidden: !isHidden });
+      };
+      menu.appendChild(toggleVisOption);
+    }
 
     // Linked Object Option
     if (noteData.linkedObject) {

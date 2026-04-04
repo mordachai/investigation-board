@@ -1,4 +1,30 @@
-/* Fonts are declared in module.json — no @font-face needed here. */
+@font-face {
+  font-family: 'Rock Salt';
+  src: url('../assets/fonts/rock_salt.ttf') format('truetype');
+  font-weight: 400;
+  font-style: normal;
+}
+
+@font-face {
+  font-family: 'Caveat';
+  src: url('../assets/fonts/caveat.ttf') format('truetype');
+  font-weight: 400;
+  font-style: normal;
+}
+
+@font-face {
+  font-family: 'Typewriter Condensed';
+  src: url('../assets/fonts/typewcond_regular.otf') format('opentype');
+  font-weight: 400;
+  font-style: normal;
+}
+
+@font-face {
+  font-family: 'IB Special Elite';
+  src: url('../assets/fonts/SpecialElite-Regular.ttf') format('truetype');
+  font-weight: 400;
+  font-style: normal;
+}
 
 .custom-drawing-text {
   font-family: 'Rock Salt', Arial, sans-serif;

@@ -2,7 +2,7 @@
   "id": "investigation-board",
   "title": "Investigation Board",
   "description": "<p>A Foundry VTT module that lets everyone create, edit, and move sticky and photo notes on the scene as collaborative investigation tools.</p>",
-  "version": "4.9.6",
+  "version": "4.9.7",
   "socket": true,
   "authors": [
     {
@@ -15,9 +15,7 @@
     "minimum": "12",
     "verified": "13"
   },
-  "esmodules": [
-    "scripts/main.js"
-  ],
+  "esmodules": ["scripts/main.js"],
   "styles": [
     {
       "src": "styles/style.css"
@@ -40,39 +38,11 @@
       "name": "Investigation Board",
       "sorting": "m",
       "color": "#061f6a",
-      "packs": [
-        "ib-scenes"
-      ]
+      "packs": ["ib-scenes"]
     }
   ],
   "url": "https://github.com/mordachai/investigation-board",
   "manifest": "https://github.com/mordachai/investigation-board/releases/latest/download/module.json",
   "download": "https://github.com/mordachai/investigation-board/releases/latest/download/module.zip",
-  "fonts": [
-    {
-      "family": "Rock Salt",
-      "fonts": [
-        { "path": "assets/fonts/rock_salt.ttf", "weight": 400, "style": "normal" }
-      ]
-    },
-    {
-      "family": "Caveat",
-      "fonts": [
-        { "path": "assets/fonts/caveat.ttf", "weight": 400, "style": "normal" }
-      ]
-    },
-    {
-      "family": "Typewriter Condensed",
-      "fonts": [
-        { "path": "assets/fonts/typewcond_regular.otf", "weight": 400, "style": "normal" }
-      ]
-    },
-    {
-      "family": "IB Special Elite",
-      "fonts": [
-        { "path": "assets/fonts/SpecialElite-regular.ttf", "weight": 400, "style": "normal" }
-      ]
-    }
-  ],
   "flags": {}
 }

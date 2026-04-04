@@ -3,7 +3,8 @@
     "allow": [
       "WebSearch",
       "WebFetch(domain:foundryvtt.com)",
-      "WebFetch(domain:foundryvtt.wiki)"
+      "WebFetch(domain:foundryvtt.wiki)",
+      "Bash(python3 -c \"import sys,json; d=json.load\\(sys.stdin\\); print\\(json.dumps\\(d.get\\('fonts', d.get\\('font', 'NOT FOUND'\\)\\), indent=2\\)\\)\")"
     ]
   }
 }
