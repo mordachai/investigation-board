@@ -307,6 +307,8 @@ export function updatePins() {
       drawing.pinSprite.cursor = 'pointer';
       drawing.pinSprite.removeAllListeners();
       drawing.pinSprite.on('click', (event) => onPinClick(event, drawing));
+      drawing.pinSprite.visible = !drawing.document.hidden || game.user.isGM;
+      drawing.pinSprite.alpha = (game.user.isGM && drawing.document.hidden) ? 0.4 : 1;
 
       pinsContainer.addChild(drawing.pinSprite);
     }

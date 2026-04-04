@@ -1,16 +1,22 @@
 [![ko-fi](https://ko-fi.com/img/githubbutton_sm.svg)](https://ko-fi.com/W7W01A1ZN1)
 
 # Investigation Board
+
 ![Foundry v13](https://img.shields.io/badge/foundry-v13-green?style=for-the-badge) ![Github All Releases](https://img.shields.io/github/downloads/mordachai/investigation-board/total.svg?style=for-the-badge) ![GitHub Release](https://img.shields.io/github/v/release/mordachai/investigation-board?display_name=tag&style=for-the-badge&label=Current%20version)
 
 A Foundry VTT module that lets everyone create, edit, and move sticky and photo notes on the scene. A must-have for investigative games like City of Mist, Call of Cthulhu, and all your conspiracy adventures.
 
+## NEW FEATURE >> Hide/Reveal Notes
+
+Added in the context menu of any note the option to hide/reveal the note for the players. Hidden notes appear with reduced opacity for GMs. This should help to prepare notes before hand. Connection stays visible all the time.
+
 ## NEW FEATURE >> Extra Fonts: Typewriter & Special Elite
+
 Added these two new fonts as options. Also fixed a bug that prevented fonts to load on systems that not have them installed locally.
 
 <img width="1227" height="758" alt="image" src="https://github.com/user-attachments/assets/ac32a62e-e4b0-4641-90cf-ff0d519d1941" />
 
-## CHECK OUT THE VIDEO ↓ 
+## CHECK OUT THE VIDEO ↓
 
 https://github.com/user-attachments/assets/9d578c0b-380e-4942-91fc-0a43d6c27296
 
@@ -20,7 +26,7 @@ https://github.com/user-attachments/assets/9d578c0b-380e-4942-91fc-0a43d6c27296
 
 Sticky notes now have color options. You can also choose the ink color for any note. Included options in game settings to let each player set their own default color set.
 
-------
+---
 
 ## NEW FEATURE >> Handout Notes from Images in Journals:
 
@@ -28,30 +34,31 @@ Journals, specially the ones containing adventures can be full of images. Now in
 
 <img width="900" height="692" alt="image" src="https://github.com/user-attachments/assets/d752e887-e9be-4c37-b50a-1c6b6b7c4d1a" />
 
-------
+---
 
 ## NEW FEATURE >> Handout Notes from Clipboard buffer:
 
 If you Ctrl+C an area in your screen and Ctrl+V while in Drawing mode a note will appear. Even better, if you copy an image file in your file explorer and Control+V in canvas a note will be created with the correct transparency set if the image has transparency.
 
-------
+---
 
 ## NEW FEATURE >> Automatic Scene Scale:
 
 The module now automatically adapts to your map size. Whether you are on a small 1280px map or a massive 5000px scene, your notes, pins, and yarn connections will stay proportional. You can even set a global multiplier if you want them a bit larger or smaller on all maps.
 
-------
+---
 
 ## NEW FEATURE >> Rapid Connection Creation:
 
 <img width="781" height="355" alt="image" src="https://github.com/user-attachments/assets/6709fe44-650e-4d25-8505-ed06c5b96726" />
 
 Speed up your board building! While dragging a yarn connection (after clicking a pin):
+
 - **Left-Click** anywhere on the background to instantly create a new Pin and connect it.
 - **Right-Click** anywhere on the background to open a quick menu and create any note type (Sticky, Photo, Index, etc.) already connected to your path.
 - Clicking on another's note pin will connect both, as usual.
 
-------
+---
 
 ## NEW FEATURE >> Only Pins:
 
@@ -59,7 +66,7 @@ We reach the peak: we are now able to create only pins and connections. Its prac
 
 <img width="600" height="462" alt="image" src="https://github.com/user-attachments/assets/bba6ed56-ed40-41b8-84cc-dc2f76df178b" />
 
------
+---
 
 ## NEW FEATURE >> Create photo notes from Folder:
 
@@ -67,7 +74,7 @@ You can now create photo notes from all items on a folder. It ignores subfolders
 
 <img width="376" height="427" alt="image" src="https://github.com/user-attachments/assets/34f6229e-3619-4725-9f2e-0673633deafb" />
 
-------
+---
 
 ## NEW FEATURE >> Notes From Items:
 
@@ -75,14 +82,15 @@ You can now create photo notes from items too. They will be automatically linked
 
 <img width="600" height="468" alt="image" src="https://github.com/user-attachments/assets/c6b6715c-0bbe-4706-8c07-91cfb2530d0e" />
 
-------
+---
 
 ## NEW FEATURE >> Old Tape Sound Effects:
+
 <img width="609" height="482" alt="image" src="https://github.com/user-attachments/assets/d8a8d34b-8ef8-41f7-9b83-ecb16241fee1" />
 
 Now you can activate a sound effect filter to make the audio even more immersive. This option is on by default in all Media notes created. Remember to edit and uncheck if you want the original audio.
 
-------
+---
 
 ## NEW FEATURE >> Connecting Notes:
 
@@ -92,7 +100,7 @@ Connecting lines will always have the player's Foundry color initially. You can 
 
 **REMEMBER: YOU NEED TO BE IN DRAW MODE TO MAKE ALL OF THIS**
 
------
+---
 
 ## How to Use
 
@@ -101,6 +109,7 @@ Open the **Drawing Tools Toolbar** in the scene controls. You will find several 
 <img width="349" height="661" alt="image" src="https://github.com/user-attachments/assets/62d48308-e44a-4f80-b7b3-047cf1663d64" />
 
 ### Note Types
+
 - **Sticky Note**: Classic square notes for quick clues or short text.
 - **Photo Note**: Polaroid-style frames. Perfect for suspects, locations, or evidence.
 - **Index Card**: Larger lined cards for more detailed notes or descriptions.
@@ -110,7 +119,7 @@ Open the **Drawing Tools Toolbar** in the scene controls. You will find several 
 
 <img width="800" height="500" alt="image" src="https://github.com/user-attachments/assets/9862eaab-8747-4df5-8153-4a795d1ef19d" />
 
------
+---
 
 ### Scene in Compendiums
 
@@ -119,18 +128,20 @@ Don't have a scene? Don't worry, you can use this corkboard scene for starters. 
 <img width="978" height="711" alt="image" src="https://github.com/user-attachments/assets/0ea03a2e-a5fc-4f4e-a0b2-8f9b2b690f66" />
 
 ### Interaction & Linking
+
 - **Double Click**: Opens the **Note Previewer**, a high-resolution view of the note and its contents.
 - **Edit & Drag**: Move notes around by selecting them. Note that you must be in the **Drawing Tools** layer to manipulate notes.
 - **Linked Objects**: You can drag and drop Actors, Items, Journal Pages, or Scenes directly onto a note (or into its configuration sheet) to link them. This creates a clickable reference in the note's preview for quick access.
 - **Context Menu (Right-Click)**: Right-clicking any note opens a custom menu allowing you to:
-    - **Edit**: Open the configuration sheet.
-    - **View**: Open the high-res preview.
-    - **Play for Me/All**: (Media notes only) Local or global audio playback.
-    - **Remove Connections**: Quickly clear all yarn lines attached to the note.
-    - **Open Link**: Directly open the linked document if one exists.
-    - **Delete**: Remove the note from the board.
+  - **Edit**: Open the configuration sheet.
+  - **View**: Open the high-res preview.
+  - **Play for Me/All**: (Media notes only) Local or global audio playback.
+  - **Remove Connections**: Quickly clear all yarn lines attached to the note.
+  - **Open Link**: Directly open the linked document if one exists.
+  - **Delete**: Remove the note from the board.
 
 ### Directory Integration
+
 You can quickly create notes directly from your Foundry sidebars by right-clicking documents:
 
 <img width="800" height="385" alt="image" src="https://github.com/user-attachments/assets/84e46265-a879-40d2-b387-129ffe5a9670" />
@@ -145,7 +156,7 @@ You can quickly create notes directly from your Foundry sidebars by right-clicki
 
 #### **Permissions Note**: Only the GM can assign images to photo notes from the file system unless players are given browser file permissions.
 
------
+---
 
 ### Module Settings
 
@@ -162,7 +173,7 @@ You can quickly create notes directly from your Foundry sidebars by right-clicki
 - **Default Note Texts**: Set the placeholder text for each new note type (Sticky, Photo, Index, Media).
 - **Show Setup Warning**: Toggle the reminder for GMs about player permissions for drawings and file uploads.
 
------
+---
 
 ## Installation
 
@@ -179,9 +190,10 @@ Paste the following manifest URL into the bottom Manifest URL field:
 ```
 https://github.com/mordachai/investigation-board/releases/latest/download/module.json
 ```
+
 After that go to your world and enable the module in your Game Settings under Manage Modules
 
------
+---
 
 ## Compatibility
 

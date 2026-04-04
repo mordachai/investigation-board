@@ -57,7 +57,8 @@ export class CustomDrawing extends Drawing {
     // Check if this is an investigation board note
     const noteData = this.document.flags?.[MODULE_ID];
     if (noteData?.type) {
-      // Allow all users to view investigation board notes
+      // Hidden notes are invisible to non-GM users
+      if (this.document.hidden && !user.isGM) return false;
       return true;
     }
     // Fall back to default behavior for regular drawings
@@ -101,6 +102,17 @@ export class CustomDrawing extends Drawing {
       return true;
     }
     return super._canConfigure(user, event);
+  }
+
+  /**
+   * Override _getTargetAlpha so Foundry's _refreshState() dims hidden IB notes for the GM.
+   * _refreshState() calls this.alpha = this._getTargetAlpha() every render tick, so this is
+   * the correct hook point — setting this.alpha manually elsewhere gets overridden each frame.
+   */
+  _getTargetAlpha() {
+    const noteData = this.document.flags?.[MODULE_ID];
+    if (noteData?.type && this.document.hidden && game.user.isGM) return 0.4;
+    return super._getTargetAlpha();
   }
 
   /**
@@ -433,7 +445,7 @@ export class CustomDrawing extends Drawing {
     }
 
     const viewOption = document.createElement('div');
-    viewOption.innerHTML = '<i class="fas fa-eye"></i> View';
+    viewOption.innerHTML = '<i class="fas fa-magnifying-glass"></i> View';
     viewOption.classList.add('ib-context-menu-item');
     viewOption.onclick = (e) => {
       e.stopPropagation();

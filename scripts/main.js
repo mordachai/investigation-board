@@ -498,7 +498,8 @@ Hooks.on("updateDrawing", async (drawing, changes, options, userId) => {
   }
 
   // Redraw connection lines when position OR connections change
-  if (changes.x !== undefined || changes.y !== undefined || flagsChanged) {
+  // Also refresh pins when hidden state changes (pins live in pinsContainer, outside the placeable hierarchy)
+  if (changes.x !== undefined || changes.y !== undefined || flagsChanged || changes.hidden !== undefined) {
     updatePins();
     drawAllConnectionLines();
   }

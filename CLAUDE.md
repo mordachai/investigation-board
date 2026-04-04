@@ -21,7 +21,7 @@ Investigation Board is a Foundry VTT v13 module that enables collaborative inves
 
 ## Development Workflow
 
-No build step required. Edit JS/CSS and reload Foundry. CSS in `styles/` is compiled automatically by Foundry — do not re-read it after edits.
+No build step required. Edit JS/CSS and reload Foundry.
 
 To test: refresh Foundry after code changes. Existing notes may need `canvas.drawings` refresh or select/deselect. Connection lines auto-update on note movement.
 
@@ -60,14 +60,14 @@ templates/
 Registers all Foundry hooks and manages Investigation Board mode:
 
 - `Hooks.once("init")` — register settings, set `CONFIG.Drawing.objectClass = CustomDrawing`, register sheet (makeDefault: false)
-- `Hooks.once("ready")` — init socket, show setup warning to GM if permissions missing
+- `Hooks.once("ready")` — init socket, force-load fonts via `document.fonts.load()`, show setup warning to GM if permissions missing
 - `Hooks.on("getSceneControlButtons")` — add 6 creation tools to `controls.drawings.tools`
 - `Hooks.on("renderSceneControls")` — activate/deactivate IB mode when drawings control is selected
 - `Hooks.on("preCreateDrawing")` — clear connections and suppress auto-open on paste/duplicate
 - `Hooks.on("createDrawing")` — open edit dialog for creator, refresh interactivity/pins
 - `Hooks.on("preUpdateDrawing")` — route updates through socket for non-owners
 - `Hooks.on("preDeleteDrawing")` — protect IB notes from bulk deletion
-- `Hooks.on("updateDrawing")` — refresh sprites, connection lines, NotePreviewer on change
+- `Hooks.on("updateDrawing")` — refresh sprites, connection lines, NotePreviewer on change; also calls `updatePins()` when `hidden` changes
 - `Hooks.on("deleteDrawing")` — redraw connections when notes are deleted
 - `Hooks.on("canvasReady")` — cleanup containers, reset state, redraw all connections
 - `Hooks.on("dropCanvasData")` — link Foundry document to note on drag-drop
@@ -80,7 +80,7 @@ Six note types in `drawing.flags['investigation-board'].type`:
 - **sticky** — 200×200, colored tints via `STICKY_TINTS`, ink color via `INK_COLORS`
 - **photo** — 225×290, polaroid layout (or horizontal in futuristic mode)
 - **index** — 600×400, default fontSize 9
-- **handout** — transparent background, image-only, resizable, `fillAlpha: 0`
+- **handout** — transparent background, image-only, resizable, `fillAlpha: 0.001`
 - **media** — 400×~296, cassette tape image, plays audio on click
 - **pin** — 40×40, standalone pin with no background
 
@@ -89,6 +89,8 @@ Rendering in `CustomDrawing._updateSprites()`:
 1. Check handout type FIRST — completely different sprite layout
 2. Check futuristic photo notes — horizontal layout
 3. All other types use shared layout logic
+
+**`_updateSprites()` concurrency guard:** The method uses `_spriteUpdateRunning` / `_spriteUpdateQueued` flags. If called while running, it queues one re-run. The queued call fires unawaited from the `finally` block — any state set *after* `await _updateSprites()` can be overridden by the queued run. Apply persistent visual state *inside* `_doUpdateSprites()`, not after it.
 
 **Z-Index Layering (front to back):**
 
@@ -133,7 +135,7 @@ Stored one-directionally in source note's `connections` flag array. All renderin
 - `showConnectionNumbers()` / `clearConnectionNumbers()` — floating number overlays during editing
 - `startConnectionAnimation()` / `stopConnectionAnimation()` — marching lights while dialog open
 
-Pins are repositioned into global `pinsContainer` at zIndex 20 on every redraw (world coordinates).
+Pins are repositioned into global `pinsContainer` at zIndex 20 on every redraw (world coordinates). Pins in `pinsContainer` are decoupled from their drawing's PIXI hierarchy, so any per-drawing state (visibility, alpha) must be explicitly applied to `drawing.pinSprite` inside `updatePins()`.
 
 ### Collaborative Editing
 
@@ -181,6 +183,21 @@ Two mitigation points:
 
 When creating new notes always use `fillAlpha: 0.001` (not `0`) for transparent types.
 
+### Fonts
+
+Module fonts are declared as `@font-face` rules at the top of `styles/style.css` — **not** in `module.json`. The four custom fonts are: Rock Salt, Caveat, Typewriter Condensed, IB Special Elite. Font files live in `assets/fonts/`. After declarations in CSS, `document.fonts.load()` is called in the `ready` hook to eagerly load them so PIXI.Text can use them before any canvas rendering.
+
+> Do not add a `fonts` array to `module.json` — fonts are managed exclusively in CSS.
+
+### Hidden Notes (GM Visibility)
+
+IB notes support GM hide/reveal via the right-click context menu (`document.hidden`). The implementation works around Foundry v13's rendering pipeline:
+
+- **`_getTargetAlpha()`** is overridden to return `0.4` for GM when `document.hidden`. This is the correct hook: Foundry's `Drawing._refreshState()` calls `this.alpha = this._getTargetAlpha()` on every render tick, so setting `this.alpha` anywhere else gets overridden each frame.
+- **`_canView(user)`** returns `false` for non-GM users when `document.hidden`, hiding the note from players at the framework level.
+- **`updatePins()`** explicitly sets `pinSprite.visible` and `pinSprite.alpha` based on hidden state, because pins live in `pinsContainer` outside the drawing's PIXI hierarchy and don't inherit container alpha.
+- The `updateDrawing` hook watches `changes.hidden !== undefined` to call `updatePins()` immediately when visibility is toggled.
+
 ### Investigation Board Mode
 
 Activated when Drawings control is selected (`renderSceneControls` hook). In active mode:
@@ -192,9 +209,10 @@ Activated when Drawings control is selected (`renderSceneControls` hook). In act
 ### Permission Overrides in CustomDrawing
 
 ```javascript
-_canControl(user, event)  // returns true for all IB notes
-_canDrag(user, event)     // returns true unless locked
-_canView(user, event)     // returns true for all IB notes
+_canControl(user, event)   // returns true for all IB notes
+_canDrag(user, event)      // returns true unless locked
+_canView(user, event)      // returns true for all IB notes; false for non-GM when document.hidden
+_getTargetAlpha()          // returns 0.4 for GM when document.hidden; delegates to super otherwise
 ```
 
 `CustomDrawingSheet._canRender(options)` also returns true for all IB notes.
