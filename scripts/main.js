@@ -303,46 +303,12 @@ Hooks.once("ready", async () => {
         if (!file) continue;
 
         ui.notifications.info("Investigation Board: Processing clipboard image...");
-
-        const folderPath = "assets/ib-handouts";
-
         try {
-          // 1. Ensure directories exist (assets -> assets/ib-handouts)
-          try {
-            await FilePicker.browse("data", "assets");
-          } catch {
-            await FilePicker.createDirectory("data", "assets");
-          }
-          
-          try {
-            await FilePicker.browse("data", folderPath);
-          } catch {
-            await FilePicker.createDirectory("data", folderPath);
-          }
-
-          // 2. Upload file
-          const timestamp = Date.now();
-          const uniqueId = foundry.utils.randomID();
-          
-          // Use original name extension if available, defaulting to png
-          let ext = "png";
-          if (file.name) {
-             const parts = file.name.split(".");
-             if (parts.length > 1) ext = parts.pop();
-          }
-          const newFileName = `pasted_handout_${timestamp}_${uniqueId}.${ext}`;
-          
-          // Create a new File object with the correct name to ensure it's respected
-          const renamedFile = new File([file], newFileName, { type: file.type });
-          
-          const response = await FilePicker.upload("data", folderPath, renamedFile, { fileName: newFileName });
-          
-          // 3. Create Note
-          if (response.path) {
-            await createHandoutNoteFromImage(response.path);
+          const path = await _uploadImageHandout(file, "pasted");
+          if (path) {
+            await createHandoutNoteFromImage(path);
             ui.notifications.info("Investigation Board: Created handout from clipboard.");
           }
-          
         } catch (err) {
           console.error("Investigation Board: Paste failed", err);
           ui.notifications.warn("Investigation Board: Failed to upload pasted image. Check console for details.");
@@ -353,7 +319,103 @@ Hooks.once("ready", async () => {
       }
     }
   });
+
+  // Drag-and-drop image listener — creates a handout note at the drop position.
+  // Handles file drops (WhatsApp, Google Images, desktop) and URL-only drops (Discord web).
+  // Attached to document (like the paste listener) so it works regardless of canvas init timing.
+  document.addEventListener("dragover", (e) => {
+    if (!InvestigationBoardState.isActive) return;
+    if (e.target?.id !== "board") return; // only intercept drags over the game canvas
+    if (!game.permissions.DRAWING_CREATE.includes(game.user.role)) return;
+
+    const hasImageFile = [...e.dataTransfer.items].some(i => i.kind === "file" && i.type.startsWith("image/"));
+    const hasUriList = e.dataTransfer.types.includes("text/uri-list");
+    if (hasImageFile || hasUriList) e.preventDefault();
+  });
+
+  document.addEventListener("drop", async (e) => {
+    if (!InvestigationBoardState.isActive) return;
+    if (e.target?.id !== "board") return; // only intercept drags over the game canvas
+    if (!game.permissions.DRAWING_CREATE.includes(game.user.role)) return;
+
+    // Convert screen coordinates to canvas world coordinates
+    const boardEl = e.target;
+    const rect = boardEl.getBoundingClientRect();
+    const worldPos = canvas.stage.toLocal(new PIXI.Point(e.clientX - rect.left, e.clientY - rect.top));
+
+    // Priority 1: actual image file(s) in the drop (WhatsApp, Google Images, desktop)
+    const imageFiles = [...e.dataTransfer.files].filter(f => f.type.startsWith("image/"));
+    if (imageFiles.length > 0) {
+      e.preventDefault();
+      e.stopPropagation();
+      ui.notifications.info("Investigation Board: Processing dropped image...");
+      try {
+        const path = await _uploadImageHandout(imageFiles[0], "dropped");
+        if (path) await createHandoutNoteFromImage(path, { x: worldPos.x, y: worldPos.y });
+      } catch (err) {
+        console.error("Investigation Board: Drop failed", err);
+        ui.notifications.warn("Investigation Board: Failed to upload dropped image. Check console for details.");
+      }
+      return;
+    }
+
+    // Priority 2: URL-only drop (Discord web, links from browser tabs)
+    const uriList = e.dataTransfer.getData("text/uri-list");
+    if (!uriList) return;
+
+    const url = uriList.split("\n").map(u => u.trim()).find(u => u && !u.startsWith("#"));
+    if (!url) return;
+
+    // Only treat it as an image if the URL path ends with a known image extension
+    const imageExtPattern = /\.(png|jpe?g|gif|webp|avif|svg|bmp|tiff?)(\?.*)?$/i;
+    if (!imageExtPattern.test(url)) return;
+
+    e.preventDefault();
+    e.stopPropagation();
+    ui.notifications.info("Investigation Board: Fetching dropped image URL...");
+    try {
+      const res = await fetch(url);
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      const blob = await res.blob();
+      const ext = (blob.type.split("/")[1] || "png").replace("jpeg", "jpg");
+      const file = new File([blob], `dropped.${ext}`, { type: blob.type });
+      const path = await _uploadImageHandout(file, "dropped");
+      if (path) await createHandoutNoteFromImage(path, { x: worldPos.x, y: worldPos.y });
+    } catch (err) {
+      console.error("Investigation Board: Could not fetch image URL", err);
+      ui.notifications.warn("Investigation Board: Couldn't download that image — try right-clicking it → Copy Image, then paste (Ctrl+V) instead.");
+    }
+  });
 });
+
+/**
+ * Uploads an image File to assets/ib-handouts/ and returns the server path.
+ * @param {File} file
+ * @param {string} [prefix] - Filename prefix, e.g. "pasted" or "dropped"
+ * @returns {Promise<string|null>}
+ */
+async function _uploadImageHandout(file, prefix = "handout") {
+  const folderPath = "assets/ib-handouts";
+
+  try { await FilePicker.browse("data", "assets"); }
+  catch { await FilePicker.createDirectory("data", "assets"); }
+
+  try { await FilePicker.browse("data", folderPath); }
+  catch { await FilePicker.createDirectory("data", folderPath); }
+
+  const timestamp = Date.now();
+  const uniqueId = foundry.utils.randomID();
+  let ext = "png";
+  if (file.name && file.name.includes(".")) {
+    ext = file.name.split(".").pop();
+  } else if (file.type) {
+    ext = (file.type.split("/")[1] || "png").replace("jpeg", "jpg");
+  }
+  const newFileName = `${prefix}_handout_${timestamp}_${uniqueId}.${ext}`;
+  const renamedFile = new File([file], newFileName, { type: file.type });
+  const response = await FilePicker.upload("data", folderPath, renamedFile, { fileName: newFileName });
+  return response.path || null;
+}
 
 // Hook to intercept drawing creation to handle Copy/Paste logic
 Hooks.on("preCreateDrawing", (drawing, data, options, userId) => {

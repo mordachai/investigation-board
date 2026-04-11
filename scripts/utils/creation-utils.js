@@ -764,10 +764,13 @@ export async function importPlaylistAsNotes(playlist) {
 }
 
 /**
- * Creates a Handout Note from a raw image path (e.g. uploaded from clipboard).
+ * Creates a Handout Note from a raw image path (e.g. uploaded from clipboard or drag-drop).
  * @param {string} imagePath - The path to the uploaded image
+ * @param {object} [options]
+ * @param {number|null} [options.x] - Canvas world X to center the note on. Defaults to viewport center.
+ * @param {number|null} [options.y] - Canvas world Y to center the note on. Defaults to viewport center.
  */
-export async function createHandoutNoteFromImage(imagePath) {
+export async function createHandoutNoteFromImage(imagePath, { x: dropX = null, y: dropY = null } = {}) {
   const scene = canvas.scene;
   if (!scene) {
     ui.notifications.error("Cannot create note: No active scene.");
@@ -777,10 +780,6 @@ export async function createHandoutNoteFromImage(imagePath) {
   const handoutW = game.settings.get(MODULE_ID, "handoutNoteWidth") || 400;
   const handoutH = game.settings.get(MODULE_ID, "handoutNoteHeight") || 400;
   const sceneScale = getEffectiveScale();
-
-  const viewCenter = canvas.stage.pivot;
-  const x = viewCenter.x - (handoutW * sceneScale) / 2;
-  const y = viewCenter.y - (handoutH * sceneScale) / 2;
 
   // Attempt to get natural dimensions for better initial sizing
   let finalWidth = handoutW;
@@ -806,6 +805,17 @@ export async function createHandoutNoteFromImage(imagePath) {
     }
   } catch (err) {
     console.error("Investigation Board: Failed to get image dimensions for handout", err);
+  }
+
+  // Center the note on the drop point, or fall back to viewport center
+  let x, y;
+  if (dropX !== null && dropY !== null) {
+    x = dropX - (finalWidth * sceneScale) / 2;
+    y = dropY - (finalHeight * sceneScale) / 2;
+  } else {
+    const viewCenter = canvas.stage.pivot;
+    x = viewCenter.x - (finalWidth * sceneScale) / 2;
+    y = viewCenter.y - (finalHeight * sceneScale) / 2;
   }
 
   const created = await collaborativeCreate({
