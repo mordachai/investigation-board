@@ -6,6 +6,14 @@
 
 A Foundry VTT module that lets everyone create, edit, and move sticky and photo notes on the scene. A must-have for investigative games like City of Mist, Call of Cthulhu, and all your conspiracy adventures.
 
+## NEW FEATURE >> Investigation Office
+
+Added a new scene to IB. Maybe it's your detective desk in the police precint, or the working table of the mising professor at the University. I've recorded the creation process of the scene here: https://youtu.be/ApPb84eDF4I
+
+<img width="1834" height="1056" alt="Office Scene" src="https://github.com/user-attachments/assets/950d06e0-926c-474e-b8f5-d7dca436359f" />
+
+------
+
 ## NEW FEATURE >> Hide/Reveal Notes
 
 Added in the context menu of any note the option to hide/reveal the note for the players. Hidden notes appear with reduced opacity for GMs. This should help to prepare notes before hand. Connection stays visible all the time.
