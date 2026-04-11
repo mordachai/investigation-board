@@ -8,11 +8,11 @@ A Foundry VTT module that lets everyone create, edit, and move sticky and photo 
 
 ## NEW FEATURE >> Investigation Office
 
-Added a new scene to IB. Maybe it's your detective desk in the police precint, or the working table of the mising professor at the University. I've recorded the creation process of the scene here: https://youtu.be/ApPb84eDF4I
+Just added a new scene to IB! Whether it's your detective desk at the precinct or the missing professor's desk at the university, you can watch the creation process here: https://youtu.be/ApPb84eDF4I
 
 <img width="1834" height="1056" alt="Office Scene" src="https://github.com/user-attachments/assets/950d06e0-926c-474e-b8f5-d7dca436359f" />
 
-------
+---
 
 ## NEW FEATURE >> Hide/Reveal Notes
 
@@ -20,11 +20,15 @@ Added in the context menu of any note the option to hide/reveal the note for the
 
 <img width="950" height="728" alt="image" src="https://github.com/user-attachments/assets/e35dd203-aa54-4085-840f-141dcf2072ad" />
 
+---
+
 ## NEW FEATURE >> Extra Fonts: Typewriter & Special Elite
 
 Added these two new fonts as options. Also fixed a bug that prevented fonts to load on systems that not have them installed locally.
 
 <img width="1227" height="758" alt="image" src="https://github.com/user-attachments/assets/ac32a62e-e4b0-4641-90cf-ff0d519d1941" />
+
+---
 
 ## CHECK OUT THE VIDEO ↓
 
