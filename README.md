@@ -1,4 +1,18 @@
+This module is free. Wanna do a cool thing?
+
 [![ko-fi](https://ko-fi.com/img/githubbutton_sm.svg)](https://ko-fi.com/W7W01A1ZN1)
+
+---
+
+## Notice: Foundry v13 development frozen. Foundry v14 upgrade on the way!
+
+What that means? Well, no new features or issues solving for the v13 version, it will stay as is at the moment with all the current capabilities.
+
+Foundry v14 migration is already done (for me only, not publishd yet ;) ). All tests seems to be working, we have some small improvements and I'm working on adding video notes, because I really want to run some adventures with the _found footage_ vibe. So stay tunned.
+
+<img width="1280" height="720" alt="image" src="https://github.com/user-attachments/assets/407120e6-8299-493b-887d-d1478d60d91e" />
+
+---
 
 # Investigation Board
 
