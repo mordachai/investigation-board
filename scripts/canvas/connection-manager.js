@@ -17,6 +17,15 @@ export let animationTickerId = null; // Ticker for animating connection lines
 // Connection number overlays
 export let connectionNumberOverlays = []; // Array of PIXI.Text objects showing connection numbers
 
+// Pin drag state
+let pinDragState = null; // { drawing, startMouseX, startMouseY, startNoteX, startNoteY, noteWidth, noteHeight, isDragging, currentX, currentY }
+const PIN_DRAG_THRESHOLD = 5; // pixels of movement before drag mode activates
+
+// Flag: true for the synchronous tick after connection mode starts.
+// Prevents the PIXI-synthesized click (from the same pointerdown→pointerup cycle that
+// started connection mode) from immediately firing onCanvasClick and creating a pin.
+let _connectionModeJustStarted = false;
+
 // Helper function to calculate points along a quadratic bezier curve
 function getQuadraticBezierPoints(x0, y0, cx, cy, x1, y1, segments) {
   const pts = [];
@@ -191,43 +200,23 @@ function drawYarnLine(graphics, x1, y1, x2, y2, color, width, animated = false, 
   drawDanglingEnd(x2, y2, false);
 }
 
-// Helper to get a realistic yarn color from a hex color
-function getRealisticYarnColor(colorInput) {
-  if (typeof foundry !== "undefined" && foundry.utils && foundry.utils.Color) {
-    try {
-      const c = foundry.utils.Color.from(colorInput);
-      let hsl = c.hsl; 
-      
-      if (hsl[2] > 0.6) {
-        hsl[2] *= 0.5;
-      } else if (hsl[2] > 0.2) {
-        hsl[2] *= 0.7;
-      } else {
-        hsl[2] = Math.max(hsl[2], 0.15);
-      }
-      
-      if (hsl[1] > 0.1) {
-         hsl[1] = Math.min(1, hsl[1] * 1.2);
-      }
-
-      let finalColor = c;
-      if (c.r > 0.6 && c.g > 0.6 && c.b > 0.6) {
-         finalColor = c.multiply(0.5); 
-      } else {
-         finalColor = c.multiply(0.7);
-      }
-      
-      if (finalColor.r < 0.1 && finalColor.g < 0.1 && finalColor.b < 0.1) {
-        finalColor = finalColor.add(foundry.utils.Color.from(0x222222)); 
-      }
-
-      return finalColor; 
-    } catch (e) {
-      console.warn("Error adjusting yarn color", e);
-      return colorInput;
-    }
+// Convert any color value (Color object, CSS string, or number) to a plain integer
+// suitable for PIXI lineStyle, with a subtle darkening for yarn texture feel.
+function toYarnColorNum(colorInput) {
+  // Step 1: get a raw integer from whatever form colorInput is in
+  let raw;
+  if (typeof colorInput === "string") {
+    raw = parseInt(colorInput.replace("#", ""), 16);
+  } else {
+    // Handles plain numbers AND Color-extends-Number objects — Number() calls valueOf()
+    raw = Number(colorInput);
   }
-  return colorInput;
+  if (!Number.isFinite(raw) || raw < 0 || raw > 0xFFFFFF) return 0xFF0000;
+
+  // Step 2: darken slightly using the static method (plain numbers in, plain number out)
+  // Light/white colors: 25% darker; everything else: 15% darker.
+  const isLight = ((raw >> 16 & 0xFF) > 178) && ((raw >> 8 & 0xFF) > 178) && ((raw & 0xFF) > 178);
+  return foundry.utils.Color.multiplyScalar(raw, isLight ? 0.75 : 0.85);
 }
 
 /**
@@ -235,7 +224,6 @@ function getRealisticYarnColor(colorInput) {
  */
 export function updatePins() {
   if (!canvas || !canvas.ready || !canvas.drawings) return;
-  const sceneScale = getEffectiveScale();
 
   if (!pinsContainer || pinsContainer.destroyed) {
     pinsContainer = new PIXI.Container();
@@ -248,65 +236,50 @@ export function updatePins() {
   canvas.drawings.placeables.forEach(drawing => {
     const noteData = drawing.document.flags[MODULE_ID];
     if (noteData && drawing.pinSprite) {
-      // Special handling for "Only Pin" notes: Keep sprite on drawing, do not move to global container
-      if (noteData.type === "pin") {
-        if (drawing.pinSprite.parent !== drawing) {
-          drawing.addChild(drawing.pinSprite);
-        }
-        drawing.pinSprite.eventMode = 'static';
-        drawing.pinSprite.cursor = 'pointer';
-        drawing.pinSprite.removeAllListeners();
-        // Determine width/height for centering (should be small, e.g. 40)
-        // Note: The drawing object itself is already scaled by sceneScale in draw/refresh
-        const width = drawing.document.shape.width || 40;
-        const height = drawing.document.shape.height || 40;
-        drawing.pinSprite.width = width;
-        drawing.pinSprite.height = height;
-        drawing.pinSprite.position.set(0, 0); // Local to drawing
-
-        drawing.pinSprite.on('click', (event) => onPinClick(event, drawing));
-        return; // Skip the rest for this drawing
-      }
-
       drawing.zIndex = 0;
-      
-      if (drawing.pinSprite.parent === drawing) {
-        drawing.removeChild(drawing.pinSprite);
-      }
 
-      const isHandout = noteData.type === "handout";
-      const isMedia = noteData.type === "media";
-      const isPhoto = noteData.type === "photo";
-      const isIndex = noteData.type === "index";
+      const noteWidth = drawing.document.shape.width || 200;
+      const noteHeight = drawing.document.shape.height || 200;
 
-      let width, pinY;
-      if (isHandout) {
-        width = (drawing.document.shape.width || 400);
-        const height = (drawing.document.shape.height || 400);
-        pinY = drawing.document.y + (height * 0.05 * sceneScale);
-      } else if (isMedia) {
-        width = (drawing.document.shape.width || 400);
-        pinY = drawing.document.y + (3 * sceneScale);
+      let pinX, pinY, pinW, pinH;
+
+      if (noteData.type === "pin") {
+        pinX = drawing.document.x;
+        pinY = drawing.document.y;
+        pinW = noteWidth;
+        pinH = noteHeight;
       } else {
-        if (isPhoto) {
-          width = game.settings.get(MODULE_ID, "photoNoteWidth");
-        } else if (isIndex) {
-          width = (game.settings.get(MODULE_ID, "indexNoteWidth") || 600);
+        pinW = 40;
+        pinH = 40;
+        if (noteData.type === "handout") {
+          pinX = drawing.document.x + noteWidth / 2 - 20;
+          pinY = drawing.document.y + noteHeight * 0.05;
         } else {
-          width = game.settings.get(MODULE_ID, "stickyNoteWidth");
+          pinX = drawing.document.x + noteWidth / 2 - 20;
+          pinY = drawing.document.y + 3;
         }
-        pinY = drawing.document.y + (3 * sceneScale);
       }
 
-      // Manually scale and position the global pin sprite
-      drawing.pinSprite.width = 40 * sceneScale;
-      drawing.pinSprite.height = 40 * sceneScale;
-      drawing.pinSprite.x = drawing.document.x + (width * sceneScale) / 2 - (20 * sceneScale);
+      drawing.pinSprite.width = pinW;
+      drawing.pinSprite.height = pinH;
+      drawing.pinSprite.x = pinX;
       drawing.pinSprite.y = pinY;
       drawing.pinSprite.eventMode = 'static';
       drawing.pinSprite.cursor = 'pointer';
       drawing.pinSprite.removeAllListeners();
-      drawing.pinSprite.on('click', (event) => onPinClick(event, drawing));
+      drawing.pinSprite.on('pointerdown', (event) => {
+        if (event.button === 2) {
+          // Right-click: bypass drag/connection logic and show the note's context menu directly.
+          // The pin sprite covers the entire pin note and is a sibling (not parent) of the Drawing
+          // in the PIXI hierarchy, so events never bubble to the Drawing's _onClickRight handler.
+          event.stopPropagation();
+          if (InvestigationBoardState.isActive && noteData?.type === "pin") {
+            drawing._showContextMenu(event);
+          }
+          return;
+        }
+        onPinPointerDown(event, drawing);
+      });
       drawing.pinSprite.visible = !drawing.document.hidden || game.user.isGM;
       drawing.pinSprite.alpha = (game.user.isGM && drawing.document.hidden) ? 0.4 : 1;
 
@@ -357,20 +330,7 @@ export function drawAllConnectionLines(animationOffset = 0) {
 
       let lineColor = conn.color || "#FF0000";
       const lineWidth = (conn.width || game.settings.get(MODULE_ID, "connectionLineWidth") || 6) * sceneScale;
-      
-      let colorNum;
-      const realisticColor = getRealisticYarnColor(lineColor);
-      
-      if (typeof realisticColor === "number") {
-          colorNum = realisticColor;
-      } else if (realisticColor instanceof foundry.utils.Color) {
-          colorNum = realisticColor.valueOf();
-      } else if (typeof realisticColor === "string") {
-        colorNum = parseInt(realisticColor.replace("#", ""), 16);
-      } else {
-         colorNum = 0xFF0000;
-      }
-
+      const colorNum = toYarnColorNum(lineColor);
       drawYarnLine(
         connectionLinesContainer,
         sourcePin.x,
@@ -538,7 +498,9 @@ async function createConnection(sourceDrawing, targetDrawing) {
     return;
   }
 
-  const playerColor = game.user.color || "#FF0000";
+  // Convert Color object to a plain CSS string so Foundry's mergeObject doesn't mangle it.
+  // Color extends Number, and mergeObject spreads enumerable own props → {}, losing the value.
+  const playerColor = game.user.color?.css ?? "#FF0000";
   const width = game.settings.get(MODULE_ID, "connectionLineWidth") || 6;
 
   connections.push({
@@ -554,7 +516,145 @@ async function createConnection(sourceDrawing, targetDrawing) {
   drawAllConnectionLines();
 }
 
-// Pin-Click Connection Function
+// Pin pointer-down: decides between drag and click (connection)
+function onPinPointerDown(event, drawing) {
+  event.stopPropagation();
+
+  if (!InvestigationBoardState.isActive) return;
+
+  const noteData = drawing.document.flags[MODULE_ID];
+  if (!noteData) return;
+
+  // If already in connection mode, complete or reject the connection immediately
+  if (pinConnectionFirstNote) {
+    if (drawing === pinConnectionFirstNote) {
+      ui.notifications.error("Cannot connect a note to itself.");
+      return;
+    }
+    createConnection(pinConnectionFirstNote, drawing);
+    resetPinConnectionState();
+    return;
+  }
+
+  // Start drag tracking — will resolve to drag or click on pointerup
+  const worldPos = event.getLocalPosition(canvas.stage);
+  pinDragState = {
+    drawing,
+    startMouseX: worldPos.x,
+    startMouseY: worldPos.y,
+    startNoteX: drawing.document.x,
+    startNoteY: drawing.document.y,
+    noteWidth: drawing.document.shape.width || 40,
+    noteHeight: drawing.document.shape.height || 40,
+    isDragging: false,
+    currentX: drawing.document.x,
+    currentY: drawing.document.y,
+  };
+
+  canvas.stage.on('pointermove', onPinDragMove);
+  canvas.stage.once('pointerup', onPinPointerUp);
+}
+
+function onPinDragMove(event) {
+  if (!pinDragState) return;
+
+  const worldPos = event.getLocalPosition(canvas.stage);
+  const dx = worldPos.x - pinDragState.startMouseX;
+  const dy = worldPos.y - pinDragState.startMouseY;
+
+  if (!pinDragState.isDragging && Math.sqrt(dx * dx + dy * dy) > PIN_DRAG_THRESHOLD) {
+    pinDragState.isDragging = true;
+    document.body.style.cursor = 'grabbing';
+  }
+
+  if (pinDragState.isDragging) {
+    const newX = pinDragState.startNoteX + dx;
+    const newY = pinDragState.startNoteY + dy;
+    pinDragState.currentX = newX;
+    pinDragState.currentY = newY;
+
+    const { drawing, noteWidth, noteHeight } = pinDragState;
+
+    // Move note body visually (shape is positioned at center with pivot at center)
+    if (drawing.shape && !drawing.shape.destroyed) {
+      drawing.shape.position.set(newX + noteWidth / 2, newY + noteHeight / 2);
+    }
+
+    // Move pin sprite visually (it lives in pinsContainer at world coords)
+    if (drawing.pinSprite && !drawing.pinSprite.destroyed) {
+      const noteData = drawing.document.flags[MODULE_ID];
+      if (noteData?.type === "pin") {
+        drawing.pinSprite.x = newX;
+        drawing.pinSprite.y = newY;
+      } else if (noteData?.type === "handout") {
+        drawing.pinSprite.x = newX + noteWidth / 2 - 20;
+        drawing.pinSprite.y = newY + noteHeight * 0.05;
+      } else {
+        drawing.pinSprite.x = newX + noteWidth / 2 - 20;
+        drawing.pinSprite.y = newY + 3;
+      }
+    }
+  }
+}
+
+async function onPinPointerUp(event) {
+  canvas.stage.off('pointermove', onPinDragMove);
+  document.body.style.cursor = '';
+
+  if (!pinDragState) return;
+
+  const state = pinDragState;
+  pinDragState = null;
+
+  if (state.isDragging) {
+    // Commit new position — hooks will redraw connections and reposition pins
+    await collaborativeUpdate(state.drawing.document.id, {
+      x: state.currentX,
+      y: state.currentY,
+    });
+  } else {
+    // Was a plain click — start connection mode
+    _startConnectionMode(state.drawing);
+  }
+}
+
+// Starts the yarn-connection mode from a pin click
+function _startConnectionMode(drawing) {
+  pinConnectionFirstNote = drawing;
+
+  if (pinConnectionHighlight) {
+    if (pinConnectionHighlight.parent) pinConnectionHighlight.parent.removeChild(pinConnectionHighlight);
+    pinConnectionHighlight.destroy();
+  }
+
+  const sceneScale = getEffectiveScale();
+  pinConnectionHighlight = new PIXI.Graphics();
+  pinConnectionHighlight.lineStyle(4 * sceneScale, 0x00ff00, 1);
+
+  const highlightW = (drawing.document.shape.width || 40) * sceneScale;
+  const highlightH = (drawing.document.shape.height || 40) * sceneScale;
+
+  pinConnectionHighlight.drawRect(
+    drawing.document.x,
+    drawing.document.y,
+    highlightW,
+    highlightH
+  );
+  canvas.controls.addChild(pinConnectionHighlight);
+
+  startConnectionPreview(drawing);
+
+  // Guard against the PIXI-synthesized click that fires in the same synchronous task as
+  // the pointerup that triggered _startConnectionMode. Without this, onCanvasClick would
+  // fire immediately and create a pin right under the cursor.
+  _connectionModeJustStarted = true;
+  setTimeout(() => { _connectionModeJustStarted = false; }, 0);
+
+  canvas.stage.once('click', onCanvasClick);
+  canvas.stage.once('rightclick', onCanvasRightClick);
+}
+
+// Pin-Click Connection Function (kept for API compatibility)
 export function onPinClick(event, drawing) {
   event.stopPropagation();
 
@@ -564,36 +664,7 @@ export function onPinClick(event, drawing) {
   if (!noteData) return;
 
   if (!pinConnectionFirstNote) {
-    pinConnectionFirstNote = drawing;
-
-    if (pinConnectionHighlight) {
-      canvas.controls.removeChild(pinConnectionHighlight);
-      pinConnectionHighlight.destroy();
-    }
-
-    const sceneScale = getEffectiveScale();
-    pinConnectionHighlight = new PIXI.Graphics();
-    pinConnectionHighlight.lineStyle(4 * sceneScale, 0x00ff00, 1);
-    
-    // Draw based on scaled dimensions
-    const highlightW = (drawing.document.shape.width || 40) * sceneScale;
-    const highlightH = (drawing.document.shape.height || 40) * sceneScale;
-    
-    pinConnectionHighlight.drawRect(
-      drawing.document.x,
-      drawing.document.y,
-      highlightW,
-      highlightH
-    );
-    canvas.controls.addChild(pinConnectionHighlight);
-
-    startConnectionPreview(drawing);
-
-    // Register canvas background click handler
-    canvas.stage.once('click', onCanvasClick);
-    // Also register right click
-    canvas.stage.once('rightclick', onCanvasRightClick);
-
+    _startConnectionMode(drawing);
     return;
   }
 
@@ -610,6 +681,14 @@ export function onPinClick(event, drawing) {
  * Handle left click on canvas background while dragging yarn
  */
 async function onCanvasClick(event) {
+  // Skip the bubbled synthetic click produced by PIXI from the same pointerdown→pointerup
+  // cycle that started connection mode. Re-arm the listener for the next real canvas click.
+  if (_connectionModeJustStarted) {
+    _connectionModeJustStarted = false;
+    canvas.stage.once('click', onCanvasClick);
+    return;
+  }
+
   // If connection was cancelled or already finished, do nothing
   if (!pinConnectionFirstNote) return;
 
@@ -677,7 +756,6 @@ function onCanvasRightClick(event) {
     { id: 'photo', label: 'Photo Note', icon: 'fa-solid fa-camera-polaroid' },
     { id: 'index', label: 'Index Card', icon: 'fa-regular fa-subtitles' },
     { id: 'media', label: 'Media Note', icon: 'fas fa-cassette-tape' },
-    { id: 'pin', label: 'Pin Only', icon: 'fas fa-thumbtack' }
   ];
 
   noteTypes.forEach(type => {
@@ -736,6 +814,13 @@ function onCanvasRightClick(event) {
 }
 
 export function resetPinConnectionState() {
+  // Clean up any in-progress drag
+  if (pinDragState) {
+    canvas.stage.off('pointermove', onPinDragMove);
+    canvas.stage.off('pointerup', onPinPointerUp);
+    document.body.style.cursor = '';
+    pinDragState = null;
+  }
   pinConnectionFirstNote = null;
   if (pinConnectionHighlight) {
     try {

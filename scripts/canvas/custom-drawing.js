@@ -1,7 +1,7 @@
 import { MODULE_ID, PIN_COLORS, SOCKET_NAME } from "../config.js";
 import { InvestigationBoardState } from "../state.js";
 import { collaborativeUpdate, collaborativeDelete, socket, activeGlobalSounds } from "../utils/socket-handler.js";
-import { getDynamicCharacterLimits, truncateText, getEffectiveScale } from "../utils/helpers.js";
+import { truncateText } from "../utils/helpers.js";
 import { NotePreviewer } from "../apps/note-previewer.js";
 import { drawAllConnectionLines } from "./connection-manager.js";
 
@@ -116,53 +116,20 @@ export class CustomDrawing extends Drawing {
   }
 
   /**
-   * Override _onHandleDrag to enforce aspect ratio for handout notes during resizing.
-   * Also prevents resizing entirely for non-handout notes.
+   * Override _refreshState to hide selection handles for all non-handout IB notes.
+   * In v14, Drawing uses DrawingShapeControls (this.controls) for selection/resize handles.
+   * _refreshFrame() was deprecated in v14 and no longer called automatically.
    */
-  _onHandleDrag(event) {
+  _refreshState() {
+    super._refreshState();
     const noteData = this.document.flags?.[MODULE_ID];
-    if (!noteData?.type) return super._onHandleDrag(event);
+    if (!noteData?.type) return;
 
-    // Only handouts are allowed to be resized
-    if (noteData.type !== "handout") {
-      return; 
-    }
-
-    // Force aspect ratio preservation for handouts by simulating the shift key
-    event.interactionData.shiftKey = true;
-    return super._onHandleDrag(event);
-  }
-
-  /**
-   * Override _refreshFrame to hide selection frame and resize handles for all notes except handouts.
-   */
-  _refreshFrame() {
-    const noteData = this.document.flags?.[MODULE_ID];
-    const isIBNote = !!noteData?.type;
-    const isHandout = noteData?.type === "handout";
-
-    // Call super first to let Foundry do its thing
-    super._refreshFrame();
-
-    // If it's one of our notes but NOT a handout, we hide the selection frame and handles
-    if (isIBNote && !isHandout) {
-      if (this.frame) {
-        this.frame.visible = false;
-        this.frame.renderable = false;
-        if (this.frame.handleContainer) {
-          this.frame.handleContainer.visible = false;
-          this.frame.handleContainer.renderable = false;
-        }
-      }
-    } 
-    // For handouts, we want to ensure handles are visible when controlled
-    else if (isHandout && this.frame && this.controlled) {
-      this.frame.visible = true;
-      this.frame.renderable = true;
-      if (this.frame.handleContainer) {
-        this.frame.handleContainer.visible = true;
-        this.frame.handleContainer.renderable = true;
-      }
+    const isHandout = noteData.type === "handout";
+    if (!isHandout && this.controls) {
+      // Hide selection border and resize handles for non-handout IB notes
+      this.controls.visible = false;
+      if (this.controls.handles) this.controls.handles.visible = false;
     }
   }
 
@@ -226,12 +193,12 @@ export class CustomDrawing extends Drawing {
     const noteData = this.document.flags?.[MODULE_ID];
     if (!noteData) return;
 
+    // Extract screen coordinates — handle both Foundry-wrapped events (interactionData.originalEvent)
+    // and raw PIXI FederatedPointerEvents from pin sprite listeners (nativeEvent).
     const data = event.data || event.interactionData;
-    const originalEvent = data.originalEvent;
-    
-    // Positions
-    const x = originalEvent.clientX;
-    const y = originalEvent.clientY;
+    const originalEvent = data?.originalEvent ?? event.nativeEvent ?? event;
+    const x = originalEvent.clientX ?? 0;
+    const y = originalEvent.clientY ?? 0;
 
     // Remove any existing custom context menus
     document.querySelectorAll('.ib-context-menu').forEach(el => el.remove());
@@ -244,14 +211,15 @@ export class CustomDrawing extends Drawing {
     menu.style.zIndex = '10000';
 
     if (noteData.type === "pin") {
-       const editOption = document.createElement('div');
-       editOption.innerHTML = '<i class="fas fa-edit"></i> Edit';
-       editOption.classList.add('ib-context-menu-item');
-       editOption.onclick = (e) => {
-         e.stopPropagation();
-         this.document.sheet.render(true);
-         menu.remove();
-       };
+       // Edit option — kept for potential future use
+       // const editOption = document.createElement('div');
+       // editOption.innerHTML = '<i class="fas fa-edit"></i> Edit';
+       // editOption.classList.add('ib-context-menu-item');
+       // editOption.onclick = (e) => {
+       //   e.stopPropagation();
+       //   this.document.sheet.render(true);
+       //   menu.remove();
+       // };
 
        if (noteData.linkedObject) {
          const linkMatch = noteData.linkedObject.match(/\[([^\]]+)\](?:\{([^\}]+)\})?/);
@@ -282,6 +250,26 @@ export class CustomDrawing extends Drawing {
            menu.appendChild(linkOption);
          }
        }
+
+       // Convert-to options
+       const convertTypes = [
+         { id: 'sticky',  label: 'Sticky Note',  icon: 'fas fa-sticky-note' },
+         { id: 'photo',   label: 'Photo Note',   icon: 'fa-solid fa-camera-polaroid' },
+         { id: 'index',   label: 'Index Card',   icon: 'fa-regular fa-subtitles' },
+         { id: 'handout', label: 'Handout',      icon: 'fas fa-image' },
+         { id: 'media',   label: 'Media Note',   icon: 'fas fa-cassette-tape' },
+       ];
+       convertTypes.forEach(ct => {
+         const convertOption = document.createElement('div');
+         convertOption.innerHTML = `<i class="${ct.icon}"></i> Convert to ${ct.label}`;
+         convertOption.classList.add('ib-context-menu-item');
+         convertOption.onclick = (e) => {
+           e.stopPropagation();
+           menu.remove();
+           this._convertToNoteType(ct.id);
+         };
+         menu.appendChild(convertOption);
+       });
 
        const removeConnectionsOption = document.createElement('div');
        removeConnectionsOption.innerHTML = '<i class="fas fa-cut"></i> Remove Connections';
@@ -329,23 +317,6 @@ export class CustomDrawing extends Drawing {
            await collaborativeDelete(this.document.id);
          }
        };
-
-       menu.appendChild(editOption);
-
-       if (game.user.isGM) {
-         const isHidden = this.document.hidden;
-         const toggleVisOption = document.createElement('div');
-         toggleVisOption.innerHTML = isHidden
-           ? '<i class="fas fa-eye"></i> Reveal to Players'
-           : '<i class="fas fa-eye-slash"></i> Hide from Players';
-         toggleVisOption.classList.add('ib-context-menu-item');
-         toggleVisOption.onclick = async (e) => {
-           e.stopPropagation();
-           menu.remove();
-           await this.document.update({ hidden: !isHidden });
-         };
-         menu.appendChild(toggleVisOption);
-       }
 
        menu.appendChild(removeConnectionsOption);
        menu.appendChild(deleteOption);
@@ -590,15 +561,10 @@ export class CustomDrawing extends Drawing {
   async draw() {
     await super.draw();
     // Only apply IB-specific rendering to IB notes. Regular drawings must not
-    // have their scale or PIXI transform overridden by this module.
-    if (!this.document.flags[MODULE_ID]?.type) {
-      this.scale.set(1, 1); // Clear any leftover scale from old code
-      return this;
-    }
+    // have their rendering overridden by this module.
+    if (!this.document.flags[MODULE_ID]?.type) return this;
 
     this.element?.setAttribute("data-investigation-note", "true");
-    const sceneScale = getEffectiveScale();
-    this.scale.set(sceneScale);
     await this._updateSprites();
     import("./connection-manager.js").then(m => {
       m.updatePins();
@@ -610,16 +576,10 @@ export class CustomDrawing extends Drawing {
   // Ensure sprites update correctly on refresh.
   async refresh() {
     await super.refresh();
-    // Only apply IB-specific rendering to IB notes. Regular drawings must not
-    // have their scale or PIXI transform overridden by this module.
-    if (!this.document.flags[MODULE_ID]?.type) {
-      this.scale.set(1, 1); // Clear any leftover scale from old code
-      return this;
-    }
+    // Only apply IB-specific rendering to IB notes.
+    if (!this.document.flags[MODULE_ID]?.type) return this;
 
     this.element?.setAttribute("data-investigation-note", "true");
-    const sceneScale = getEffectiveScale();
-    this.scale.set(sceneScale);
     await this._updateSprites();
     import("./connection-manager.js").then(m => {
       m.updatePins();
@@ -648,6 +608,7 @@ export class CustomDrawing extends Drawing {
   }
 
   async _doUpdateSprites() {
+    if (!this.shape) return;
     const noteData = this.document.flags[MODULE_ID];
     if (!noteData) return;
 
@@ -663,7 +624,7 @@ export class CustomDrawing extends Drawing {
 
       // No background sprite for media (we use photoImageSprite for the cassette)
       if (this.bgSprite) {
-        this.removeChild(this.bgSprite);
+        this.shape.removeChild(this.bgSprite);
         this.bgSprite.destroy();
         this.bgSprite = null;
       }
@@ -671,13 +632,13 @@ export class CustomDrawing extends Drawing {
       if (!this.photoImageSprite || !this.photoImageSprite.parent) {
         if (this.photoImageSprite) this.photoImageSprite.destroy();
         this.photoImageSprite = new PIXI.Sprite();
-        this.addChild(this.photoImageSprite);
+        this.shape.addChild(this.photoImageSprite);
       }
 
       // --- Cassette Shadow ---
       if (!this.bgShadow) {
         this.bgShadow = new PIXI.Sprite();
-        this.addChildAt(this.bgShadow, 0); // Put it behind everything
+        this.shape.addChildAt(this.bgShadow, 0); // Put it behind everything
       }
 
       const imagePath = noteData.image || "modules/investigation-board/assets/cassette1.webp";
@@ -711,19 +672,18 @@ export class CustomDrawing extends Drawing {
         console.error(`Failed to load media image: ${imagePath}`, err);
       }
 
-      // --- Pin Sprite ---
+      // --- Pin Sprite (managed by updatePins, just load texture here) ---
       const pinSetting = game.settings.get(MODULE_ID, "pinColor");
       if (pinSetting === "none") {
         if (this.pinSprite) {
-          this.removeChild(this.pinSprite);
+          if (this.pinSprite.parent) this.pinSprite.parent.removeChild(this.pinSprite);
           this.pinSprite.destroy();
           this.pinSprite = null;
         }
       } else {
-        if (!this.pinSprite || !this.pinSprite.parent) {
+        if (!this.pinSprite || this.pinSprite.destroyed) {
           if (this.pinSprite) this.pinSprite.destroy();
           this.pinSprite = new PIXI.Sprite();
-          this.addChild(this.pinSprite);
         }
 
         let pinColor = noteData.pinColor;
@@ -737,12 +697,8 @@ export class CustomDrawing extends Drawing {
         const pinImage = `modules/investigation-board/assets/${pinColor}`;
         try {
           const texture = await PIXI.Assets.load(pinImage);
-          if (texture && this.pinSprite && this.pinSprite.parent) {
+          if (texture && this.pinSprite && !this.pinSprite.destroyed) {
             this.pinSprite.texture = texture;
-            this.pinSprite.width = 40;
-            this.pinSprite.height = 40;
-            // Center horizontally based on the actual drawing width
-            this.pinSprite.position.set(drawingWidth / 2 - 20, 3);
           }
         } catch (err) {
           console.error(`Failed to load pin texture: ${pinImage}`, err);
@@ -758,32 +714,28 @@ export class CustomDrawing extends Drawing {
 
     // PIN ONLY LAYOUT
     if (noteData.type === "pin") {
-      const width = this.document.shape.width || 40;
-      const height = this.document.shape.height || 40;
-
       // No background for pin-only
       if (this.bgSprite) {
-        this.removeChild(this.bgSprite);
+        this.shape.removeChild(this.bgSprite);
         this.bgSprite.destroy();
         this.bgSprite = null;
       }
       if (this.bgShadow) {
-        this.removeChild(this.bgShadow);
+        this.shape.removeChild(this.bgShadow);
         this.bgShadow.destroy();
         this.bgShadow = null;
       }
       if (this.photoImageSprite) {
-        this.removeChild(this.photoImageSprite);
+        this.shape.removeChild(this.photoImageSprite);
         this.photoImageSprite.destroy();
         this.photoImageSprite = null;
       }
 
-      // --- Pin Sprite ---
+      // --- Pin Sprite (managed by updatePins, just load texture here) ---
       const pinSetting = game.settings.get(MODULE_ID, "pinColor");
-      if (!this.pinSprite || !this.pinSprite.parent) {
+      if (!this.pinSprite || this.pinSprite.destroyed) {
         if (this.pinSprite) this.pinSprite.destroy();
         this.pinSprite = new PIXI.Sprite();
-        this.addChild(this.pinSprite);
       }
 
       let pinColor = noteData.pinColor;
@@ -797,11 +749,8 @@ export class CustomDrawing extends Drawing {
       const pinImage = `modules/investigation-board/assets/${pinColor}`;
       try {
         const texture = await PIXI.Assets.load(pinImage);
-        if (texture && this.pinSprite && this.pinSprite.parent) {
+        if (texture && this.pinSprite && !this.pinSprite.destroyed) {
           this.pinSprite.texture = texture;
-          this.pinSprite.width = width;
-          this.pinSprite.height = height;
-          this.pinSprite.position.set(0, 0);
         }
       } catch (err) {
         console.error(`Failed to load pin texture: ${pinImage}`, err);
@@ -821,7 +770,7 @@ export class CustomDrawing extends Drawing {
 
       // No background sprite for handouts (transparent)
       if (this.bgSprite) {
-        this.removeChild(this.bgSprite);
+        this.shape.removeChild(this.bgSprite);
         this.bgSprite.destroy();
         this.bgSprite = null;
       }
@@ -835,7 +784,7 @@ export class CustomDrawing extends Drawing {
           this.photoImageSprite = null;
         }
         this.photoImageSprite = new PIXI.Sprite();
-        this.addChild(this.photoImageSprite);
+        this.shape.addChild(this.photoImageSprite);
       }
 
       const imagePath = noteData.image || "modules/investigation-board/assets/newhandout.webp";
@@ -880,23 +829,18 @@ export class CustomDrawing extends Drawing {
         }
       }
 
-      // --- Pin Sprite ---
+      // --- Pin Sprite (managed by updatePins, just load texture here) ---
       const pinSetting = game.settings.get(MODULE_ID, "pinColor");
       if (pinSetting === "none") {
         if (this.pinSprite) {
-          this.removeChild(this.pinSprite);
+          if (this.pinSprite.parent) this.pinSprite.parent.removeChild(this.pinSprite);
           this.pinSprite.destroy();
           this.pinSprite = null;
         }
       } else {
-        // Check if sprite exists and has a valid parent, recreate if orphaned
-        if (!this.pinSprite || !this.pinSprite.parent) {
-          // Destroy old sprite if it exists
-          if (this.pinSprite) {
-            this.pinSprite.destroy();
-          }
+        if (!this.pinSprite || this.pinSprite.destroyed) {
+          if (this.pinSprite) this.pinSprite.destroy();
           this.pinSprite = new PIXI.Sprite();
-          this.addChild(this.pinSprite);
         }
 
         let pinColor = noteData.pinColor;
@@ -904,54 +848,23 @@ export class CustomDrawing extends Drawing {
           pinColor = (pinSetting === "random")
             ? PIN_COLORS[Math.floor(Math.random() * PIN_COLORS.length)]
             : `${pinSetting}Pin.webp`;
-          // Use collaborative update to save pin color (works for all users)
           await collaborativeUpdate(this.document.id, { [`flags.${MODULE_ID}.pinColor`]: pinColor });
         }
 
         const pinImage = `modules/investigation-board/assets/${pinColor}`;
         try {
           const texture = await PIXI.Assets.load(pinImage);
-          if (texture && this.pinSprite && this.pinSprite.parent) {
+          if (texture && this.pinSprite && !this.pinSprite.destroyed) {
             this.pinSprite.texture = texture;
-            this.pinSprite.width = 40;
-            this.pinSprite.height = 40;
-            // Position at 5% from top, centered horizontally
-            this.pinSprite.position.set(
-              drawingWidth / 2 - 20,
-              drawingHeight * 0.05
-            );
           }
         } catch (err) {
           console.error(`Failed to load pin texture: ${pinImage}`, err);
-          if (this.pinSprite) {
-            this.pinSprite.texture = PIXI.Texture.EMPTY;
-          }
         }
       }
 
       // Hide text sprites (handouts don't have text)
-      if (this.noteText) {
-        this.noteText.visible = false;
-      }
-      if (this.futuristicText) {
-        this.futuristicText.visible = false;
-      }
-
-      // Ensure the drawing itself is visible for handouts
-      this.visible = true;
-      this.alpha = 1;
-      this.renderable = true;
-
-      // Force PIXI render update by multiple methods
-      this.transform.updateTransform(this.parent.transform);
-
-      // Mark all children as needing update
-      if (this.photoImageSprite) {
-        this.photoImageSprite.updateTransform();
-      }
-      if (this.pinSprite) {
-        this.pinSprite.updateTransform();
-      }
+      if (this.noteText) this.noteText.visible = false;
+      if (this.futuristicText) this.futuristicText.visible = false;
 
       return; // Early exit for handout notes
     }
@@ -976,13 +889,13 @@ export class CustomDrawing extends Drawing {
     
     if (!this.bgSprite) {
       this.bgSprite = new PIXI.Sprite();
-      this.addChild(this.bgSprite);
+      this.shape.addChild(this.bgSprite);
     }
-    
+
     // --- Background Shadow ---
     if (!this.bgShadow) {
       this.bgShadow = new PIXI.Sprite();
-      this.addChildAt(this.bgShadow, 0); // Behind the background
+      this.shape.addChildAt(this.bgShadow, 0); // Behind the background
     }
     
     try {
@@ -1030,7 +943,7 @@ export class CustomDrawing extends Drawing {
       if (!this.photoImageSprite || this.photoImageSprite.destroyed) {
         if (this.photoImageSprite) this.photoImageSprite = null;
         this.photoImageSprite = new PIXI.Sprite();
-        this.addChild(this.photoImageSprite);
+        this.shape.addChild(this.photoImageSprite);
       }
       try {
         const texture = await PIXI.Assets.load(fgImage);
@@ -1073,7 +986,7 @@ export class CustomDrawing extends Drawing {
           // Apply Mask to clip overflow
           if (!this.photoMask) {
             this.photoMask = new PIXI.Graphics();
-            this.addChild(this.photoMask);
+            this.shape.addChild(this.photoMask);
           }
           this.photoMask.clear();
           this.photoMask.beginFill(0xffffff);
@@ -1094,42 +1007,34 @@ export class CustomDrawing extends Drawing {
       if (this.photoMask) this.photoMask.visible = false;
     }
     
-    // --- Pin Handling ---
+    // --- Pin Handling (managed by updatePins, just load texture here) ---
     {
       const pinSetting = game.settings.get(MODULE_ID, "pinColor");
       if (pinSetting === "none") {
         if (this.pinSprite) {
-          this.removeChild(this.pinSprite);
+          if (this.pinSprite.parent) this.pinSprite.parent.removeChild(this.pinSprite);
           this.pinSprite.destroy();
           this.pinSprite = null;
         }
       } else {
-        if (!this.pinSprite) {
+        if (!this.pinSprite || this.pinSprite.destroyed) {
           this.pinSprite = new PIXI.Sprite();
-          this.addChild(this.pinSprite);
         }
         let pinColor = noteData.pinColor;
         if (!pinColor) {
           pinColor = (pinSetting === "random")
             ? PIN_COLORS[Math.floor(Math.random() * PIN_COLORS.length)]
             : `${pinSetting}Pin.webp`;
-          // Use collaborative update to save pin color (works for all users)
           await collaborativeUpdate(this.document.id, { [`flags.${MODULE_ID}.pinColor`]: pinColor });
         }
         const pinImage = `modules/investigation-board/assets/${pinColor}`;
         try {
           const texture = await PIXI.Assets.load(pinImage);
-          if (texture && this.pinSprite) {
+          if (texture && this.pinSprite && !this.pinSprite.destroyed) {
             this.pinSprite.texture = texture;
-            this.pinSprite.width = 40;
-            this.pinSprite.height = 40;
-            this.pinSprite.position.set(width / 2 - 20, 3);
           }
         } catch (err) {
           console.error(`Failed to load pin texture: ${pinImage}`, err);
-          if (this.pinSprite) {
-            this.pinSprite.texture = PIXI.Texture.EMPTY;
-          }
         }
       }
     }
@@ -1152,7 +1057,7 @@ export class CustomDrawing extends Drawing {
     if (!this.noteText || this.noteText.destroyed) {
       this.noteText = new PIXI.Text(truncatedText, textStyle);
       this.noteText.anchor.set(0.5);
-      this.addChild(this.noteText);
+      this.shape.addChild(this.noteText);
     } else {
       this.noteText.style = textStyle;
       this.noteText.text = truncatedText;
@@ -1168,54 +1073,76 @@ export class CustomDrawing extends Drawing {
   _getPinPosition() {
     const noteData = this.document.flags[MODULE_ID];
     if (!noteData) return { x: this.document.x, y: this.document.y };
-    const sceneScale = getEffectiveScale();
 
-    // Handout notes use dynamic positioning based on drawing height
-    if (noteData.type === "handout") {
-      const width = (this.document.shape.width || 400) * sceneScale;
-      const height = (this.document.shape.height || 400) * sceneScale;
-      return {
-        x: this.document.x + width / 2,
-        y: this.document.y + (height * 0.05) + (20 * sceneScale) 
-      };
-    }
+    const noteWidth = this.document.shape.width || 200;
+    const noteHeight = this.document.shape.height || 200;
 
-    // Media notes (cassettes) center horizontally based on actual width
-    if (noteData.type === "media") {
-      const width = (this.document.shape.width || 400) * sceneScale;
-      return {
-        x: this.document.x + width / 2,
-        y: this.document.y + (23 * sceneScale)
-      };
-    }
-    
-    // Pin-only notes
     if (noteData.type === "pin") {
-      const width = (this.document.shape.width || 40) * sceneScale;
-      const height = (this.document.shape.height || 40) * sceneScale;
       return {
-        x: this.document.x + width / 2,
-        y: this.document.y + height / 2
+        x: this.document.x + noteWidth / 2,
+        y: this.document.y + noteHeight / 2
       };
     }
 
-    const isPhoto = noteData.type === "photo";
-    const isIndex = noteData.type === "index";
-
-    // Get note width based on type
-    let width;
-    if (isPhoto) {
-      width = game.settings.get(MODULE_ID, "photoNoteWidth") * sceneScale;
-    } else if (isIndex) {
-      width = (game.settings.get(MODULE_ID, "indexNoteWidth") || 600) * sceneScale;
-    } else {
-      width = game.settings.get(MODULE_ID, "stickyNoteWidth") * sceneScale;
+    if (noteData.type === "handout") {
+      return {
+        x: this.document.x + noteWidth / 2,
+        y: this.document.y + noteHeight * 0.05 + 20
+      };
     }
 
-    // Pin center is at (width/2, 23) relative to drawing position
+    // sticky, photo, index, media — pin is centered horizontally, near the top
     return {
-      x: this.document.x + width / 2,
-      y: this.document.y + (23 * sceneScale)
+      x: this.document.x + noteWidth / 2,
+      y: this.document.y + 23
     };
+  }
+
+  /**
+   * Convert this pin-only note into a different note type, keeping connections and linkedObject.
+   */
+  /**
+   * Convert this pin-only note into a different note type.
+   * Deletes the pin and creates a fresh note of the target type at the same position,
+   * preserving connections and the linked object.
+   */
+  async _convertToNoteType(targetType) {
+    // Capture everything we need before the delete destroys the document
+    const existing  = this.document.flags[MODULE_ID] || {};
+    const savedX    = this.document.x;
+    const savedY    = this.document.y;
+    const savedConns = (existing.connections || []).slice();
+    const savedLink  = existing.linkedObject || "";
+    const pinId      = this.document.id;
+
+    // Collect notes with incoming connections pointing at this pin, before deleting it
+    const incomingNotes = canvas.drawings.placeables.filter(d => {
+      if (d.document.id === pinId) return false;
+      return d.document.flags[MODULE_ID]?.connections?.some(c => c.targetId === pinId);
+    });
+
+    // Delete the pin (bypass the bulk-deletion guard)
+    await collaborativeDelete(pinId);
+
+    // Create the replacement note at the same position.
+    // createNote() handles all dimensions, fill, defaults, and opens the edit sheet.
+    const { createNote } = await import("../utils/creation-utils.js");
+    const newDoc = await createNote(targetType, { x: savedX, y: savedY });
+
+    if (newDoc?.id) {
+      // Restore outgoing connections and linked object on the new note
+      const updates = {};
+      if (savedLink)         updates[`flags.${MODULE_ID}.linkedObject`] = savedLink;
+      if (savedConns.length) updates[`flags.${MODULE_ID}.connections`]  = savedConns;
+      if (Object.keys(updates).length) await collaborativeUpdate(newDoc.id, updates);
+
+      // Re-point incoming connections from the old pin ID to the new note ID
+      for (const other of incomingNotes) {
+        const conns = other.document.flags[MODULE_ID].connections.map(c =>
+          c.targetId === pinId ? { ...c, targetId: newDoc.id } : c
+        );
+        await collaborativeUpdate(other.document.id, { [`flags.${MODULE_ID}.connections`]: conns });
+      }
+    }
   }
 }

@@ -136,12 +136,8 @@ export async function createNote(noteType, { x = null, y = null } = {}) {
   }
 
   // Switch back to select tool so user can immediately manipulate the note
-  if (InvestigationBoardState.isActive) {
-    const drawingsControl = ui.controls?.controls?.drawings;
-    if (drawingsControl) {
-      drawingsControl.activeTool = "select";
-      ui.controls.render();
-    }
+  if (InvestigationBoardState.isActive && ui.controls) {
+    ui.controls.activate({ control: "drawings", tool: "select" });
   }
 
   return created?.[0];

@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-Investigation Board is a Foundry VTT v13 module that enables collaborative investigation gameplay by allowing all users to create, edit, and move notes on the scene canvas. Notes are implemented as Foundry Drawing objects with custom rendering using PIXI.js sprites.
+Investigation Board is a Foundry VTT module (currently targeting **v14**, Build 360) that enables collaborative investigation gameplay by allowing all users to create, edit, and move notes on the scene canvas. Notes are implemented as Foundry Drawing objects with custom rendering using PIXI.js sprites.
 
 **Note Types:** sticky, photo, index, handout, media, pin
 
@@ -91,6 +91,8 @@ Rendering in `CustomDrawing._updateSprites()`:
 3. All other types use shared layout logic
 
 **`_updateSprites()` concurrency guard:** The method uses `_spriteUpdateRunning` / `_spriteUpdateQueued` flags. If called while running, it queues one re-run. The queued call fires unawaited from the `finally` block — any state set *after* `await _updateSprites()` can be overridden by the queued run. Apply persistent visual state *inside* `_doUpdateSprites()`, not after it.
+
+**v14: all sprites go to `this.shape`, not `this`** — See the v14 section below.
 
 **Z-Index Layering (front to back):**
 
@@ -217,7 +219,7 @@ _getTargetAlpha()          // returns 0.4 for GM when document.hidden; delegates
 
 `CustomDrawingSheet._canRender(options)` also returns true for all IB notes.
 
-### API and v13 Patterns
+### API Patterns
 
 Always use namespaced Foundry APIs:
 
@@ -283,10 +285,11 @@ In `utils/helpers.js`. Dynamic character limits scale inversely with font size u
 
 ### Additional Context Menus
 
-Beyond the directory context menus documented above, two more hooks extend creation:
+Beyond the directory context menus documented above, one more hook extends creation:
 
-- `renderJournalSheet` / `renderJournalPageSheet` — injects "Create Handout Note" into the existing image context menu within Journal sheets (modifies the ContextMenu instance at `app.contextMenus`)
-- `renderImagePopout` — appends "Create Handout Note" button to the `menu.controls-dropdown` in Image Popout windows
+- `getHeaderControlsImagePopout` — adds "Create Handout Note" to the Image Popout header controls via `onClick` + `app.options.src` (v14 pattern; the old `renderImagePopout` + `menu.controls-dropdown` approach no longer works)
+
+> **v14 note:** `renderJournalSheet` / `renderJournalPageSheet` + `app.contextMenus` was the v13 approach for journal image context menus. In v14, `JournalEntrySheet` is AppV2 and has no public `contextMenus` array — that feature is currently absent. Use `getHeaderControlsJournalEntrySheet` hook if re-implementing.
 
 ### Clipboard Paste
 
@@ -308,6 +311,100 @@ World-level settings (see `scripts/settings.js`):
 - `baseCharacterLimits` — hidden JSON for text truncation
 
 All settings call `refreshAllDrawings()` on change.
+
+## v14 Migration Notes
+
+This module was migrated from Foundry v13 to v14. The following are the breaking changes and their fixes — important context for future work.
+
+### `this.shape` — where sprites live in v14
+
+In v14, `Drawing._draw()` creates `this.shape = canvas.primary.addDrawing(this)` — a `PrimaryGraphics` instance in `canvas.primary`, NOT a child of the Drawing container. **All `addChild`/`removeChild` calls in `_doUpdateSprites()` must target `this.shape`, not `this`.**
+
+- `canvas.primary.addDrawing()` **reuses** the same PrimaryGraphics across `draw()` calls — `_clear()` only hides it, doesn't destroy children. Safe to re-use existing sprites.
+- `this.shape` is positioned at `(x + w/2, y + h/2)` with `pivot = (w/2, h/2)`. A sprite added at (0, 0) appears at the note's world position.
+- `this` (the Drawing container) is NOT at world coordinates in v14 — do not add visual sprites to `this`.
+- `autoScale` defaults to `true` — do NOT apply `getEffectiveScale()` as `this.shape.scale`. The shape's parent handles world scaling automatically; applying scale manually breaks the controls/sprite size alignment.
+
+### `_refreshState` replaces `_refreshFrame`
+
+v14 deprecated `_refreshFrame`. Override `_refreshState()` instead to hide resize handles for non-handout IB notes:
+
+```javascript
+_refreshState() {
+  super._refreshState();
+  if (this.document.flags[MODULE_ID]?.type && this.document.flags[MODULE_ID].type !== "handout") {
+    if (this.controls?.handles) this.controls.handles.visible = false;
+  }
+}
+```
+
+`this.frame.handleContainer` no longer exists — use `this.controls.handles`.
+
+### `_prepareSubmitData` override in CustomDrawingSheet
+
+AppV2's `DocumentSheetV2._postRender` and `_onChangeForm` call `_prepareSubmitData` which validates all form fields against the `DrawingDocument` schema. IB custom fields (`text`, `image`, `font`, etc.) are not valid schema paths and throw errors. Override to return `{}`:
+
+```javascript
+_prepareSubmitData(event, form, formData) {
+  return {};  // IB handles all updates manually in the submit handler
+}
+```
+
+### Context menu hook format
+
+v14 changed directory context menu hook signatures. All hooks now use `(label, onClick(event, li), visible)` — no more `(name, callback, condition)`:
+
+```javascript
+// v14
+options.push({
+  name: "IB.CreateNote",
+  icon: '<i class="fas fa-sticky-note"></i>',
+  condition: li => ...,
+  callback: li => ...
+});
+```
+
+Actually the format uses `name`/`icon`/`condition`/`callback` keys but the hook is called with `(html, options)` not `(name, ...)`. The IB code uses `getActorDirectoryEntryContext` etc. — verify these fire correctly in v14.
+
+### Folder context menus
+
+v14 consolidated all folder context hooks into a single `getFolderContextOptions` hook. Type-specific hooks (`getActorDirectoryFolderContext`, etc.) are gone.
+
+### Scene navigation context
+
+`getSceneContextOptions` fires for both the Scene directory AND `SceneNavigation` in v14. The separate `getSceneNavigationContext` hook was removed.
+
+### Tool activation
+
+`ui.controls.activate({ control: "drawings", tool: "select" })` — use the method, not direct property assignment.
+
+### `Color extends Number` — never store as flag value
+
+In v14, `game.user.color` returns a `Color` object (extends `Number`). **Do not store a `Color` object directly in document flags.** Foundry's `mergeObject` / data pipeline treats `Color` as a plain object, spreads its enumerable own properties (none), and produces `{}`, losing the value entirely.
+
+Always convert to a primitive before storing:
+
+```javascript
+// WRONG — stores as {} after Foundry's data pipeline
+connections.push({ color: game.user.color });
+
+// RIGHT — stores as "#28afcc" (plain string, survives round-trip)
+connections.push({ color: game.user.color?.css ?? "#FF0000" });
+```
+
+The same applies to any `Color` value you want to persist. Use `.css` (CSS hex string) or `Number(color)` (plain integer).
+
+### Connection yarn color pipeline
+
+`toYarnColorNum(colorInput)` in `connection-manager.js` converts a stored color (string, number, or Color object) to a plain integer for PIXI `lineStyle`. Uses `foundry.utils.Color.multiplyScalar(raw, factor)` — a static method that takes two plain numbers and returns a plain number, avoiding all `instanceof`/`valueOf` chain issues.
+
+- `Number(colorInput)` correctly extracts the value from Color objects (calls `valueOf()`)
+- `typeof colorInput === "string"` branch handles CSS strings like `"#28afcc"`
+- Never use `instanceof foundry.utils.Color` for type-checking — class identity can differ between core and module contexts
+
+### `_refreshFrame` → `_refreshState` / dead `_onHandleDrag`
+
+`_onHandleDrag` was calling a non-existent `super._onHandleDrag()` — removed entirely.
 
 ## Known Limitations
 
