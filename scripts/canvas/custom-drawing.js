@@ -125,11 +125,52 @@ export class CustomDrawing extends Drawing {
     const noteData = this.document.flags?.[MODULE_ID];
     if (!noteData?.type) return;
 
-    const isHandout = noteData.type === "handout";
-    if (!isHandout && this.controls) {
-      // Hide selection border and resize handles for non-handout IB notes
+    // Handout keeps full controls — leave Foundry's defaults untouched.
+    if (noteData.type === "handout") return;
+
+    // Pin notes never show a bounding box regardless of settings.
+    if (noteData.type === "pin") {
+      if (this.controls) this.controls.visible = false;
+      return;
+    }
+
+    if (!this.controls) return;
+
+    const showControls = game.settings.get(MODULE_ID, "showSelectionControls");
+    if (!showControls) {
+      // Default behaviour: no bounding box or handles for IB notes
       this.controls.visible = false;
-      if (this.controls.handles) this.controls.handles.visible = false;
+      return;
+    }
+
+    // Let Foundry's super manage controls.visible (hover/selected state).
+    // Per-handle filtering is enforced by the patch in draw() so it survives
+    // any subsequent controls._refresh() calls triggered by position/rotation changes.
+    this._applyHandleVisibility();
+  }
+
+  /**
+   * Hides scale and translate handles, leaving only the rotate handle visible.
+   * Also hides scale handles when allowScaling is off.
+   * Called from _refreshState and from the patched controls._refresh.
+   */
+  _applyHandleVisibility() {
+    if (!this.controls?.handles) return;
+    const allowScaling = game.settings.get(MODULE_ID, "allowScaling");
+    for (const handle of this.controls.handles.children) {
+      switch (handle.name) {
+        case "rotate":
+          handle.visible = true;
+          break;
+        case "scale":
+        case "scaleX":
+        case "scaleY":
+          handle.visible = allowScaling;
+          break;
+        default: // "translate" and anything else
+          handle.visible = false;
+          break;
+      }
     }
   }
 
@@ -565,6 +606,22 @@ export class CustomDrawing extends Drawing {
     if (!this.document.flags[MODULE_ID]?.type) return this;
 
     this.element?.setAttribute("data-investigation-note", "true");
+
+    // Patch this.controls._refresh (created fresh each draw() by Foundry) so that
+    // our per-handle visibility is reapplied after every Foundry controls refresh.
+    // This prevents position/rotation updates from resetting handle visibility.
+    const noteType = this.document.flags[MODULE_ID]?.type;
+    if (this.controls && noteType && noteType !== "handout" && noteType !== "pin") {
+      const originalRefresh = this.controls._refresh.bind(this.controls);
+      const self = this;
+      this.controls._refresh = function() {
+        originalRefresh();
+        if (game.settings.get(MODULE_ID, "showSelectionControls")) {
+          self._applyHandleVisibility();
+        }
+      };
+    }
+
     await this._updateSprites();
     import("./connection-manager.js").then(m => {
       m.updatePins();
@@ -870,17 +927,21 @@ export class CustomDrawing extends Drawing {
     }
     
     // STANDARD LAYOUT (Modern photo notes, sticky, index, etc.)
-    const width = isPhoto
-      ? game.settings.get(MODULE_ID, "photoNoteWidth")
-      : isIndex
-        ? game.settings.get(MODULE_ID, "indexNoteWidth") || 600
-        : game.settings.get(MODULE_ID, "stickyNoteWidth");
-    
-    const height = isPhoto
-      ? Math.round(width / (225 / 290))
-      : isIndex
-        ? Math.round(width / (600 / 400))
-        : width;
+    // Use document shape dimensions as the authoritative size — they match the settings
+    // at creation time and correctly reflect any subsequent scaling by the user.
+    const width = this.document.shape.width
+      || (isPhoto
+        ? game.settings.get(MODULE_ID, "photoNoteWidth")
+        : isIndex
+          ? game.settings.get(MODULE_ID, "indexNoteWidth") || 600
+          : game.settings.get(MODULE_ID, "stickyNoteWidth"));
+
+    const height = this.document.shape.height
+      || (isPhoto
+        ? Math.round(width / (225 / 290))
+        : isIndex
+          ? Math.round(width / (600 / 400))
+          : width);
     
     // Background Image: Always use modern mode assets
     const bgImage = isPhoto ? "modules/investigation-board/assets/photoFrame.webp" 
@@ -1040,17 +1101,26 @@ export class CustomDrawing extends Drawing {
     }
 
     // Default text layout.
+    // Font size is anchored to the settings-based note width, NOT the document shape width.
+    // This means scaling the note frame (via the scale handle) gives more text area without
+    // changing the character size — the user controls size explicitly via the edit panel.
+    const settingsWidth = isPhoto
+      ? game.settings.get(MODULE_ID, "photoNoteWidth")
+      : isIndex
+        ? game.settings.get(MODULE_ID, "indexNoteWidth") || 600
+        : game.settings.get(MODULE_ID, "stickyNoteWidth");
+
     const font = noteData.font || game.settings.get(MODULE_ID, "font");
     const defaultFontSize = isIndex ? 9 : game.settings.get(MODULE_ID, "baseFontSize");
     const baseFontSize = noteData.fontSize || defaultFontSize;
     const fontBoost = font === "Caveat" ? 1.6 : 1.0;
-    const fontSize = (width / 200) * baseFontSize * fontBoost;
+    const fontSize = (settingsWidth / 200) * baseFontSize * fontBoost;
     const textStyle = new PIXI.TextStyle({
       fontFamily: font,
       fontSize: fontSize,
       fill: noteData.textColor || "#000000",
       wordWrap: true,
-      wordWrapWidth: width - 2, // Increased from -15 to give more room for italics
+      wordWrapWidth: width - 2, // Uses document shape width — scaling adds more wrap space
       align: "center",
     });
     const truncatedText = truncateText(noteData.text || "Default Text", font, noteData.type, fontSize);

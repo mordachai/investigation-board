@@ -529,39 +529,41 @@ Hooks.on("updateDrawing", async (drawing, changes, options, userId) => {
 
   const placeable = canvas.drawings.get(drawing.id);
 
-  // For handouts, check if actual dimensions differ from sprite dimensions
-  if (noteData.type === "handout" && placeable && placeable.photoImageSprite) {
-    const docW = drawing.shape.width;
-    const docH = drawing.shape.height;
-    const spriteW = placeable.photoImageSprite.width || 0;
-    const spriteH = placeable.photoImageSprite.height || 0;
+  const flagsChanged = changes.flags?.[MODULE_ID] !== undefined;
+  const shapeChanged = changes.shape !== undefined;
 
-    // Check if sprite dimensions don't match document (allowing for aspect ratio differences)
-    const tolerance = 5; // pixels
-    const widthMismatch = Math.abs(spriteW - docW) > tolerance;
-    const heightMismatch = Math.abs(spriteH - docH) > tolerance;
+  // Refresh sprites when content or dimensions change.
+  // For non-pin notes: check flags, explicit shape change, AND a sprite/document
+  // dimension mismatch — the mismatch check is a reliable fallback in case
+  // Foundry packages scale handle commits in a way that doesn't set changes.shape.
+  if (placeable && noteData.type !== "pin") {
+    let needsRefresh = flagsChanged || shapeChanged;
 
-    if (widthMismatch || heightMismatch) {
+    if (!needsRefresh) {
+      const docW = drawing.shape.width;
+      const docH = drawing.shape.height;
+      // bgSprite covers sticky/photo/index; photoImageSprite covers handout/media
+      const sprite = placeable.bgSprite ?? placeable.photoImageSprite;
+      if (sprite && (Math.abs(sprite.width - docW) > 5 || Math.abs(sprite.height - docH) > 5)) {
+        needsRefresh = true;
+      }
+    }
+
+    if (needsRefresh) {
       await placeable.refresh();
+
+      // Re-render open NotePreviewer when note content changes
+      if (flagsChanged) {
+        const appId = `note-preview-${drawing.id}`;
+        const app = foundry.applications.instances.get(appId);
+        if (app) app.render();
+      }
     }
   }
 
-  // Check if flags changed (text, image, connections, font, etc.)
-  const flagsChanged = changes.flags?.[MODULE_ID] !== undefined;
-
-  // If flags changed, refresh the drawing to update visuals on ALL clients
-  if (flagsChanged && placeable) {
-    await placeable.refresh();
-    
-    // Also re-render open NotePreviewer for this drawing
-    const appId = `note-preview-${drawing.id}`;
-    const app = foundry.applications.instances.get(appId);
-    if (app) app.render();
-  }
-
-  // Redraw connection lines when position OR connections change
+  // Redraw connection lines when position, shape, or connections change
   // Also refresh pins when hidden state changes (pins live in pinsContainer, outside the placeable hierarchy)
-  if (changes.x !== undefined || changes.y !== undefined || flagsChanged || changes.hidden !== undefined) {
+  if (changes.x !== undefined || changes.y !== undefined || flagsChanged || shapeChanged || changes.hidden !== undefined) {
     updatePins();
     drawAllConnectionLines();
   }

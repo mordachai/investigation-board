@@ -219,6 +219,26 @@ export const registerSettings = function() {
         }
     });
 
+    game.settings.register(MODULE_ID, "showSelectionControls", {
+        name: "Show Selection Controls",
+        hint: "When enabled, selecting a note shows its bounding box and rotation handle. Has no effect on handout or pin notes.",
+        scope: "world",
+        config: true,
+        type: Boolean,
+        default: false,
+        onChange: () => refreshAllDrawings()
+    });
+
+    game.settings.register(MODULE_ID, "allowScaling", {
+        name: "Allow Scaling",
+        hint: "When enabled (and Show Selection Controls is on), the scale handle is also visible, allowing notes to be resized by dragging.",
+        scope: "world",
+        config: true,
+        type: Boolean,
+        default: false,
+        onChange: () => refreshAllDrawings()
+    });
+
     game.settings.register(MODULE_ID, "showSetupWarning", {
         name: "Show Setup Warning",
         hint: "Whether to show the setup warning for GMs about player permissions.",
