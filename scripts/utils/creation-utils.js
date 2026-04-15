@@ -63,9 +63,19 @@ export async function createNote(noteType, { x = null, y = null } = {}) {
 
   if (finalX === null || finalY === null) {
     const viewCenter = canvas.stage.pivot;
-    // Account for sceneScale in visual centering
-    finalX = viewCenter.x - (width * sceneScale) / 2;
-    finalY = viewCenter.y - (height * sceneScale) / 2;
+
+    // Cascade offset: each existing IB note shifts the new one diagonally so notes
+    // don't stack. Step size is 15% of the note's own dimensions, capped at 80 world
+    // units per step, cycling every 6 notes back to the centre.
+    const existingCount = canvas.drawings.placeables.filter(
+      d => d.document.flags[MODULE_ID]?.type
+    ).length;
+    const cascadeStep = existingCount % 6;
+    const stepX = Math.min(Math.round(width * 0.15), 80);
+    const stepY = Math.min(Math.round(height * 0.15), 80);
+
+    finalX = viewCenter.x - (width * sceneScale) / 2 + cascadeStep * stepX;
+    finalY = viewCenter.y - (height * sceneScale) / 2 + cascadeStep * stepY;
   }
 
   // Get default text from settings (fallback if missing)

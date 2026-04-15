@@ -219,6 +219,59 @@ _getTargetAlpha()          // returns 0.4 for GM when document.hidden; delegates
 
 `CustomDrawingSheet._canRender(options)` also returns true for all IB notes.
 
+### Selection Controls and Scaling
+
+Two world settings gate bounding-box display and scaling:
+- `showSelectionControls` (default `false`) — shows the selection border and handles on non-handout, non-pin notes when selected
+- `allowScaling` (default `false`) — when controls are shown, also shows the scale handle; rotate handle is always shown when controls are on
+
+**Implementation in `_refreshState()`:**
+
+- `handout` — returns early (Foundry handles it normally; resize handles remain)
+- `pin` — explicitly sets `this.controls.visible = false` and returns
+- all others — hides controls if `showSelectionControls` is off; otherwise calls `_applyHandleVisibility()`
+
+**`_applyHandleVisibility()`** iterates `this.controls.handles.children` and sets visibility by handle name:
+- `"rotate"` → always `true`
+- `"scale"`, `"scaleX"`, `"scaleY"` → `allowScaling` setting
+- anything else (translate handles) → `false`
+
+**`controls._refresh` monkey-patch** — `ShapeControls._refresh()` resets all `handle.visible` to true on every render tick. Since `this.controls` is recreated fresh on every `draw()` call, `draw()` monkey-patches `controls._refresh` in-place to call `_applyHandleVisibility()` after the base refresh. The patch only applies to non-handout, non-pin IB notes.
+
+**Sprite resize on scale** — `_doUpdateSprites` reads `this.document.shape.width` / `this.document.shape.height` as the authoritative rendered size (not the settings values). The `updateDrawing` hook detects `shapeChanged` and also checks for sprite/document dimension mismatch (tolerance 5px), triggering `placeable.refresh()` either way.
+
+**Text size is NOT tied to note scale** — font size uses `settingsWidth` (from settings) as the reference, so scaling the note gives more text wrap space without changing the font size:
+```javascript
+const settingsWidth = game.settings.get(MODULE_ID, "stickyNoteWidth") || 200;
+const fontSize = (settingsWidth / 200) * baseFontSize * fontBoost;
+// word wrap uses document shape width (actual rendered width)
+```
+
+### Pin Note Context Menu
+
+Right-clicking a pin-only note (type `"pin"`) shows a context menu with:
+- **Convert to…** — five options: Sticky Note, Photo Note, Index Card, Handout Note, Media Note
+
+The pin sprite (which lives in `pinsContainer` as a PIXI sibling, not a child of the Drawing) intercepts all pointer events. The `pointerdown` listener checks `event.button === 2 && noteData?.type === "pin"` to forward right-clicks to `drawing._showContextMenu(event)`. Other note types fall through to `onPinPointerDown` (connection mode).
+
+**`_convertToNoteType(pinId, newType)`** in `custom-drawing.js`:
+1. Reads the source pin's position and connections
+2. Collects all *incoming* connections from other notes pointing to `pinId`
+3. Deletes the pin via `collaborativeDelete`
+4. Creates the new note type at the same position via `createNote`
+5. Re-maps incoming connections on all other notes: `targetId: pinId` → `targetId: newDoc.id`
+6. Re-maps outgoing connections from the old pin onto the new note
+
+### Note Positioning
+
+**Toolbar cascade** (`createNote` in `creation-utils.js`) — when no explicit `x`/`y` is provided, new notes are staggered diagonally so they don't stack. Step size is 15% of the note's own dimensions, capped at 80 world units, cycling every 6 notes back to center.
+
+**Connection-mode right-click menu** (`onCanvasRightClick` in `connection-manager.js`) — since the right-click always fires on the source note's pin, a minimum-distance push is applied:
+- Direction: from viewport center (`canvas.stage.pivot`) toward source note center; 30° fallback if the note is within 10 world units of center
+- `minDist = srcHalfDiag + tgtHalfDiag + 40` (all in world units — **no** `sceneScale` factor)
+
+**Coordinate system note** — `document.shape.width/height` are the raw stored values (e.g., 200 for a sticky note) and equal the note's actual world-space rendered size. `sceneScale` (from `getEffectiveScale()`) is used only when *positioning* a new note (`x = viewCenter.x - width * sceneScale / 2`), not when computing distances or sizes from existing documents. Never multiply `shape.width` by `sceneScale` — that will undercount by the scale factor.
+
 ### API Patterns
 
 Always use namespaced Foundry APIs:
@@ -303,12 +356,18 @@ Beyond the directory context menus documented above, one more hook extends creat
 World-level settings (see `scripts/settings.js`):
 
 - Note dimensions: `stickyNoteWidth`, `photoNoteWidth`, `indexNoteWidth`, `handoutNoteWidth`, `handoutNoteHeight`
-- Appearance: `fontFamily`, `fontSize`, `pinColor`, `boardMode`
-- Connection lines: `connectionLineColor`, `connectionLineWidth`
-- Default text per note type
+- Appearance: `font`, `baseFontSize`, `pinColor`, `autoScale`, `sceneScale`
+- Connection lines: `connectionLineWidth`
+- Default text per note type: `stickyNoteDefaultText`, `photoNoteDefaultText`, `indexNoteDefaultText`, `mediaNoteDefaultText`
+- `showSelectionControls` (world, default `false`) — show bounding box and rotate handle on selected notes (excludes pin and handout)
+- `allowScaling` (world, default `false`) — also show scale handle when selection controls are on
 - `showSetupWarning` — GM permission check on ready
 - `characterNameKey` — dot-path for actor name in photo notes (default: `prototypeToken.name`)
 - `baseCharacterLimits` — hidden JSON for text truncation
+
+Client-level settings:
+- `defaultNoteColor` — default sticky note tint color
+- `defaultInkColor` — default ink/text color for new notes
 
 All settings call `refreshAllDrawings()` on change.
 
@@ -327,18 +386,25 @@ In v14, `Drawing._draw()` creates `this.shape = canvas.primary.addDrawing(this)`
 
 ### `_refreshState` replaces `_refreshFrame`
 
-v14 deprecated `_refreshFrame`. Override `_refreshState()` instead to hide resize handles for non-handout IB notes:
+v14 deprecated `_refreshFrame`. Override `_refreshState()` to control handle visibility per note type. The current implementation:
 
 ```javascript
 _refreshState() {
   super._refreshState();
-  if (this.document.flags[MODULE_ID]?.type && this.document.flags[MODULE_ID].type !== "handout") {
-    if (this.controls?.handles) this.controls.handles.visible = false;
+  const noteData = this.document.flags[MODULE_ID];
+  if (!noteData?.type) return;
+  if (noteData.type === "handout") return;          // handout uses Foundry default
+  if (noteData.type === "pin") {
+    if (this.controls) this.controls.visible = false;
+    return;
   }
+  const showControls = game.settings.get(MODULE_ID, "showSelectionControls");
+  if (!showControls) { this.controls.visible = false; return; }
+  this._applyHandleVisibility();
 }
 ```
 
-`this.frame.handleContainer` no longer exists — use `this.controls.handles`.
+`this.frame.handleContainer` no longer exists — use `this.controls.handles`. `this.controls` is recreated on every `draw()` call, so any per-instance customisation (like hiding translate handles) must be re-applied via the `controls._refresh` monkey-patch set up in `draw()`.
 
 ### `_prepareSubmitData` override in CustomDrawingSheet
 

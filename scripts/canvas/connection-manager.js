@@ -737,7 +737,6 @@ async function onCanvasClick(event) {
 function onCanvasRightClick(event) {
   if (!pinConnectionFirstNote) return;
 
-  const worldPos = event.getLocalPosition(canvas.stage);
   const screenPos = event.data.global;
 
   // Remove any existing custom context menus
@@ -765,17 +764,56 @@ function onCanvasRightClick(event) {
       e.stopPropagation();
       menu.remove();
       
-      const sceneScale = getEffectiveScale();
-      
-      // Determine default width for this type to center it
-      let width = 200;
-      if (type.id === 'photo') width = 225;
-      else if (type.id === 'index') width = 600;
-      else if (type.id === 'handout' || type.id === 'media') width = 400;
-      else if (type.id === 'pin') width = 40;
+      // Read dimensions from settings (same sources as createNote)
+      let noteWidth, noteHeight;
+      if (type.id === 'photo') {
+        noteWidth = game.settings.get(MODULE_ID, "photoNoteWidth") || 225;
+        noteHeight = Math.round(noteWidth / (225 / 290));
+      } else if (type.id === 'index') {
+        noteWidth = game.settings.get(MODULE_ID, "indexNoteWidth") || 600;
+        noteHeight = Math.round(noteWidth / (600 / 400));
+      } else if (type.id === 'handout') {
+        noteWidth = game.settings.get(MODULE_ID, "handoutNoteWidth") || 400;
+        noteHeight = game.settings.get(MODULE_ID, "handoutNoteHeight") || 400;
+      } else if (type.id === 'media') {
+        noteWidth = 400;
+        noteHeight = Math.round(400 * (296 / 400));
+      } else if (type.id === 'pin') {
+        noteWidth = 40;
+        noteHeight = 40;
+      } else {
+        // sticky
+        noteWidth = game.settings.get(MODULE_ID, "stickyNoteWidth") || 200;
+        noteHeight = noteWidth;
+      }
 
-      const posX = worldPos.x - (width * sceneScale) / 2;
-      const posY = worldPos.y - (width * sceneScale) / 2; // Approximated square centering
+      // Place the new note clear of the source. shape.width/height are world-space
+      // sizes (the raw stored values, not multiplied by sceneScale), so all distance
+      // math here is in plain world units with no sceneScale factor.
+      const srcDoc = pinConnectionFirstNote.document;
+      const srcW = srcDoc.shape.width || 200;
+      const srcH = srcDoc.shape.height || 200;
+      const srcCenterX = srcDoc.x + srcW / 2;
+      const srcCenterY = srcDoc.y + srcH / 2;
+
+      // Direction: push outward from the viewport center so notes spread naturally.
+      // Use a 30° (right-down) fallback when the note sits very close to center.
+      const viewCenter = canvas.stage.pivot;
+      const outDx = srcCenterX - viewCenter.x;
+      const outDy = srcCenterY - viewCenter.y;
+      const outDist = Math.sqrt(outDx * outDx + outDy * outDy);
+      const angle = outDist < 10 ? Math.PI / 6 : Math.atan2(outDy, outDx);
+
+      // Minimum gap: sum of both half-diagonals + 40 world units.
+      const srcHalfDiag = Math.sqrt(srcW * srcW + srcH * srcH) / 2;
+      const tgtHalfDiag = Math.sqrt(noteWidth * noteWidth + noteHeight * noteHeight) / 2;
+      const minDist = srcHalfDiag + tgtHalfDiag + 40;
+
+      const targetCenterX = srcCenterX + Math.cos(angle) * minDist;
+      const targetCenterY = srcCenterY + Math.sin(angle) * minDist;
+
+      const posX = targetCenterX - noteWidth / 2;
+      const posY = targetCenterY - noteHeight / 2;
 
       import("../utils/creation-utils.js").then(async (m) => {
         const newNote = await m.createNote(type.id, { x: posX, y: posY });
