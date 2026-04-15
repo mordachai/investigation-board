@@ -1,0 +1,54 @@
+<div class="ib-note-defaults">
+
+  <fieldset class="ib-defaults-fieldset">
+    <legend>Note Dimensions</legend>
+
+    <div class="form-group">
+      <label>Sticky Note Width <span class="units">px</span></label>
+      <input type="number" name="stickyNoteWidth" value="{{stickyNoteWidth}}" min="100" max="800" step="10">
+    </div>
+    <div class="form-group">
+      <label>Photo Note Width <span class="units">px</span></label>
+      <input type="number" name="photoNoteWidth" value="{{photoNoteWidth}}" min="100" max="800" step="10">
+    </div>
+    <div class="form-group">
+      <label>Index Card Width <span class="units">px</span></label>
+      <input type="number" name="indexNoteWidth" value="{{indexNoteWidth}}" min="200" max="1200" step="10">
+    </div>
+    <div class="form-group">
+      <label>Handout Width <span class="units">px</span></label>
+      <input type="number" name="handoutNoteWidth" value="{{handoutNoteWidth}}" min="100" max="1200" step="10">
+    </div>
+    <div class="form-group">
+      <label>Handout Height <span class="units">px</span></label>
+      <input type="number" name="handoutNoteHeight" value="{{handoutNoteHeight}}" min="100" max="1200" step="10">
+    </div>
+  </fieldset>
+
+  <fieldset class="ib-defaults-fieldset">
+    <legend>Default Text</legend>
+
+    <div class="form-group">
+      <label>Sticky Note</label>
+      <input type="text" name="stickyNoteDefaultText" value="{{stickyNoteDefaultText}}">
+    </div>
+    <div class="form-group">
+      <label>Photo Note</label>
+      <input type="text" name="photoNoteDefaultText" value="{{photoNoteDefaultText}}">
+    </div>
+    <div class="form-group">
+      <label>Index Card</label>
+      <input type="text" name="indexNoteDefaultText" value="{{indexNoteDefaultText}}">
+    </div>
+    <div class="form-group">
+      <label>Media Note</label>
+      <input type="text" name="mediaNoteDefaultText" value="{{mediaNoteDefaultText}}">
+    </div>
+  </fieldset>
+
+  <footer class="ib-defaults-footer">
+    <button type="button" data-action="save"><i class="fas fa-save"></i> Save</button>
+    <button type="button" data-action="cancel"><i class="fas fa-times"></i> Cancel</button>
+  </footer>
+
+</div>

@@ -1330,3 +1330,92 @@ body.investigation-board-mode .drawing:not([data-investigation-note="true"]) {
   filter: brightness(1.1);
 }
 
+/* ========================= */
+/* Settings section headers  */
+/* ========================= */
+
+.ib-settings-header {
+  font-family: "Signika", sans-serif;
+  font-size: 13px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: #4a3728;
+  border-bottom: 1px solid #c9b99a;
+  margin: 1em 0 0.25em;
+  padding-bottom: 3px;
+}
+
+.theme-dark .ib-settings-header {
+  color: #c9b99a;
+  border-bottom-color: #4a3728;
+}
+
+/* ========================= */
+/* Note Defaults dialog      */
+/* ========================= */
+
+.ib-note-defaults {
+  padding: 8px 12px 4px;
+  font-family: "Signika", sans-serif;
+}
+
+.ib-defaults-fieldset {
+  border: 1px solid #c9b99a;
+  border-radius: 4px;
+  padding: 8px 12px 10px;
+  margin-bottom: 12px;
+}
+
+.ib-defaults-fieldset legend {
+  font-weight: 700;
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: #4a3728;
+  padding: 0 6px;
+}
+
+.theme-dark .ib-defaults-fieldset {
+  border-color: #4a3728;
+}
+
+.theme-dark .ib-defaults-fieldset legend {
+  color: #c9b99a;
+}
+
+.ib-note-defaults .form-group {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 6px;
+}
+
+.ib-note-defaults .form-group label {
+  flex: 1;
+  font-size: 13px;
+  min-width: 130px;
+}
+
+.ib-note-defaults .form-group input {
+  flex: 1;
+  max-width: 200px;
+}
+
+.ib-note-defaults .units {
+  font-size: 11px;
+  color: #888;
+  margin-left: 2px;
+}
+
+.ib-defaults-footer {
+  display: flex;
+  gap: 8px;
+  justify-content: flex-end;
+  padding: 6px 0 4px;
+}
+
+.ib-defaults-footer button {
+  min-width: 90px;
+}
+
