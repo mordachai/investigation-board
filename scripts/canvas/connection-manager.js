@@ -268,14 +268,13 @@ export function updatePins() {
       drawing.pinSprite.cursor = 'pointer';
       drawing.pinSprite.removeAllListeners();
       drawing.pinSprite.on('pointerdown', (event) => {
-        if (event.button === 2) {
-          // Right-click: bypass drag/connection logic and show the note's context menu directly.
-          // The pin sprite covers the entire pin note and is a sibling (not parent) of the Drawing
-          // in the PIXI hierarchy, so events never bubble to the Drawing's _onClickRight handler.
+        if (event.button === 2 && InvestigationBoardState.isActive && noteData?.type === "pin") {
+          // Pin-only notes: right-click opens the convert/manage context menu.
+          // For all other note types, right-click falls through to onPinPointerDown which
+          // starts connection mode; the subsequent rightclick event on canvas then triggers
+          // onCanvasRightClick and shows the "create connected note" menu.
           event.stopPropagation();
-          if (InvestigationBoardState.isActive && noteData?.type === "pin") {
-            drawing._showContextMenu(event);
-          }
+          drawing._showContextMenu(event);
           return;
         }
         onPinPointerDown(event, drawing);
