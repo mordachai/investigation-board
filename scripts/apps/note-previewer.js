@@ -85,7 +85,8 @@ export class NotePreviewer extends HandlebarsApplicationMixin(ApplicationV2) {
       isGM: game.user.isGM,
       isGlobalActive: isGlobalActive,
       linkedObject: noteData?.linkedObject || "",
-      enrichedLinkedObject: noteData?.linkedObject ? await TextEditor.enrichHTML(noteData.linkedObject, { async: true }) : ""
+      enrichedLinkedObject: noteData?.linkedObject ? await TextEditor.enrichHTML(noteData.linkedObject, { async: true }) : "",
+      canViewSensitive: game.user.isGM || game.user.can("FILES_BROWSE")
     };
   }
 

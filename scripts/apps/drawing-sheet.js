@@ -75,6 +75,9 @@ export class CustomDrawingSheet extends DrawingConfig {
     // Enrich the linked object for display
     context.enrichedLinkedObject = context.linkedObject ? await TextEditor.enrichHTML(context.linkedObject, { async: true }) : "";
 
+    // Gate sensitive fields (image paths, linked object) behind file-browse permission
+    context.canViewSensitive = game.user.isGM || game.user.can("FILES_BROWSE");
+
     return context;
   }
 

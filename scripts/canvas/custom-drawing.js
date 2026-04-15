@@ -263,12 +263,11 @@ export class CustomDrawing extends Drawing {
        // };
 
        if (noteData.linkedObject) {
-         const linkMatch = noteData.linkedObject.match(/\[([^\]]+)\](?:\{([^\}]+)\})?/);
+         const linkMatch = noteData.linkedObject.match(/\[([^\]]+)\]/);
          if (linkMatch) {
            const uuid = linkMatch[1];
-           const name = linkMatch[2] || "Linked Object";
            const linkOption = document.createElement('div');
-           linkOption.innerHTML = `<i class="fas fa-link"></i> Open: ${name}`;
+           linkOption.innerHTML = `<i class="fas fa-link"></i> Open`;
            linkOption.classList.add('ib-context-menu-item');
            linkOption.onclick = async (e) => {
              e.stopPropagation();
@@ -528,13 +527,12 @@ export class CustomDrawing extends Drawing {
 
     // Linked Object Option
     if (noteData.linkedObject) {
-      const linkMatch = noteData.linkedObject.match(/\[([^\]]+)\](?:\{([^\}]+)\})?/);
+      const linkMatch = noteData.linkedObject.match(/\[([^\]]+)\]/);
       if (linkMatch) {
         const uuid = linkMatch[1];
-        const name = linkMatch[2] || "Linked Object";
-        
+
         const linkOption = document.createElement('div');
-        linkOption.innerHTML = `<i class="fas fa-link"></i> Open: ${name}`;
+        linkOption.innerHTML = `<i class="fas fa-link"></i> Open`;
         linkOption.classList.add('ib-context-menu-item');
         linkOption.onclick = async (e) => {
           e.stopPropagation();

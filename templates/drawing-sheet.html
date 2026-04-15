@@ -60,7 +60,8 @@
     </div>
   {{/unless}}
 
-  {{!-- Linked Object field --}}
+  {{!-- Linked Object field — visible only to users with file-browse permission --}}
+  {{#if canViewSensitive}}
   <div class="form-group ib-drop-zone">
     <label for="linkedObject">Linked Object:</label>
     <div class="linked-object-row">
@@ -81,9 +82,11 @@
       {{/if}}
     </div>
   </div>
+  {{/if}}
 
-  {{!-- Media Audio Path --}}
+  {{!-- Media Audio Path — file picker only for users with file-browse permission --}}
   {{#if (eq noteType "media")}}
+    {{#if canViewSensitive}}
     <div class="form-group">
       <label for="audioPath">Audio File:</label>
       <div class="file-picker">
@@ -96,6 +99,7 @@
         </button>
       </div>
     </div>
+    {{/if}}
     <div class="form-group">
       <label for="audioEffectEnabled">Apply Tape Effect:</label>
       <input type="checkbox" name="audioEffectEnabled" {{#if audioEffectEnabled}}checked{{/if}} />
@@ -103,8 +107,8 @@
     </div>
   {{/if}}
 
-  {{!-- Show Image Path field for photo notes and handouts --}}
-  {{#if (or (eq noteType "photo") (eq noteType "handout"))}}
+  {{!-- Image Path — visible only to users with file-browse permission --}}
+  {{#if (and canViewSensitive (or (eq noteType "photo") (eq noteType "handout")))}}
     <div class="form-group" style="display: block;">
       <label for="image">Image Path:</label>
       <div class="file-picker">
@@ -114,8 +118,6 @@
         </button>
       </div>
     </div>
-  {{else}}
-    <div class="form-group" style="display: none;"></div>
   {{/if}}
 
 

@@ -70,7 +70,7 @@
     {{/if}}
 
         
-        {{#if enrichedLinkedObject}}
+        {{#if (and canViewSensitive enrichedLinkedObject)}}
         <div class="preview-footer">
             <div class="preview-link-label">Linked Reference:</div>
             <div class="preview-link">
