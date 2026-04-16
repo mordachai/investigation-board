@@ -84,26 +84,95 @@
   </div>
   {{/if}}
 
-  {{!-- Media Audio Path — file picker only for users with file-browse permission --}}
+  {{!-- Media Note — Audio / Video mode toggle --}}
   {{#if (eq noteType "media")}}
-    {{#if canViewSensitive}}
-    <div class="form-group">
-      <label for="audioPath">Audio File:</label>
-      <div class="file-picker">
-        <input type="text" name="audioPath" value="{{audioPath}}" placeholder="Select audio file..." readonly />
-        <button type="button" class="audio-picker-button" title="Browse Audio">
-          <i class="fas fa-music"></i>
-        </button>
-        <button type="button" class="preview-audio-btn" title="Preview Audio" {{#unless audioPath}}disabled{{/unless}}>
-          <i class="fas fa-play"></i>
-        </button>
+    <div class="form-group ib-media-type-toggle">
+      <label>Media Type:</label>
+      <div class="ib-media-radios">
+        <label class="ib-radio-label">
+          <input type="radio" name="mediaMode" value="audio" {{#if (eq mediaMode "audio")}}checked{{/if}} />
+          <i class="fas fa-cassette-tape"></i> Audio
+        </label>
+        <label class="ib-radio-label">
+          <input type="radio" name="mediaMode" value="video" {{#if (eq mediaMode "video")}}checked{{/if}} />
+          <i class="fas fa-film"></i> Video
+        </label>
       </div>
     </div>
-    {{/if}}
-    <div class="form-group">
-      <label for="audioEffectEnabled">Apply Tape Effect:</label>
-      <input type="checkbox" name="audioEffectEnabled" {{#if audioEffectEnabled}}checked{{/if}} />
-      <p class="notes">Old tape recording (High-pass filter).</p>
+
+    {{!-- AUDIO fields --}}
+    <div class="ib-audio-fields" {{#if (eq mediaMode "video")}}style="display:none"{{/if}}>
+      {{#if canViewSensitive}}
+      <div class="form-group">
+        <label for="audioPath">Audio File:</label>
+        <div class="file-picker">
+          <input type="text" name="audioPath" value="{{audioPath}}" placeholder="Select audio file..." readonly />
+          <button type="button" class="audio-picker-button" title="Browse Audio">
+            <i class="fas fa-music"></i>
+          </button>
+          <button type="button" class="preview-audio-btn" title="Preview Audio" {{#unless audioPath}}disabled{{/unless}}>
+            <i class="fas fa-play"></i>
+          </button>
+        </div>
+      </div>
+      {{/if}}
+      <div class="form-group">
+        <label for="audioEffectEnabled">Apply Tape Effect:</label>
+        <input type="checkbox" name="audioEffectEnabled" {{#if audioEffectEnabled}}checked{{/if}} />
+        <p class="notes">Lo-fi tape recording filter.</p>
+      </div>
+    </div>
+
+    {{!-- VIDEO fields --}}
+    <div class="ib-video-fields" {{#if (eq mediaMode "audio")}}style="display:none"{{/if}}>
+      {{#if canViewSensitive}}
+      <div class="form-group">
+        <label for="videoPath">Video File:</label>
+        <div class="file-picker">
+          <input type="text" name="videoPath" value="{{videoPath}}" placeholder="Select video file (.mp4, .webm, .webp)..." readonly />
+          <button type="button" class="video-picker-button" title="Browse Video">
+            <i class="fas fa-video"></i>
+          </button>
+        </div>
+      </div>
+      {{/if}}
+
+      <div class="form-group">
+        <label for="videoFormat">Player Format:</label>
+        <select name="videoFormat">
+          {{#each videoFormats}}
+            <option value="{{@key}}" {{#if (eq ../videoFormat @key)}}selected{{/if}}>
+              {{this.label}}
+            </option>
+          {{/each}}
+        </select>
+      </div>
+
+      <div class="form-group ib-video-effects">
+        <label>Effects on Open:</label>
+        <div class="ib-effects-grid">
+          <label class="ib-effect-label">
+            <input type="checkbox" name="videoEffects.whiteNoise"
+              {{#if videoEffects.whiteNoise}}checked{{/if}} />
+            White Noise
+          </label>
+          <label class="ib-effect-label">
+            <input type="checkbox" name="videoEffects.mechanicalSound"
+              {{#if videoEffects.mechanicalSound}}checked{{/if}} />
+            Mechanical Sound
+          </label>
+          <label class="ib-effect-label">
+            <input type="checkbox" name="videoEffects.trackingGlitch"
+              {{#if videoEffects.trackingGlitch}}checked{{/if}} />
+            Tracking Glitch
+          </label>
+          <label class="ib-effect-label">
+            <input type="checkbox" name="videoEffects.filmGrain"
+              {{#if videoEffects.filmGrain}}checked{{/if}} />
+            Film Grain
+          </label>
+        </div>
+      </div>
     </div>
   {{/if}}
 

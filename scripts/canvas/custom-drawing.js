@@ -1,8 +1,9 @@
-import { MODULE_ID, PIN_COLORS, SOCKET_NAME } from "../config.js";
+import { MODULE_ID, PIN_COLORS, SOCKET_NAME, VIDEO_EXTENSIONS, VIDEO_IMAGES, CASSETTE_IMAGES } from "../config.js";
 import { InvestigationBoardState } from "../state.js";
-import { collaborativeUpdate, collaborativeDelete, socket, activeGlobalSounds } from "../utils/socket-handler.js";
+import { collaborativeUpdate, collaborativeDelete, socket, activeGlobalSounds, activeVideoBroadcasts } from "../utils/socket-handler.js";
 import { truncateText } from "../utils/helpers.js";
 import { NotePreviewer } from "../apps/note-previewer.js";
+import { VideoPlayer } from "../apps/video-player.js";
 import { drawAllConnectionLines } from "./connection-manager.js";
 
 // v13 namespaced imports
@@ -195,8 +196,12 @@ export class CustomDrawing extends Drawing {
     const noteData = this.document.flags?.[MODULE_ID];
     if (noteData?.type === "pin") return;
     if (noteData?.type) {
-      // Open the detail view previewer
-      new NotePreviewer(this.document).render(true);
+      // Route video media notes to VideoPlayer, everything else to NotePreviewer
+      if (noteData.type === "media" && noteData.videoPath) {
+        new VideoPlayer(this.document).render(true);
+      } else {
+        new NotePreviewer(this.document).render(true);
+      }
       return;
     }
     return super._onClickLeft2(event);
@@ -375,8 +380,11 @@ export class CustomDrawing extends Drawing {
       menu.remove();
     };
 
-    // Media-specific options
-    if (noteData.type === "media" && noteData.audioPath) {
+    const isVideoMedia = noteData.type === "media" && !!noteData.videoPath;
+    const isAudioMedia = noteData.type === "media" && !!noteData.audioPath;
+
+    // Audio-media-specific options (existing cassette notes)
+    if (isAudioMedia) {
       const appId = `note-preview-${this.document.id}`;
       const app = foundry.applications.instances.get(appId);
       const audioEl = app?.element?.querySelector('.local-audio-player');
@@ -385,23 +393,20 @@ export class CustomDrawing extends Drawing {
       const isPlaying = isAppPlaying || isLegacyPlaying;
 
       const playMeOption = document.createElement('div');
-      
       if (isPlaying) {
         playMeOption.innerHTML = '<i class="fas fa-stop"></i> Stop for Me';
         playMeOption.onclick = (e) => {
           e.stopPropagation();
-          // Stop App Audio
           if (audioEl) audioEl.pause();
-          // Stop Legacy Audio
-          const sounds = Array.from(game.audio.playing.values()).filter(s => s.src === noteData.audioPath);
-          sounds.forEach(s => s.stop());
+          Array.from(game.audio.playing.values())
+            .filter(s => s.src === noteData.audioPath)
+            .forEach(s => s.stop());
           menu.remove();
         };
       } else {
         playMeOption.innerHTML = '<i class="fas fa-volume-up"></i> Play for Me';
         playMeOption.onclick = (e) => {
           e.stopPropagation();
-          // Open Preview with autoplay
           new NotePreviewer(this.document).render(true, { autoplay: true });
           menu.remove();
         };
@@ -412,32 +417,18 @@ export class CustomDrawing extends Drawing {
       if (game.user.isGM) {
         const isGlobalActive = activeGlobalSounds.has(noteData.audioPath) && activeGlobalSounds.get(noteData.audioPath).playing;
         const playAllOption = document.createElement('div');
-        
         if (isGlobalActive) {
           playAllOption.innerHTML = '<i class="fas fa-stop"></i> Stop for All';
           playAllOption.onclick = (e) => {
             e.stopPropagation();
-            // Try to use App control first
             if (app) {
-               const globalBtn = app.element.querySelector('.global-toggle');
-               if (globalBtn && globalBtn.classList.contains('active')) {
-                 globalBtn.click();
-                 menu.remove();
-                 return;
-               }
+              const globalBtn = app.element.querySelector('.global-toggle');
+              if (globalBtn?.classList.contains('active')) { globalBtn.click(); menu.remove(); return; }
             }
-
-            // Fallback to manual socket stop
             if (socket) {
-              socket.emit(SOCKET_NAME, {
-                action: "stopAudio",
-                audioPath: noteData.audioPath
-              });
+              socket.emit(SOCKET_NAME, { action: "stopAudio", audioPath: noteData.audioPath });
               const sound = activeGlobalSounds.get(noteData.audioPath);
-              if (sound) {
-                sound.stop();
-                activeGlobalSounds.delete(noteData.audioPath);
-              }
+              if (sound) { sound.stop(); activeGlobalSounds.delete(noteData.audioPath); }
             }
             menu.remove();
           };
@@ -445,7 +436,6 @@ export class CustomDrawing extends Drawing {
           playAllOption.innerHTML = '<i class="fas fa-broadcast-tower"></i> Play for All';
           playAllOption.onclick = (e) => {
             e.stopPropagation();
-            // Unified: Open Preview and broadcast
             new NotePreviewer(this.document).render(true, { autobroadcast: true });
             menu.remove();
           };
@@ -455,12 +445,56 @@ export class CustomDrawing extends Drawing {
       }
     }
 
+    // Video-media-specific options
+    if (isVideoMedia) {
+      const videoPlayOption = document.createElement('div');
+      videoPlayOption.innerHTML = '<i class="fas fa-play"></i> Play Video';
+      videoPlayOption.classList.add('ib-context-menu-item');
+      videoPlayOption.onclick = (e) => {
+        e.stopPropagation();
+        new VideoPlayer(this.document).render(true);
+        menu.remove();
+      };
+      menu.appendChild(videoPlayOption);
+
+      if (game.user.isGM) {
+        const isBroadcasting = activeVideoBroadcasts.has(this.document.id);
+        const broadcastOption = document.createElement('div');
+        if (isBroadcasting) {
+          broadcastOption.innerHTML = '<i class="fas fa-stop"></i> Stop Broadcast';
+          broadcastOption.onclick = (e) => {
+            e.stopPropagation();
+            const playerAppId = `video-player-${this.document.id}`;
+            const playerApp = foundry.applications.instances.get(playerAppId);
+            if (playerApp) playerApp._stopBroadcast();
+            else if (socket) socket.emit(SOCKET_NAME, { action: "stopVideoBroadcast", drawingId: this.document.id });
+            menu.remove();
+          };
+        } else {
+          broadcastOption.innerHTML = '<i class="fas fa-broadcast-tower"></i> Open for All';
+          broadcastOption.onclick = (e) => {
+            e.stopPropagation();
+            const playerApp = new VideoPlayer(this.document);
+            playerApp.render(true);
+            setTimeout(() => playerApp._startBroadcast(), 300);
+            menu.remove();
+          };
+        }
+        broadcastOption.classList.add('ib-context-menu-item');
+        menu.appendChild(broadcastOption);
+      }
+    }
+
     const viewOption = document.createElement('div');
     viewOption.innerHTML = '<i class="fas fa-magnifying-glass"></i> View';
     viewOption.classList.add('ib-context-menu-item');
     viewOption.onclick = (e) => {
       e.stopPropagation();
-      new NotePreviewer(this.document).render(true);
+      if (isVideoMedia) {
+        new VideoPlayer(this.document).render(true);
+      } else {
+        new NotePreviewer(this.document).render(true);
+      }
       menu.remove();
     };
 
@@ -672,10 +706,12 @@ export class CustomDrawing extends Drawing {
     const isHandout = noteData.type === "handout";
     const isMedia = noteData.type === "media";
 
-    // MEDIA NOTE LAYOUT (Cassette tape)
+    // MEDIA NOTE LAYOUT (Cassette tape or VHS tape)
     if (isMedia) {
+      const isVideo = isVideoMedia(noteData);
       const drawingWidth = this.document.shape.width || 400;
-      const drawingHeight = this.document.shape.height || Math.round(drawingWidth * 0.74);
+      // Audio cassette ratio: 0.74 (470×350) — VHS tape ratio: 0.571 (875×500)
+      const drawingHeight = this.document.shape.height || Math.round(drawingWidth * (isVideo ? 0.571 : 0.74));
 
       // No background sprite for media (we use photoImageSprite for the cassette)
       if (this.bgSprite) {
@@ -696,7 +732,9 @@ export class CustomDrawing extends Drawing {
         this.shape.addChildAt(this.bgShadow, 0); // Put it behind everything
       }
 
-      const imagePath = noteData.image || "modules/investigation-board/assets/cassette1.webp";
+      const fallbackImage = isVideo ? "modules/investigation-board/assets/video1.webp"
+                                     : "modules/investigation-board/assets/cassette1.webp";
+      const imagePath = noteData.image || fallbackImage;
       try {
         const texture = await PIXI.Assets.load(imagePath);
         if (texture) {
@@ -1213,4 +1251,16 @@ export class CustomDrawing extends Drawing {
       }
     }
   }
+}
+
+/**
+ * Returns true if the given media note flags describe a video (not audio) note.
+ * Detection is based on the videoPath field — if set, it's a video note regardless
+ * of extension. The extension check on videoPath is a belt-and-suspenders guard.
+ * @param {object} noteData  flags[MODULE_ID] from a media note
+ */
+export function isVideoMedia(noteData) {
+  if (!noteData?.videoPath) return false;
+  const ext = noteData.videoPath.split(".").pop().toLowerCase();
+  return VIDEO_EXTENSIONS.includes(ext);
 }

@@ -1,29 +1,18 @@
-import { MODULE_ID } from "../config.js";
+import { MODULE_ID, CASSETTE_IMAGES, VIDEO_IMAGES } from "../config.js";
 import { InvestigationBoardState } from "../state.js";
 import { getActorDisplayName, getEffectiveScale } from "./helpers.js";
 import { collaborativeCreate, collaborativeCreateMany } from "./socket-handler.js";
 
-/**
- * Internal helper to find a random cassette image from assets
- */
-async function _getRandomCassetteImage() {
-  let imagePath = "modules/investigation-board/assets/cassette1.webp"; // Default fallback
-  try {
-    const folder = "modules/investigation-board/assets/";
-    // v13 namespaced FilePicker
-    const FilePickerImpl = foundry.applications.apps.FilePicker.implementation;
-    const browse = await FilePickerImpl.browse("data", folder);
-    const cassettes = browse.files.filter(f => {
-      const filename = f.split("/").pop();
-      return filename.startsWith("cassette") && f.endsWith(".webp");
-    });
-    if (cassettes.length > 0) {
-      imagePath = cassettes[Math.floor(Math.random() * cassettes.length)];
-    }
-  } catch (err) {
-    console.warn("Investigation Board: Could not browse assets folder for cassettes", err);
-  }
-  return imagePath;
+/** Returns a random cassette sprite path for an audio media note. */
+export function getRandomCassetteImage() {
+  const name = CASSETTE_IMAGES[Math.floor(Math.random() * CASSETTE_IMAGES.length)];
+  return `modules/investigation-board/assets/${name}`;
+}
+
+/** Returns a random VHS tape sprite path for a video media note. */
+export function getRandomVideoImage() {
+  const name = VIDEO_IMAGES[Math.floor(Math.random() * VIDEO_IMAGES.length)];
+  return `modules/investigation-board/assets/${name}`;
 }
 
 export async function createNote(noteType, { x = null, y = null } = {}) {
@@ -50,6 +39,7 @@ export async function createNote(noteType, { x = null, y = null } = {}) {
                 : noteType === "media" ? mediaW
                 : noteType === "pin" ? pinW
                 : stickyW;
+  // Media notes start as audio (cassette) by default; height updates if user sets a videoPath
   const height = noteType === "photo" ? Math.round(photoW / (225 / 290))
                  : noteType === "index" ? Math.round(indexW / (600 / 400))
                  : noteType === "handout" ? handoutH
@@ -101,9 +91,9 @@ export async function createNote(noteType, { x = null, y = null } = {}) {
     extraFlags.image = "modules/investigation-board/assets/newhandout.webp";
   }
 
-  // Set default image and audio for media notes
+  // Set default image for media notes (audio/cassette default; swaps to VHS when videoPath is set)
   if (noteType === "media") {
-    extraFlags.image = await _getRandomCassetteImage();
+    extraFlags.image = getRandomCassetteImage();
     extraFlags.audioPath = "";
   }
 
@@ -384,15 +374,13 @@ export async function createMediaNoteFromSound(sound) {
   const x = viewCenter.x - (mediaW * sceneScale) / 2;
   const y = viewCenter.y - (height * sceneScale) / 2;
 
-  const imagePath = await _getRandomCassetteImage();
-
   const created = await collaborativeCreate({
     type: "r",
     author: game.user.id,
     x, y,
     shape: { width: mediaW, height },
     fillColor: "#000000",
-    fillAlpha: 0,
+    fillAlpha: 0.001,
     strokeColor: "#000000",
     strokeWidth: 0,
     strokeAlpha: 0,
@@ -401,7 +389,7 @@ export async function createMediaNoteFromSound(sound) {
       [MODULE_ID]: {
         type: "media",
         text: sound.name,
-        image: imagePath,
+        image: getRandomCassetteImage(),
         audioPath: sound.path,
         linkedObject: `@UUID[${sound.uuid}]{${sound.name}}`
       },
@@ -560,13 +548,8 @@ export async function importFolderAsNotes(folder) {
 
   const createDataArray = [];
   
+  // No pre-fetch needed — getRandomCassetteImage() is now synchronous
   const cassetteImages = [];
-  if (type === "Playlist") {
-    // Pre-fetch some random cassette images to avoid too many file browses
-    for(let i=0; i<5; i++) {
-      cassetteImages.push(await _getRandomCassetteImage());
-    }
-  }
 
   for (let i = 0; i < documents.length; i++) {
     const doc = documents[i];
@@ -621,11 +604,10 @@ export async function importFolderAsNotes(folder) {
         tint: "#ffffff"
       };
     } else if (type === "Playlist") { // doc is a PlaylistSound
-      const imagePath = cassetteImages[i % cassetteImages.length];
       noteData = {
         type: "media",
         text: doc.name,
-        image: imagePath,
+        image: getRandomCassetteImage(),
         audioPath: doc.path,
         linkedObject: `@UUID[${doc.uuid}]{${doc.name}}`,
         audioEffectEnabled: applyLoFi,
@@ -718,26 +700,20 @@ export async function importPlaylistAsNotes(playlist) {
   const spacing = 40;
 
   const createDataArray = [];
-  const cassetteImages = [];
-  for(let i=0; i<5; i++) {
-    cassetteImages.push(await _getRandomCassetteImage());
-  }
-
   const defaultInk = game.settings.get(MODULE_ID, "defaultInkColor") || "#000000";
 
   for (let i = 0; i < documents.length; i++) {
     const doc = documents[i];
     const col = i % cols;
     const row = Math.floor(i / cols);
-    
+
     const x = startX + col * (mediaW + spacing);
     const y = startY + row * (mediaH + spacing);
 
-    const imagePath = cassetteImages[i % cassetteImages.length];
     const noteData = {
       type: "media",
       text: doc.name,
-      image: imagePath,
+      image: getRandomCassetteImage(),
       audioPath: doc.path,
       linkedObject: `@UUID[${doc.uuid}]{${doc.name}}`,
       audioEffectEnabled: applyLoFi,

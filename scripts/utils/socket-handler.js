@@ -2,7 +2,8 @@ import { MODULE_ID, SOCKET_NAME } from "../config.js";
 import { applyTapeEffectToSound } from "./audio-utils.js";
 
 export let socket = null;
-export let activeGlobalSounds = new Map(); // Track sounds played via socket
+export let activeGlobalSounds = new Map();  // audioPath → Sound (audio broadcast)
+export let activeVideoBroadcasts = new Map(); // drawingId → { gmUserId } (video broadcast)
 
 /**
  * Updates a drawing document, using socket communication if the user doesn't have permission.
@@ -197,6 +198,50 @@ export function handleSocketMessage(data) {
         sound.stop();
         activeGlobalSounds.delete(data.audioPath);
       }
+    }
+    return;
+  }
+
+  // ---- VIDEO BROADCAST — handled by all clients ----
+
+  if (data.action === "openVideoPlayer") {
+    // Open the VideoPlayer window for the given drawing on this client
+    (async () => {
+      const { VideoPlayer } = await import("../apps/video-player.js");
+      const drawing = canvas.drawings?.get(data.drawingId)?.document
+                   ?? game.scenes.active?.drawings.get(data.drawingId);
+      if (!drawing) return;
+      const appId = `video-player-${data.drawingId}`;
+      let app = foundry.applications.instances.get(appId);
+      if (!app) {
+        app = new VideoPlayer(drawing);
+        await app.render(true);
+      } else {
+        app.bringToTop?.();
+      }
+    })();
+    return;
+  }
+
+  if (data.action === "playVideo" || data.action === "pauseVideo" || data.action === "seekVideo") {
+    // Find the open VideoPlayer for this drawing and sync it
+    // GM's own player is the source of truth — skip self-sync
+    if (activeVideoBroadcasts.get(data.drawingId)?.gmUserId === game.user.id) return;
+
+    const appId = `video-player-${data.drawingId}`;
+    const app = foundry.applications.instances.get(appId);
+    if (app?.syncPlayback) {
+      app.syncPlayback(data.action, data.currentTime);
+    }
+    return;
+  }
+
+  if (data.action === "stopVideoBroadcast") {
+    activeVideoBroadcasts.delete(data.drawingId);
+    const appId = `video-player-${data.drawingId}`;
+    const app = foundry.applications.instances.get(appId);
+    if (app?.onBroadcastStop) {
+      app.onBroadcastStop();
     }
     return;
   }

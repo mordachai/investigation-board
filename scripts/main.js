@@ -552,11 +552,13 @@ Hooks.on("updateDrawing", async (drawing, changes, options, userId) => {
     if (needsRefresh) {
       await placeable.refresh();
 
-      // Re-render open NotePreviewer when note content changes
+      // Re-render open NotePreviewer or VideoPlayer when note content changes
       if (flagsChanged) {
-        const appId = `note-preview-${drawing.id}`;
-        const app = foundry.applications.instances.get(appId);
-        if (app) app.render();
+        const previewApp = foundry.applications.instances.get(`note-preview-${drawing.id}`);
+        if (previewApp) previewApp.render();
+
+        const videoApp = foundry.applications.instances.get(`video-player-${drawing.id}`);
+        if (videoApp) videoApp.render();
       }
     }
   }

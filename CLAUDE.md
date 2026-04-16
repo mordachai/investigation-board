@@ -36,10 +36,12 @@ scripts/
 ├── state.js             # Singleton: InvestigationBoardState { isActive }
 ├── settings.js          # Settings registration
 ├── apps/
-│   ├── drawing-sheet.js # CustomDrawingSheet — note edit dialog
-│   ├── hud.js           # InvestigationBoardHUD — quick controls on selected notes
-│   ├── note-previewer.js# NotePreviewer — floating preview of note content
-│   └── setup-warning.js # SetupWarningDialog — GM permission setup prompt
+│   ├── drawing-sheet.js      # CustomDrawingSheet — note edit dialog
+│   ├── hud.js                # InvestigationBoardHUD — quick controls on selected notes
+│   ├── note-previewer.js     # NotePreviewer — floating preview of note content
+│   ├── setup-warning.js      # SetupWarningDialog — GM permission setup prompt
+│   ├── appearance-dialog.js  # AppearanceDialog — font/color/connection settings
+│   └── note-defaults-dialog.js # NoteDefaultsDialog — dimensions and default text
 ├── canvas/
 │   ├── custom-drawing.js    # CustomDrawing — PIXI sprite rendering, permission overrides
 │   └── connection-manager.js# All connection line logic, pins, preview, animations
@@ -49,10 +51,12 @@ scripts/
     ├── socket-handler.js    # collaborativeUpdate/Create/Delete, socket listener
     └── audio-utils.js       # Tape effect for media notes
 templates/
-├── drawing-sheet.html   # Note config dialog (Handlebars)
-├── hud.html             # HUD template
-├── note-preview.html    # Note previewer template
-└── setup-warning.html   # GM setup warning template
+├── drawing-sheet.html        # Note config dialog (Handlebars)
+├── hud.html                  # HUD template
+├── note-preview.html         # Note previewer template
+├── setup-warning.html        # GM setup warning template
+├── appearance-dialog.html    # Appearance settings dialog
+└── note-defaults-dialog.html # Note Defaults settings dialog
 ```
 
 ### Module Entry Point: `scripts/main.js`
@@ -353,23 +357,57 @@ Beyond the directory context menus documented above, one more hook extends creat
 
 ## Settings
 
-World-level settings (see `scripts/settings.js`):
+All settings are registered in `scripts/settings.js`. The UI is organized into sections.
 
-- Note dimensions: `stickyNoteWidth`, `photoNoteWidth`, `indexNoteWidth`, `handoutNoteWidth`, `handoutNoteHeight`
-- Appearance: `font`, `baseFontSize`, `pinColor`, `autoScale`, `sceneScale`
-- Connection lines: `connectionLineWidth`
-- Default text per note type: `stickyNoteDefaultText`, `photoNoteDefaultText`, `indexNoteDefaultText`, `mediaNoteDefaultText`
-- `showSelectionControls` (world, default `false`) — show bounding box and rotate handle on selected notes (excludes pin and handout)
-- `allowScaling` (world, default `false`) — also show scale handle when selection controls are on
-- `showSetupWarning` — GM permission check on ready
+### Settings UI layout
+
+The settings config page shows:
+
+**Buttons (top):**
+- **[Configure Appearance]** — opens `AppearanceDialog` (`scripts/apps/appearance-dialog.js`), `restricted: false`
+- **[Configure Note Defaults]** — opens `NoteDefaultsDialog` (`scripts/apps/note-defaults-dialog.js`), `restricted: true` (GM only)
+
+**Scale & Layout** *(section header injected via `renderSettingsConfig` hook)*
+- `autoScale` — automatic scale per scene
+- `sceneScale` — fixed scale or global multiplier
+
+**Selection & Interaction**
+- `showSelectionControls` (world, default `false`)
+- `allowScaling` (world, default `false`)
+
+**Advanced**
 - `characterNameKey` — dot-path for actor name in photo notes (default: `prototypeToken.name`)
-- `baseCharacterLimits` — hidden JSON for text truncation
+- `showSetupWarning` — GM permission check on ready
 
-Client-level settings:
-- `defaultNoteColor` — default sticky note tint color
-- `defaultInkColor` — default ink/text color for new notes
+Section headers are injected as `<h3 class="ib-settings-header">` elements via a `renderSettingsConfig` hook at the bottom of `registerSettings`.
 
-All settings call `refreshAllDrawings()` on change.
+### Appearance dialog (`AppearanceDialog`)
+
+Manages: `font`, `baseFontSize`, `defaultNoteColor` (client), `defaultInkColor` (client), `pinColor`, `connectionLineWidth`. All registered with `config: false` so they don't appear in the flat list. The dialog template (`templates/appearance-dialog.html`) has three fieldsets: Text, Colors, Connections. `restricted: false` so players can change their own client-scope colors.
+
+### Note Defaults dialog (`NoteDefaultsDialog`)
+
+Manages: `stickyNoteWidth`, `photoNoteWidth`, `indexNoteWidth`, `handoutNoteWidth`, `handoutNoteHeight`, `stickyNoteDefaultText`, `photoNoteDefaultText`, `indexNoteDefaultText`, `mediaNoteDefaultText`. All registered with `config: false`. Template (`templates/note-defaults-dialog.html`) has two fieldsets: Note Dimensions and Default Text.
+
+### Hidden / internal settings
+- `baseCharacterLimits` — JSON object for text truncation per font/type, never shown in UI
+
+All world settings call `refreshAllDrawings()` on change.
+
+### Sensitive information visibility (`canViewSensitive`)
+
+Certain fields reveal information players should not see (image file paths, linked object identity). These are gated behind:
+
+```javascript
+canViewSensitive = game.user.isGM || game.user.can("FILES_BROWSE")
+```
+
+This flag is added to context in both `CustomDrawingSheet._prepareContext()` and `NotePreviewer._prepareContext()`. Fields hidden from non-privileged players:
+
+- **Edit dialog** — Linked Object field, Image Path field (photo/handout), Audio File picker (media); the tape-effect toggle remains visible
+- **Note Previewer** — "Linked Reference" footer section
+
+**Context menu** — the linked-object menu item always shows **"Open"** (no document name), so the object's identity is not revealed in the button text regardless of permission level.
 
 ## v14 Migration Notes
 

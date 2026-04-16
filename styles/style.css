@@ -1419,3 +1419,229 @@ body.investigation-board-mode .drawing:not([data-investigation-note="true"]) {
   min-width: 90px;
 }
 
+/* ============================================================
+   VIDEO PLAYER WINDOW
+   ============================================================ */
+
+.ib-video-player .window-content {
+  padding: 0;
+  overflow: hidden;
+  background: #111;
+}
+
+.ib-video-player-content {
+  display: flex;
+  flex-direction: column;
+  background: #111;
+  padding: var(--vp-pad-top, 20px)
+           var(--vp-pad-right, 20px)
+           var(--vp-pad-bottom, 20px)
+           var(--vp-pad-left, 20px);
+  gap: 0;
+}
+
+/* Video wrapper — positions the video and the click-to-play overlay */
+.ib-video-wrapper {
+  position: relative;
+  width: 100%;
+  line-height: 0; /* prevents extra whitespace below video */
+}
+
+.ib-video-element {
+  width: 100%;
+  aspect-ratio: var(--vp-aspect, 1.333);
+  display: block;
+  background: #000;
+  object-fit: contain;
+}
+
+/* Click-to-play overlay — shown when browser autoplay is blocked */
+.ib-click-to-play {
+  position: absolute;
+  inset: 0;
+  display: none;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  background: rgba(0, 0, 0, 0.65);
+  color: #fff;
+  cursor: pointer;
+  z-index: 10;
+  gap: 8px;
+  font-size: 14px;
+}
+
+.ib-click-to-play.visible {
+  display: flex;
+}
+
+.ib-click-to-play i {
+  font-size: 48px;
+  opacity: 0.9;
+}
+
+/* Controls row — GM only (broadcast button) */
+.ib-video-controls {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  padding: 6px 4px 4px;
+  background: #111;
+}
+
+/* Broadcast button */
+.ib-broadcast-btn {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 10px;
+  background: #2a2a2a;
+  border: 1px solid #555;
+  border-radius: 4px;
+  color: #ccc;
+  cursor: pointer;
+  font-size: 12px;
+  white-space: nowrap;
+  flex-shrink: 0;
+  transition: background 0.2s, color 0.2s;
+}
+
+.ib-broadcast-btn:hover {
+  background: #3a3a3a;
+  color: #fff;
+}
+
+.ib-broadcast-btn.active {
+  background: #6b1a1a;
+  border-color: #c03030;
+  color: #ffaaaa;
+}
+
+/* Empty state */
+.ib-video-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 40px 20px;
+  color: #666;
+  text-align: center;
+}
+
+.ib-video-empty i {
+  font-size: 36px;
+  opacity: 0.5;
+}
+
+.ib-video-empty p {
+  margin: 0;
+  font-size: 13px;
+}
+
+.ib-video-empty .hint {
+  font-size: 11px;
+  color: #555;
+}
+
+/* ============================================================
+   EFFECTS — WHITE NOISE OVERLAY
+   ============================================================ */
+
+@keyframes ib-noise-fade {
+  0%   { opacity: 1; }
+  60%  { opacity: 0.7; }
+  100% { opacity: 0; pointer-events: none; }
+}
+
+.ib-effect-noise {
+  position: absolute;
+  inset: 0;
+  z-index: 20;
+  pointer-events: none;
+  animation: ib-noise-fade 1.4s ease-out forwards;
+  filter: url(#ib-noise-filter);
+  background: white;
+}
+
+/* ============================================================
+   EFFECTS — TRACKING GLITCH OVERLAY
+   ============================================================ */
+
+@keyframes ib-tracking {
+  0%   { transform: translateX(0);   clip-path: none; }
+  8%   { transform: translateX(-6px); clip-path: polygon(0 18%, 100% 18%, 100% 28%, 0 28%); }
+  12%  { transform: translateX(4px);  clip-path: polygon(0 30%, 100% 30%, 100% 34%, 0 34%); }
+  18%  { transform: translateX(-3px); clip-path: polygon(0 55%, 100% 55%, 100% 60%, 0 60%); }
+  24%  { transform: translateX(0);   clip-path: none; }
+  100% { transform: translateX(0);   clip-path: none; }
+}
+
+.ib-effect-glitch {
+  position: absolute;
+  inset: 0;
+  z-index: 19;
+  pointer-events: none;
+  animation: ib-tracking 0.8s steps(1) forwards;
+  background: rgba(255, 255, 255, 0.08);
+  mix-blend-mode: screen;
+}
+
+/* ============================================================
+   EFFECTS — FILM GRAIN (applied to the video element itself)
+   ============================================================ */
+
+.ib-video-element.ib-film-grain {
+  filter: url(#ib-grain-filter);
+}
+
+/* ============================================================
+   EDIT DIALOG — MEDIA TYPE TOGGLE & VIDEO FIELDS
+   ============================================================ */
+
+.ib-media-type-toggle {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.ib-media-radios {
+  display: flex;
+  gap: 16px;
+}
+
+.ib-radio-label {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  cursor: pointer;
+  font-weight: normal;
+  font-size: 13px;
+}
+
+.ib-radio-label input[type="radio"] {
+  margin: 0;
+  cursor: pointer;
+}
+
+.ib-effects-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 4px 12px;
+  margin-top: 4px;
+}
+
+.ib-effect-label {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 12px;
+  font-weight: normal;
+  cursor: pointer;
+}
+
+.ib-effect-label input[type="checkbox"] {
+  margin: 0;
+  cursor: pointer;
+}
+

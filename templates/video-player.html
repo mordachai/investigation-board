@@ -1,0 +1,32 @@
+<div class="ib-video-player-content">
+  {{#if videoPath}}
+    <div class="ib-video-wrapper">
+      {{!-- Autoplay-blocked overlay — hidden until needed --}}
+      <div class="ib-click-to-play">
+        <i class="fas fa-play-circle"></i>
+        <span>Click to Play</span>
+      </div>
+
+      <video class="ib-video-element"
+             src="{{videoPath}}"
+             controls
+             preload="metadata">
+      </video>
+    </div>
+  {{else}}
+    <div class="ib-video-empty">
+      <i class="fas fa-video-slash"></i>
+      <p>No video file linked to this note.</p>
+      <p class="hint">Open the note editor to attach a video.</p>
+    </div>
+  {{/if}}
+
+  {{#if isGM}}
+  <div class="ib-video-controls">
+    <button type="button" class="ib-broadcast-btn" data-drawing-id="{{drawingId}}">
+      <i class="fas fa-broadcast-tower"></i>
+      <span>Open for All</span>
+    </button>
+  </div>
+  {{/if}}
+</div>

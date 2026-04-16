@@ -1,6 +1,7 @@
-import { MODULE_ID, PIN_COLORS, STICKY_TINTS, INK_COLORS } from "../config.js";
+import { MODULE_ID, PIN_COLORS, STICKY_TINTS, INK_COLORS, VIDEO_FORMATS } from "../config.js";
 import { collaborativeUpdate } from "../utils/socket-handler.js";
 import { applyTapeEffectToSound } from "../utils/audio-utils.js";
+import { getRandomCassetteImage, getRandomVideoImage } from "../utils/creation-utils.js";
 import { 
   startConnectionAnimation, 
   stopConnectionAnimation, 
@@ -71,6 +72,12 @@ export class CustomDrawingSheet extends DrawingConfig {
     context.textColor = customData.textColor;
     context.stickyTints = customData.stickyTints;
     context.inkColors = customData.inkColors;
+    // Video fields
+    context.videoPath = customData.videoPath;
+    context.videoFormat = customData.videoFormat;
+    context.videoEffects = customData.videoEffects;
+    context.mediaMode = customData.mediaMode;
+    context.videoFormats = customData.videoFormats;
 
     // Enrich the linked object for display
     context.enrichedLinkedObject = context.linkedObject ? await TextEditor.enrichHTML(context.linkedObject, { async: true }) : "";
@@ -113,18 +120,21 @@ export class CustomDrawingSheet extends DrawingConfig {
     const noteType = this.document.flags[MODULE_ID]?.type || "sticky";
     const defaultFontSize = noteType === "index" ? 9 : game.settings.get(MODULE_ID, "baseFontSize");
 
+    const ibFlags = this.document.flags[MODULE_ID] || {};
+    const isVideoNote = !!ibFlags.videoPath;
+
     const data = {
       document: this.document,
       noteType: noteType,
-      text: this.document.flags[MODULE_ID]?.text || "Default Text",
-      audioPath: this.document.flags[MODULE_ID]?.audioPath || "",
-      audioEffectEnabled: this.document.flags[MODULE_ID]?.audioEffectEnabled !== false, // Default to true
-      linkedObject: this.document.flags[MODULE_ID]?.linkedObject || "",
-      image: this.document.flags[MODULE_ID]?.image || (noteType === "handout" ? "modules/investigation-board/assets/newhandout.webp" : "modules/investigation-board/assets/placeholder.webp"),
-      font: this.document.flags[MODULE_ID]?.font || game.settings.get(MODULE_ID, "font"),
-      fontSize: this.document.flags[MODULE_ID]?.fontSize || defaultFontSize,
-      tint: this.document.flags[MODULE_ID]?.tint || "#ffffff",
-      textColor: this.document.flags[MODULE_ID]?.textColor || "#000000",
+      text: ibFlags.text || "Default Text",
+      audioPath: ibFlags.audioPath || "",
+      audioEffectEnabled: ibFlags.audioEffectEnabled !== false,
+      linkedObject: ibFlags.linkedObject || "",
+      image: ibFlags.image || (noteType === "handout" ? "modules/investigation-board/assets/newhandout.webp" : "modules/investigation-board/assets/placeholder.webp"),
+      font: ibFlags.font || game.settings.get(MODULE_ID, "font"),
+      fontSize: ibFlags.fontSize || defaultFontSize,
+      tint: ibFlags.tint || "#ffffff",
+      textColor: ibFlags.textColor || "#000000",
       stickyTints: STICKY_TINTS,
       inkColors: INK_COLORS,
       connections: formattedConnections,
@@ -133,7 +143,16 @@ export class CustomDrawingSheet extends DrawingConfig {
         photo: "Photo Note",
         index: "Index Card",
         handout: "Handout"
-      }
+      },
+      // Video fields
+      videoPath: ibFlags.videoPath || "",
+      videoFormat: ibFlags.videoFormat || "crt",
+      videoEffects: Object.assign(
+        { whiteNoise: true, mechanicalSound: true, trackingGlitch: true, filmGrain: false },
+        ibFlags.videoEffects || {}
+      ),
+      mediaMode: isVideoNote ? "video" : "audio",
+      videoFormats: VIDEO_FORMATS,
     };
     return data;
   }
@@ -287,6 +306,41 @@ export class CustomDrawingSheet extends DrawingConfig {
             }
           }, 500);
         }
+      });
+    }
+
+    // Media type toggle (audio ↔ video)
+    const mediaRadios = this.element.querySelectorAll("input[name='mediaMode']");
+    const audioFields = this.element.querySelector(".ib-audio-fields");
+    const videoFields = this.element.querySelector(".ib-video-fields");
+    mediaRadios.forEach(radio => {
+      radio.addEventListener("change", async () => {
+        const isVideo = radio.value === "video";
+        if (audioFields) audioFields.style.display = isVideo ? "none" : "";
+        if (videoFields) videoFields.style.display = isVideo ? "" : "none";
+
+        // Update canvas image and height immediately so the note reflects the new type
+        const w = this.document.shape.width || 400;
+        await collaborativeUpdate(this.document.id, {
+          [`flags.${MODULE_ID}.image`]: isVideo ? getRandomVideoImage() : getRandomCassetteImage(),
+          "shape.height": Math.round(w * (isVideo ? 0.571 : 0.74)),
+        });
+      });
+    });
+
+    // Video file picker
+    const videoPickerButton = this.element.querySelector(".video-picker-button");
+    if (videoPickerButton) {
+      videoPickerButton.addEventListener("click", (ev) => {
+        ev.preventDefault();
+        const input = this.element.querySelector("input[name='videoPath']");
+        new FilePicker({
+          type: "video",
+          current: input?.value || "",
+          callback: (path) => {
+            if (input) input.value = path;
+          }
+        }).browse();
       });
     }
 
@@ -444,12 +498,39 @@ export class CustomDrawingSheet extends DrawingConfig {
           updates[`flags.${MODULE_ID}.image`] = data.image || (noteType === "handout" ? "modules/investigation-board/assets/newhandout.webp" : "modules/investigation-board/assets/placeholder.webp");
         }
 
-        if (data.audioPath !== undefined) {
-          updates[`flags.${MODULE_ID}.audioPath`] = data.audioPath;
-        }
-
         if (noteType === "media") {
-          updates[`flags.${MODULE_ID}.audioEffectEnabled`] = !!data.audioEffectEnabled;
+          const wasVideo = !!this.document.flags[MODULE_ID]?.videoPath;
+          const isNowVideo = data.mediaMode === "video" && !!data.videoPath;
+
+          if (isNowVideo) {
+            // Video mode — save videoPath, clear audioPath
+            updates[`flags.${MODULE_ID}.videoPath`] = data.videoPath;
+            updates[`flags.${MODULE_ID}.audioPath`] = "";
+            updates[`flags.${MODULE_ID}.videoFormat`] = data.videoFormat || "crt";
+            updates[`flags.${MODULE_ID}.videoEffects`] = {
+              whiteNoise:      !!data["videoEffects.whiteNoise"],
+              mechanicalSound: !!data["videoEffects.mechanicalSound"],
+              trackingGlitch:  !!data["videoEffects.trackingGlitch"],
+              filmGrain:       !!data["videoEffects.filmGrain"],
+            };
+            // Swap canvas sprite to VHS tape and resize to taller format
+            if (!wasVideo) {
+              const w = this.document.shape.width || 400;
+              updates[`flags.${MODULE_ID}.image`] = getRandomVideoImage();
+              updates["shape.height"] = Math.round(w * 0.571);
+            }
+          } else {
+            // Audio mode — save audioPath, clear videoPath
+            updates[`flags.${MODULE_ID}.audioPath`] = data.audioPath || "";
+            updates[`flags.${MODULE_ID}.videoPath`] = "";
+            updates[`flags.${MODULE_ID}.audioEffectEnabled`] = !!data.audioEffectEnabled;
+            // Swap canvas sprite back to cassette and restore cassette height
+            if (wasVideo) {
+              const w = this.document.shape.width || 400;
+              updates[`flags.${MODULE_ID}.image`] = getRandomCassetteImage();
+              updates["shape.height"] = Math.round(w * 0.74);
+            }
+          }
         }
 
         if (data.linkedObject !== undefined) {
