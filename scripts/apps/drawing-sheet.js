@@ -1,4 +1,5 @@
-import { MODULE_ID, PIN_COLORS, STICKY_TINTS, INK_COLORS, VIDEO_FORMATS } from "../config.js";
+import { MODULE_ID, STICKY_TINTS, INK_COLORS, VIDEO_FORMATS } from "../config.js";
+import { getAvailablePinFiles } from "../utils/helpers.js";
 import { collaborativeUpdate } from "../utils/socket-handler.js";
 import { applyTapeEffectToSound } from "../utils/audio-utils.js";
 import { getRandomCassetteImage, getRandomVideoImage } from "../utils/creation-utils.js";
@@ -85,6 +86,20 @@ export class CustomDrawingSheet extends DrawingConfig {
     // Gate sensitive fields (image paths, linked object) behind file-browse permission
     context.canViewSensitive = game.user.isGM || game.user.can("FILES_BROWSE");
 
+    // Pin image choices — scan the configured folder, fall back to built-in list
+    context.selectedPinColor = customData.selectedPinColor;
+    context.showPinSelector  = game.settings.get(MODULE_ID, "pinColor") !== "none";
+    if (context.showPinSelector) {
+      const files = await getAvailablePinFiles();
+      context.pinImageChoices = files.map(f => ({
+        value: f,
+        // "redPin.webp" → "Red Pin", "nail_gold.webp" → "Nail Gold"
+        label: f.replace(/\.\w+$/, "").replace(/[_-]/g, " ").replace(/([A-Z])/g, " $1").trim()
+               .replace(/\b\w/g, c => c.toUpperCase()),
+        selected: f === customData.selectedPinColor
+      }));
+    }
+
     return context;
   }
 
@@ -122,6 +137,9 @@ export class CustomDrawingSheet extends DrawingConfig {
 
     const ibFlags = this.document.flags[MODULE_ID] || {};
     const isVideoNote = !!ibFlags.videoPath;
+    // mediaMode is stored explicitly in flags when the user toggles the radio button.
+    // Fall back to deriving it from videoPath for notes created before this field existed.
+    const mediaMode = ibFlags.mediaMode ?? (isVideoNote ? "video" : "audio");
 
     const data = {
       document: this.document,
@@ -151,8 +169,10 @@ export class CustomDrawingSheet extends DrawingConfig {
         { whiteNoise: true, mechanicalSound: true, trackingGlitch: true, filmGrain: false },
         ibFlags.videoEffects || {}
       ),
-      mediaMode: isVideoNote ? "video" : "audio",
+      mediaMode,
       videoFormats: VIDEO_FORMATS,
+      // Pin — bare filename stored in flags, or "" meaning "auto/random"
+      selectedPinColor: ibFlags.pinColor || "",
     };
     return data;
   }
@@ -319,12 +339,22 @@ export class CustomDrawingSheet extends DrawingConfig {
         if (audioFields) audioFields.style.display = isVideo ? "none" : "";
         if (videoFields) videoFields.style.display = isVideo ? "" : "none";
 
-        // Update canvas image and height immediately so the note reflects the new type
+        // Persist mediaMode explicitly in flags so the sheet re-render (triggered by
+        // ApplicationV2's auto-render-on-document-update) reads the correct value and
+        // doesn't snap the radio back to its previous state.
         const w = this.document.shape.width || 400;
         await collaborativeUpdate(this.document.id, {
+          [`flags.${MODULE_ID}.mediaMode`]: radio.value,
           [`flags.${MODULE_ID}.image`]: isVideo ? getRandomVideoImage() : getRandomCassetteImage(),
           "shape.height": Math.round(w * (isVideo ? 0.571 : 0.74)),
         });
+
+        // Foundry doesn't await async hook handlers, so the updateDrawing hook's
+        // placeable.refresh() races with the frame render cycle and the sprite
+        // texture update loses. Force a synchronous sprite redraw here, same as
+        // the submit handler does after its collaborativeUpdate.
+        const placeable = canvas.drawings.get(this.document.id);
+        if (placeable) await placeable.refresh();
       });
     });
 
@@ -499,12 +529,15 @@ export class CustomDrawingSheet extends DrawingConfig {
         }
 
         if (noteType === "media") {
-          const wasVideo = !!this.document.flags[MODULE_ID]?.videoPath;
-          const isNowVideo = data.mediaMode === "video" && !!data.videoPath;
+          const prevMode = this.document.flags[MODULE_ID]?.mediaMode
+            ?? (!!this.document.flags[MODULE_ID]?.videoPath ? "video" : "audio");
+          const newMode = data.mediaMode || "audio";
+          const modeChanged = prevMode !== newMode;
 
-          if (isNowVideo) {
-            // Video mode — save videoPath, clear audioPath
-            updates[`flags.${MODULE_ID}.videoPath`] = data.videoPath;
+          updates[`flags.${MODULE_ID}.mediaMode`] = newMode;
+
+          if (newMode === "video") {
+            updates[`flags.${MODULE_ID}.videoPath`] = data.videoPath || "";
             updates[`flags.${MODULE_ID}.audioPath`] = "";
             updates[`flags.${MODULE_ID}.videoFormat`] = data.videoFormat || "crt";
             updates[`flags.${MODULE_ID}.videoEffects`] = {
@@ -513,19 +546,18 @@ export class CustomDrawingSheet extends DrawingConfig {
               trackingGlitch:  !!data["videoEffects.trackingGlitch"],
               filmGrain:       !!data["videoEffects.filmGrain"],
             };
-            // Swap canvas sprite to VHS tape and resize to taller format
-            if (!wasVideo) {
+            // Only swap canvas sprite on mode change — the radio change handler
+            // already handles immediate updates, but this covers Save-without-toggle.
+            if (modeChanged) {
               const w = this.document.shape.width || 400;
               updates[`flags.${MODULE_ID}.image`] = getRandomVideoImage();
               updates["shape.height"] = Math.round(w * 0.571);
             }
           } else {
-            // Audio mode — save audioPath, clear videoPath
             updates[`flags.${MODULE_ID}.audioPath`] = data.audioPath || "";
             updates[`flags.${MODULE_ID}.videoPath`] = "";
             updates[`flags.${MODULE_ID}.audioEffectEnabled`] = !!data.audioEffectEnabled;
-            // Swap canvas sprite back to cassette and restore cassette height
-            if (wasVideo) {
+            if (modeChanged) {
               const w = this.document.shape.width || 400;
               updates[`flags.${MODULE_ID}.image`] = getRandomCassetteImage();
               updates["shape.height"] = Math.round(w * 0.74);
@@ -554,6 +586,12 @@ export class CustomDrawingSheet extends DrawingConfig {
 
         if (data.textColor !== undefined) {
           updates[`flags.${MODULE_ID}.textColor`] = data.textColor;
+        }
+
+        // Save per-note pin image choice (all note types)
+        // "" means "auto" — cleared flag triggers a new random pick on next render
+        if (data.pinColor !== undefined) {
+          updates[`flags.${MODULE_ID}.pinColor`] = data.pinColor;
         }
 
         // Process connection color changes

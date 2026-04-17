@@ -1,4 +1,5 @@
-import { MODULE_ID, STICKY_TINTS, INK_COLORS } from "../config.js";
+import { MODULE_ID, STICKY_TINTS, INK_COLORS, DEFAULT_PIN_FOLDER } from "../config.js";
+import { invalidatePinFilesCache } from "../utils/helpers.js";
 
 const { ApplicationV2, HandlebarsApplicationMixin } = foundry.applications.api;
 
@@ -15,11 +16,7 @@ const FONT_CHOICES = {
 
 const PIN_COLOR_CHOICES = {
   random: "Random",
-  red:    "Red",
-  blue:   "Blue",
-  yellow: "Yellow",
-  green:  "Green",
-  none:   "No Pins"
+  none:   "No Pins (disables yarn connections)"
 };
 
 export class AppearanceDialog extends HandlebarsApplicationMixin(ApplicationV2) {
@@ -44,10 +41,11 @@ export class AppearanceDialog extends HandlebarsApplicationMixin(ApplicationV2) 
   };
 
   async _prepareContext(options) {
-    const currentFont      = game.settings.get(MODULE_ID, "font");
-    const currentNoteColor = game.settings.get(MODULE_ID, "defaultNoteColor");
-    const currentInkColor  = game.settings.get(MODULE_ID, "defaultInkColor");
-    const currentPinColor  = game.settings.get(MODULE_ID, "pinColor");
+    const currentFont        = game.settings.get(MODULE_ID, "font");
+    const currentNoteColor   = game.settings.get(MODULE_ID, "defaultNoteColor");
+    const currentInkColor    = game.settings.get(MODULE_ID, "defaultInkColor");
+    const currentPinColor    = game.settings.get(MODULE_ID, "pinColor");
+    const currentPinFolder   = game.settings.get(MODULE_ID, "pinImagesFolder") || DEFAULT_PIN_FOLDER;
 
     return {
       // Current values
@@ -56,6 +54,7 @@ export class AppearanceDialog extends HandlebarsApplicationMixin(ApplicationV2) 
       defaultNoteColor:   currentNoteColor,
       defaultInkColor:    currentInkColor,
       pinColor:           currentPinColor,
+      pinImagesFolder:    currentPinFolder,
       connectionLineWidth: game.settings.get(MODULE_ID, "connectionLineWidth"),
 
       // Choices for selects
@@ -76,6 +75,7 @@ export class AppearanceDialog extends HandlebarsApplicationMixin(ApplicationV2) 
 
   _onRender(context, options) {
     const html = this.element;
+    const FilePicker = foundry.applications.apps.FilePicker.implementation;
 
     html.querySelector('[data-action="save"]')?.addEventListener("click", async () => {
       await this._save();
@@ -84,6 +84,17 @@ export class AppearanceDialog extends HandlebarsApplicationMixin(ApplicationV2) 
 
     html.querySelector('[data-action="cancel"]')?.addEventListener("click", () => {
       this.close();
+    });
+
+    html.querySelector('[data-action="browse-pins"]')?.addEventListener("click", () => {
+      const input = html.querySelector('[name="pinImagesFolder"]');
+      new FilePicker({
+        type: "folder",
+        current: input?.value || DEFAULT_PIN_FOLDER,
+        callback: (path) => {
+          if (input) input.value = path;
+        }
+      }).browse();
     });
   }
 
@@ -95,7 +106,7 @@ export class AppearanceDialog extends HandlebarsApplicationMixin(ApplicationV2) 
       return isNaN(val) ? null : val;
     };
 
-    const strKeys = ["font", "defaultNoteColor", "defaultInkColor", "pinColor"];
+    const strKeys = ["font", "defaultNoteColor", "defaultInkColor", "pinColor", "pinImagesFolder"];
     const numKeys = ["baseFontSize", "connectionLineWidth"];
 
     for (const key of strKeys) {

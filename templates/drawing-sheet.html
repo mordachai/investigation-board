@@ -190,6 +190,19 @@
   {{/if}}
 
 
+  {{!-- Pin Image — shown for all note types when pins are enabled --}}
+  {{#if showPinSelector}}
+  <div class="form-group pin-select-group">
+    <label>Pin:</label>
+    <select name="pinColor">
+      <option value="" {{#unless selectedPinColor}}selected{{/unless}}>Auto</option>
+      {{#each pinImageChoices}}
+        <option value="{{value}}" {{#if selected}}selected{{/if}}>{{label}}</option>
+      {{/each}}
+    </select>
+  </div>
+  {{/if}}
+
   {{!-- Connections Section --}}
   {{#if connections.length}}
     <div class="form-group connections-section">

@@ -1092,6 +1092,8 @@ body.investigation-board-mode .drawing:not([data-investigation-note="true"]) {
   text-align: center;
   width: 100%;
   padding: 0 60px; /* Increased internal safety margin on paper */
+  max-height: 55vh;
+  overflow-y: auto;
 }
 
 .preview-footer {

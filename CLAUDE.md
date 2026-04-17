@@ -32,7 +32,7 @@ To test: refresh Foundry after code changes. Existing notes may need `canvas.dra
 ```text
 scripts/
 ├── main.js              # Entry point — all Foundry hooks, IB mode activation/deactivation
-├── config.js            # Constants: MODULE_ID, SOCKET_NAME, PIN_COLORS, STICKY_TINTS, INK_COLORS
+├── config.js            # Constants: MODULE_ID, SOCKET_NAME, DEFAULT_PIN_FOLDER, PIN_COLORS, STICKY_TINTS, INK_COLORS
 ├── state.js             # Singleton: InvestigationBoardState { isActive }
 ├── settings.js          # Settings registration
 ├── apps/
@@ -40,16 +40,19 @@ scripts/
 │   ├── hud.js                # InvestigationBoardHUD — quick controls on selected notes
 │   ├── note-previewer.js     # NotePreviewer — floating preview of note content
 │   ├── setup-warning.js      # SetupWarningDialog — GM permission setup prompt
-│   ├── appearance-dialog.js  # AppearanceDialog — font/color/connection settings
+│   ├── appearance-dialog.js  # AppearanceDialog — font/color/connection/pin settings
 │   └── note-defaults-dialog.js # NoteDefaultsDialog — dimensions and default text
 ├── canvas/
 │   ├── custom-drawing.js    # CustomDrawing — PIXI sprite rendering, permission overrides
 │   └── connection-manager.js# All connection line logic, pins, preview, animations
 └── utils/
     ├── creation-utils.js    # createNote() and all "create from X" helpers
-    ├── helpers.js           # getDynamicCharacterLimits, truncateText, getEffectiveScale
+    ├── helpers.js           # getDynamicCharacterLimits, truncateText, getEffectiveScale, resolvePinImage, getAvailablePinFiles
     ├── socket-handler.js    # collaborativeUpdate/Create/Delete, socket listener
     └── audio-utils.js       # Tape effect for media notes
+assets/
+├── pins/                # Built-in pin images (redPin, bluePin, yellowPin, greenPin .webp)
+│                        # GM can point pinImagesFolder at any folder to replace the entire set
 templates/
 ├── drawing-sheet.html        # Note config dialog (Handlebars)
 ├── hud.html                  # HUD template
@@ -64,7 +67,7 @@ templates/
 Registers all Foundry hooks and manages Investigation Board mode:
 
 - `Hooks.once("init")` — register settings, set `CONFIG.Drawing.objectClass = CustomDrawing`, register sheet (makeDefault: false)
-- `Hooks.once("ready")` — init socket, force-load fonts via `document.fonts.load()`, show setup warning to GM if permissions missing
+- `Hooks.once("ready")` — init socket, force-load fonts via `document.fonts.load()`, migrate legacy `pinColor` setting values, show setup warning to GM if permissions missing
 - `Hooks.on("getSceneControlButtons")` — add 6 creation tools to `controls.drawings.tools`
 - `Hooks.on("renderSceneControls")` — activate/deactivate IB mode when drawings control is selected
 - `Hooks.on("preCreateDrawing")` — clear connections and suppress auto-open on paste/duplicate
@@ -115,7 +118,9 @@ flags['investigation-board'] = {
   image: "path/to/image.webp",        // photo, handout, media
   audioPath: "path/to/audio.mp3",     // media only
   audioEffectEnabled: true,           // media only — lo-fi tape effect
-  pinColor: "redPin.webp",
+  pinColor: "redPin.webp",            // bare filename; "" or absent = auto-random on next render
+                                      // resolved at render time via resolvePinImage() so the folder
+                                      // can change without touching note data
   identityName: "Character Name",      // futuristic photo only
   unknown: true,                       // photo only — shows "???" instead of name
   font: "Arial",                       // per-note, falls back to global (not handout/media/pin)
@@ -142,6 +147,26 @@ Stored one-directionally in source note's `connections` flag array. All renderin
 - `startConnectionAnimation()` / `stopConnectionAnimation()` — marching lights while dialog open
 
 Pins are repositioned into global `pinsContainer` at zIndex 20 on every redraw (world coordinates). Pins in `pinsContainer` are decoupled from their drawing's PIXI hierarchy, so any per-drawing state (visibility, alpha) must be explicitly applied to `drawing.pinSprite` inside `updatePins()`.
+
+### Pin Images System
+
+Pin images live in `assets/pins/` by default. The GM can point `pinImagesFolder` (world setting) at any folder (e.g. a "nails" set) — all notes immediately resolve to the new folder without touching flag data.
+
+**Key helpers in `utils/helpers.js`:**
+- `resolvePinImage(filename)` — prepends the configured folder: `"redPin.webp"` → `"modules/investigation-board/assets/pins/redPin.webp"`
+- `getAvailablePinFiles()` — async; scans `pinImagesFolder` via `FilePicker.browse()`, returns array of bare filenames. Module-level cache; busted by `invalidatePinFilesCache()` when the folder setting changes. Falls back to the `PIN_COLORS` constant list for clients without `FILES_BROWSE` permission.
+- `invalidatePinFilesCache()` — called from the `pinImagesFolder` setting's `onChange`.
+
+**`CustomDrawing._loadPinTexture(noteData)`** — single method replacing four previously duplicated pin-loading blocks across `_doUpdateSprites`. Logic:
+1. Global `pinColor` setting `"none"` → destroy sprite, return (disables yarn connections too — pins are the click target)
+2. `noteData.pinColor` is set → load `resolvePinImage(noteData.pinColor)`
+3. Not set → `getAvailablePinFiles()`, pick random, persist filename to flag via `collaborativeUpdate`, then load
+
+**Global setting `pinColor`** — only two valid values now: `"random"` / `"none"`. Legacy values (`"red"`, `"blue"`, etc. from the old color-name system) are migrated to `"random"` on first `ready` hook by the GM client.
+
+**Per-note pin selector** — the note edit dialog (`drawing-sheet.js`) scans the folder via `getAvailablePinFiles()` in `_prepareContext` and renders a `<select name="pinColor">` with an "Auto" option (empty string) plus one entry per discovered file. Saving sets `flags.${MODULE_ID}.pinColor` to the bare filename or clears it for auto/random.
+
+> **"No Pins" disables connections** — `pinColor: "none"` destroys `pinSprite`, so `updatePins()` skips registering the `pointerdown` listener. Existing yarn lines remain visible but no new connections can be created.
 
 ### Collaborative Editing
 
@@ -212,6 +237,11 @@ Activated when Drawings control is selected (`renderSceneControls` hook). In act
 - Non-IB drawings: `eventMode = 'none'`, non-interactive
 - Body gets `.investigation-board-mode` CSS class
 
+**Cursor behaviour:**
+- Note body → `grab` (set via `drawing.cursor` in `refreshDrawingsInteractivity`)
+- Pin sprite → `pointer` (set in `updatePins()` in `connection-manager.js`)
+- Rotation / scale handles → `pointer` (set in `_applyHandleVisibility()`)
+
 ### Permission Overrides in CustomDrawing
 
 ```javascript
@@ -235,10 +265,10 @@ Two world settings gate bounding-box display and scaling:
 - `pin` — explicitly sets `this.controls.visible = false` and returns
 - all others — hides controls if `showSelectionControls` is off; otherwise calls `_applyHandleVisibility()`
 
-**`_applyHandleVisibility()`** iterates `this.controls.handles.children` and sets visibility by handle name:
-- `"rotate"` → always `true`
-- `"scale"`, `"scaleX"`, `"scaleY"` → `allowScaling` setting
-- anything else (translate handles) → `false`
+**`_applyHandleVisibility()`** iterates `this.controls.handles.children` and sets visibility **and cursor** by handle name:
+- `"rotate"` → `visible = true`, `cursor = 'pointer'`
+- `"scale"`, `"scaleX"`, `"scaleY"` → `visible = allowScaling`, `cursor = 'pointer'`
+- anything else (translate handles) → `visible = false`
 
 **`controls._refresh` monkey-patch** — `ShapeControls._refresh()` resets all `handle.visible` to true on every render tick. Since `this.controls` is recreated fresh on every `draw()` call, `draw()` monkey-patches `controls._refresh` in-place to call `_applyHandleVisibility()` after the base refresh. The patch only applies to non-handout, non-pin IB notes.
 
@@ -383,7 +413,9 @@ Section headers are injected as `<h3 class="ib-settings-header">` elements via a
 
 ### Appearance dialog (`AppearanceDialog`)
 
-Manages: `font`, `baseFontSize`, `defaultNoteColor` (client), `defaultInkColor` (client), `pinColor`, `connectionLineWidth`. All registered with `config: false` so they don't appear in the flat list. The dialog template (`templates/appearance-dialog.html`) has three fieldsets: Text, Colors, Connections. `restricted: false` so players can change their own client-scope colors.
+Manages: `font`, `baseFontSize`, `defaultNoteColor` (client), `defaultInkColor` (client), `pinColor`, `pinImagesFolder`, `connectionLineWidth`. All registered with `config: false` so they don't appear in the flat list. The dialog template (`templates/appearance-dialog.html`) has three fieldsets: Text, Colors, Connections. `restricted: false` so players can change their own client-scope colors.
+
+`pinColor` has two values: `"random"` (pick from folder) and `"none"` (hide all pins, disables connections). `pinImagesFolder` has a folder browse button that opens `FilePicker` in folder mode.
 
 ### Note Defaults dialog (`NoteDefaultsDialog`)
 
@@ -391,8 +423,14 @@ Manages: `stickyNoteWidth`, `photoNoteWidth`, `indexNoteWidth`, `handoutNoteWidt
 
 ### Hidden / internal settings
 - `baseCharacterLimits` — JSON object for text truncation per font/type, never shown in UI
+- `pinColor` — `"random"` | `"none"`, managed via Appearance dialog
+- `pinImagesFolder` — folder path for pin images, managed via Appearance dialog; `onChange` calls `invalidatePinFilesCache()` then `refreshAllDrawings()`
 
 All world settings call `refreshAllDrawings()` on change.
+
+### Note Previewer text overflow
+
+Long text in the previewer is contained by `max-height: 55vh; overflow-y: auto` on `.preview-text` in `styles/style.css`. The container (paper background, border) remains full-size; only the text content scrolls inside it.
 
 ### Sensitive information visibility (`canViewSensitive`)
 

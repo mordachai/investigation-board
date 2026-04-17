@@ -43,7 +43,7 @@ function refreshDrawingsInteractivity() {
       // Use 'static' to ensure it receives events even if it's not "owned".
       drawing.eventMode = 'static';
       drawing.interactiveChildren = true;
-      drawing.cursor = 'pointer';
+      drawing.cursor = 'grab';
     }
     // Non-IB drawings are left at their default Foundry state so they remain
     // selectable in draw mode. Forcing them to 'none' breaks the ability to
@@ -269,6 +269,18 @@ Hooks.once("ready", async () => {
   await Promise.all(moduleFonts.map(f => document.fonts.load(`16px "${f}"`).catch(() => {})));
 
   initSocket();
+
+  // Migrate legacy pinColor setting — old system stored colour names ("red",
+  // "blue", "yellow", "green") that were used to build filenames at render time.
+  // The new system only uses "random" / "none"; anything else becomes "random".
+  // Per-note pinColor flags store bare filenames ("redPin.webp") and are already
+  // compatible with the new resolvePinImage() helper — no note-level migration needed.
+  if (game.user.isGM) {
+    const pinColorSetting = game.settings.get(MODULE_ID, "pinColor");
+    if (!["random", "none"].includes(pinColorSetting)) {
+      await game.settings.set(MODULE_ID, "pinColor", "random");
+    }
+  }
 
   // Show setup warning to GM if enabled
   if (game.user.isGM && game.settings.get(MODULE_ID, "showSetupWarning")) {

@@ -1,4 +1,63 @@
-import { MODULE_ID, BASE_FONT_SIZE } from "../config.js";
+import { MODULE_ID, BASE_FONT_SIZE, DEFAULT_PIN_FOLDER, PIN_COLORS } from "../config.js";
+
+// ---------------------------------------------------------------------------
+// Pin image helpers
+// ---------------------------------------------------------------------------
+
+let _pinFilesCache = null;
+let _pinFolderCache = null;
+
+/**
+ * Bust the cached pin file list. Call this when pinImagesFolder setting changes.
+ */
+export function invalidatePinFilesCache() {
+  _pinFilesCache = null;
+  _pinFolderCache = null;
+}
+
+/**
+ * Returns the full URL for a bare pin filename, resolved against the
+ * configured (or default) pin images folder.
+ * @param {string} filename  e.g. "redPin.webp"
+ * @returns {string}         e.g. "modules/investigation-board/assets/pins/redPin.webp"
+ */
+export function resolvePinImage(filename) {
+  const folder = game.settings.get(MODULE_ID, "pinImagesFolder") || DEFAULT_PIN_FOLDER;
+  return `${folder}/${filename}`;
+}
+
+/**
+ * Scans the configured pin images folder and returns the list of available
+ * filenames (.webp / .png). Results are cached per-folder until
+ * invalidatePinFilesCache() is called.
+ *
+ * Falls back to PIN_COLORS (the built-in list) when the folder cannot be
+ * read (e.g. players without FILES_BROWSE permission).
+ *
+ * @returns {Promise<string[]>}  Array of bare filenames, e.g. ["redPin.webp", ...]
+ */
+export async function getAvailablePinFiles() {
+  const FilePicker = foundry.applications.apps.FilePicker.implementation;
+  const folder = game.settings.get(MODULE_ID, "pinImagesFolder") || DEFAULT_PIN_FOLDER;
+
+  if (_pinFolderCache === folder && _pinFilesCache !== null) {
+    return _pinFilesCache;
+  }
+
+  try {
+    const result = await FilePicker.browse("data", folder);
+    _pinFilesCache = result.files
+      .filter(f => /\.(webp|png)$/i.test(f))
+      .map(f => f.split("/").pop());
+    _pinFolderCache = folder;
+  } catch {
+    // No FILES_BROWSE permission or folder doesn't exist — use built-in list
+    _pinFilesCache = [...PIN_COLORS];
+    _pinFolderCache = folder;
+  }
+
+  return _pinFilesCache;
+}
 
 export function getBaseCharacterLimits() {
   return game.settings.get(MODULE_ID, "baseCharacterLimits") || {

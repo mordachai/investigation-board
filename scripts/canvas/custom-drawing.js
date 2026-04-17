@@ -1,7 +1,7 @@
-import { MODULE_ID, PIN_COLORS, SOCKET_NAME, VIDEO_EXTENSIONS, VIDEO_IMAGES, CASSETTE_IMAGES } from "../config.js";
+import { MODULE_ID, SOCKET_NAME, VIDEO_EXTENSIONS, VIDEO_IMAGES, CASSETTE_IMAGES } from "../config.js";
 import { InvestigationBoardState } from "../state.js";
 import { collaborativeUpdate, collaborativeDelete, socket, activeGlobalSounds, activeVideoBroadcasts } from "../utils/socket-handler.js";
-import { truncateText } from "../utils/helpers.js";
+import { truncateText, resolvePinImage, getAvailablePinFiles } from "../utils/helpers.js";
 import { NotePreviewer } from "../apps/note-previewer.js";
 import { VideoPlayer } from "../apps/video-player.js";
 import { drawAllConnectionLines } from "./connection-manager.js";
@@ -162,11 +162,13 @@ export class CustomDrawing extends Drawing {
       switch (handle.name) {
         case "rotate":
           handle.visible = true;
+          handle.cursor = 'pointer';
           break;
         case "scale":
         case "scaleX":
         case "scaleY":
           handle.visible = allowScaling;
+          handle.cursor = 'pointer';
           break;
         default: // "translate" and anything else
           handle.visible = false;
@@ -696,6 +698,57 @@ export class CustomDrawing extends Drawing {
     }
   }
 
+  /**
+   * Load (or destroy) the pin sprite for this note.
+   *
+   * The global "pinColor" setting controls visibility:
+   *   "none"   → destroy any existing sprite and bail out.
+   *   "random" → pick a random image from the pin folder on first render,
+   *              persist the choice to the note's flags so every client
+   *              shows the same pin.
+   *
+   * The per-note flag `noteData.pinColor` stores the bare filename
+   * (e.g. "redPin.webp").  resolvePinImage() prepends the configured
+   * folder at render time, so switching the folder setting instantly
+   * re-resolves every note without touching flag data.
+   *
+   * @param {object} noteData  The investigation-board flags for this drawing.
+   */
+  async _loadPinTexture(noteData) {
+    const pinSetting = game.settings.get(MODULE_ID, "pinColor");
+
+    if (pinSetting === "none") {
+      if (this.pinSprite) {
+        if (this.pinSprite.parent) this.pinSprite.parent.removeChild(this.pinSprite);
+        this.pinSprite.destroy();
+        this.pinSprite = null;
+      }
+      return;
+    }
+
+    if (!this.pinSprite || this.pinSprite.destroyed) {
+      if (this.pinSprite) this.pinSprite.destroy();
+      this.pinSprite = new PIXI.Sprite();
+    }
+
+    let pinFilename = noteData.pinColor;
+    if (!pinFilename) {
+      const files = await getAvailablePinFiles();
+      pinFilename = files[Math.floor(Math.random() * files.length)];
+      await collaborativeUpdate(this.document.id, { [`flags.${MODULE_ID}.pinColor`]: pinFilename });
+    }
+
+    const pinImage = resolvePinImage(pinFilename);
+    try {
+      const texture = await PIXI.Assets.load(pinImage);
+      if (texture && this.pinSprite && !this.pinSprite.destroyed) {
+        this.pinSprite.texture = texture;
+      }
+    } catch (err) {
+      console.error(`Investigation Board: Failed to load pin texture: ${pinImage}`, err);
+    }
+  }
+
   async _doUpdateSprites() {
     if (!this.shape) return;
     const noteData = this.document.flags[MODULE_ID];
@@ -766,37 +819,7 @@ export class CustomDrawing extends Drawing {
       }
 
       // --- Pin Sprite (managed by updatePins, just load texture here) ---
-      const pinSetting = game.settings.get(MODULE_ID, "pinColor");
-      if (pinSetting === "none") {
-        if (this.pinSprite) {
-          if (this.pinSprite.parent) this.pinSprite.parent.removeChild(this.pinSprite);
-          this.pinSprite.destroy();
-          this.pinSprite = null;
-        }
-      } else {
-        if (!this.pinSprite || this.pinSprite.destroyed) {
-          if (this.pinSprite) this.pinSprite.destroy();
-          this.pinSprite = new PIXI.Sprite();
-        }
-
-        let pinColor = noteData.pinColor;
-        if (!pinColor) {
-          pinColor = (pinSetting === "random")
-            ? PIN_COLORS[Math.floor(Math.random() * PIN_COLORS.length)]
-            : `${pinSetting}Pin.webp`;
-          await collaborativeUpdate(this.document.id, { [`flags.${MODULE_ID}.pinColor`]: pinColor });
-        }
-
-        const pinImage = `modules/investigation-board/assets/${pinColor}`;
-        try {
-          const texture = await PIXI.Assets.load(pinImage);
-          if (texture && this.pinSprite && !this.pinSprite.destroyed) {
-            this.pinSprite.texture = texture;
-          }
-        } catch (err) {
-          console.error(`Failed to load pin texture: ${pinImage}`, err);
-        }
-      }
+      await this._loadPinTexture(noteData);
 
       // Hide text for media notes on canvas
       if (this.noteText) this.noteText.visible = false;
@@ -825,29 +848,7 @@ export class CustomDrawing extends Drawing {
       }
 
       // --- Pin Sprite (managed by updatePins, just load texture here) ---
-      const pinSetting = game.settings.get(MODULE_ID, "pinColor");
-      if (!this.pinSprite || this.pinSprite.destroyed) {
-        if (this.pinSprite) this.pinSprite.destroy();
-        this.pinSprite = new PIXI.Sprite();
-      }
-
-      let pinColor = noteData.pinColor;
-      if (!pinColor) {
-        pinColor = (pinSetting === "random")
-          ? PIN_COLORS[Math.floor(Math.random() * PIN_COLORS.length)]
-          : (pinSetting === "none" ? "redPin.webp" : `${pinSetting}Pin.webp`);
-        await collaborativeUpdate(this.document.id, { [`flags.${MODULE_ID}.pinColor`]: pinColor });
-      }
-
-      const pinImage = `modules/investigation-board/assets/${pinColor}`;
-      try {
-        const texture = await PIXI.Assets.load(pinImage);
-        if (texture && this.pinSprite && !this.pinSprite.destroyed) {
-          this.pinSprite.texture = texture;
-        }
-      } catch (err) {
-        console.error(`Failed to load pin texture: ${pinImage}`, err);
-      }
+      await this._loadPinTexture(noteData);
 
       // Hide text
       if (this.noteText) this.noteText.visible = false;
@@ -923,37 +924,7 @@ export class CustomDrawing extends Drawing {
       }
 
       // --- Pin Sprite (managed by updatePins, just load texture here) ---
-      const pinSetting = game.settings.get(MODULE_ID, "pinColor");
-      if (pinSetting === "none") {
-        if (this.pinSprite) {
-          if (this.pinSprite.parent) this.pinSprite.parent.removeChild(this.pinSprite);
-          this.pinSprite.destroy();
-          this.pinSprite = null;
-        }
-      } else {
-        if (!this.pinSprite || this.pinSprite.destroyed) {
-          if (this.pinSprite) this.pinSprite.destroy();
-          this.pinSprite = new PIXI.Sprite();
-        }
-
-        let pinColor = noteData.pinColor;
-        if (!pinColor) {
-          pinColor = (pinSetting === "random")
-            ? PIN_COLORS[Math.floor(Math.random() * PIN_COLORS.length)]
-            : `${pinSetting}Pin.webp`;
-          await collaborativeUpdate(this.document.id, { [`flags.${MODULE_ID}.pinColor`]: pinColor });
-        }
-
-        const pinImage = `modules/investigation-board/assets/${pinColor}`;
-        try {
-          const texture = await PIXI.Assets.load(pinImage);
-          if (texture && this.pinSprite && !this.pinSprite.destroyed) {
-            this.pinSprite.texture = texture;
-          }
-        } catch (err) {
-          console.error(`Failed to load pin texture: ${pinImage}`, err);
-        }
-      }
+      await this._loadPinTexture(noteData);
 
       // Hide text sprites (handouts don't have text)
       if (this.noteText) this.noteText.visible = false;
@@ -1105,36 +1076,7 @@ export class CustomDrawing extends Drawing {
     }
     
     // --- Pin Handling (managed by updatePins, just load texture here) ---
-    {
-      const pinSetting = game.settings.get(MODULE_ID, "pinColor");
-      if (pinSetting === "none") {
-        if (this.pinSprite) {
-          if (this.pinSprite.parent) this.pinSprite.parent.removeChild(this.pinSprite);
-          this.pinSprite.destroy();
-          this.pinSprite = null;
-        }
-      } else {
-        if (!this.pinSprite || this.pinSprite.destroyed) {
-          this.pinSprite = new PIXI.Sprite();
-        }
-        let pinColor = noteData.pinColor;
-        if (!pinColor) {
-          pinColor = (pinSetting === "random")
-            ? PIN_COLORS[Math.floor(Math.random() * PIN_COLORS.length)]
-            : `${pinSetting}Pin.webp`;
-          await collaborativeUpdate(this.document.id, { [`flags.${MODULE_ID}.pinColor`]: pinColor });
-        }
-        const pinImage = `modules/investigation-board/assets/${pinColor}`;
-        try {
-          const texture = await PIXI.Assets.load(pinImage);
-          if (texture && this.pinSprite && !this.pinSprite.destroyed) {
-            this.pinSprite.texture = texture;
-          }
-        } catch (err) {
-          console.error(`Failed to load pin texture: ${pinImage}`, err);
-        }
-      }
-    }
+    await this._loadPinTexture(noteData);
 
     // Default text layout.
     // Font size is anchored to the settings-based note width, NOT the document shape width.

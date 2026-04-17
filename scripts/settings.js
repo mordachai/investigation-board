@@ -1,4 +1,5 @@
-import { MODULE_ID } from "./config.js";
+import { MODULE_ID, DEFAULT_PIN_FOLDER } from "./config.js";
+import { invalidatePinFilesCache } from "./utils/helpers.js";
 import { NoteDefaultsDialog } from "./apps/note-defaults-dialog.js";
 import { AppearanceDialog } from "./apps/appearance-dialog.js";
 
@@ -97,7 +98,7 @@ export const registerSettings = function() {
   });
 
   game.settings.register(MODULE_ID, "pinColor", {
-    name: "Pin Color",
+    name: "Pin Visibility",
     scope: "world",
     config: false,
     type: String,
@@ -106,6 +107,19 @@ export const registerSettings = function() {
       if (canvas.drawings) {
         canvas.drawings.placeables.forEach(drawing => drawing.refresh());
       }
+    }
+  });
+
+  game.settings.register(MODULE_ID, "pinImagesFolder", {
+    name: "Pin Images Folder",
+    hint: "Path to a folder containing .webp or .png pin images. Change this to switch the entire pin set (e.g. from pins to nails).",
+    scope: "world",
+    config: false,
+    type: String,
+    default: DEFAULT_PIN_FOLDER,
+    onChange: () => {
+      invalidatePinFilesCache();
+      refreshAllDrawings();
     }
   });
 
