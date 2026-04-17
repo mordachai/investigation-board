@@ -1101,7 +1101,7 @@ export class CustomDrawing extends Drawing {
       wordWrapWidth: width - 2, // Uses document shape width — scaling adds more wrap space
       align: "center",
     });
-    const truncatedText = truncateText(noteData.text || "Default Text", font, noteData.type, fontSize);
+    const truncatedText = truncateText(noteData.text || "Default Text", font, noteData.type, fontSize, width, height);
     if (!this.noteText || this.noteText.destroyed) {
       this.noteText = new PIXI.Text(truncatedText, textStyle);
       this.noteText.anchor.set(0.5);

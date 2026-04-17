@@ -1,9 +1,13 @@
 <form class="ib-note-config-form">
+
+  {{!-- TEXT + APPEARANCE — sticky, photo, index only --}}
   {{#unless (or (eq noteType "handout") (eq noteType "media") (eq noteType "pin"))}}
     <div class="form-group">
       <label for="text">Note Text:</label>
       <textarea name="text" rows="4" placeholder="Enter note text...">{{text}}</textarea>
     </div>
+
+    <hr class="ib-section-divider">
 
     {{!-- Color Selection --}}
     <div class="form-group color-settings">
@@ -12,10 +16,10 @@
         <label>Note Color:</label>
         <div class="color-mosaic sticky-tints">
           {{#each stickyTints}}
-            <div class="color-option {{#if (eq ../tint this)}}active{{/if}}" 
-                 data-color="{{this}}" 
+            <div class="color-option {{#if (eq ../tint this)}}active{{/if}}"
+                 data-color="{{this}}"
                  data-type="tint"
-                 style="background-color: {{this}};" 
+                 style="background-color: {{this}};"
                  title="{{@key}}"></div>
           {{/each}}
           <input type="hidden" name="tint" value="{{tint}}" />
@@ -27,10 +31,10 @@
         <label>Ink Color:</label>
         <div class="color-mosaic ink-colors">
           {{#each inkColors}}
-            <div class="color-option {{#if (eq ../textColor this)}}active{{/if}}" 
-                 data-color="{{this}}" 
+            <div class="color-option {{#if (eq ../textColor this)}}active{{/if}}"
+                 data-color="{{this}}"
                  data-type="textColor"
-                 style="background-color: {{this}};" 
+                 style="background-color: {{this}};"
                  title="{{@key}}"></div>
           {{/each}}
           <input type="hidden" name="textColor" value="{{textColor}}" />
@@ -38,29 +42,279 @@
       </div>
     </div>
 
-    {{!-- Font Settings --}}
+    {{!-- Font · Font Size · Pin — same row --}}
     <div class="form-group font-settings">
       <div class="font-select-group">
         <label for="font">Font:</label>
         <select name="font">
-          <option value="Rock Salt" {{#if (eq font "Rock Salt")}}selected{{/if}}>Rock Salt</option>
-          <option value="Caveat" {{#if (eq font "Caveat")}}selected{{/if}}>Caveat</option>
-          <option value="Courier New" {{#if (eq font "Courier New")}}selected{{/if}}>Courier New</option>
-          <option value="Times New Roman" {{#if (eq font "Times New Roman")}}selected{{/if}}>Times New Roman</option>
-          <option value="Signika" {{#if (eq font "Signika")}}selected{{/if}}>Signika</option>
-          <option value="Arial" {{#if (eq font "Arial")}}selected{{/if}}>Arial</option>
+          <option value="Rock Salt"            {{#if (eq font "Rock Salt")}}selected{{/if}}>Rock Salt</option>
+          <option value="Caveat"               {{#if (eq font "Caveat")}}selected{{/if}}>Caveat</option>
+          <option value="Courier New"          {{#if (eq font "Courier New")}}selected{{/if}}>Courier New</option>
+          <option value="Times New Roman"      {{#if (eq font "Times New Roman")}}selected{{/if}}>Times New Roman</option>
+          <option value="Signika"              {{#if (eq font "Signika")}}selected{{/if}}>Signika</option>
+          <option value="Arial"                {{#if (eq font "Arial")}}selected{{/if}}>Arial</option>
           <option value="Typewriter Condensed" {{#if (eq font "Typewriter Condensed")}}selected{{/if}}>Typewriter Condensed</option>
-          <option value="IB Special Elite" {{#if (eq font "IB Special Elite")}}selected{{/if}}>Special Elite</option>
+          <option value="IB Special Elite"     {{#if (eq font "IB Special Elite")}}selected{{/if}}>Special Elite</option>
         </select>
       </div>
       <div class="font-size-group">
-        <label for="fontSize">Font Size:</label>
+        <label for="fontSize">Size:</label>
         <input type="number" name="fontSize" value="{{fontSize}}" min="8" max="48" step="1" />
       </div>
+      {{#if showPinSelector}}
+      <div class="pin-select-inline-group">
+        <label>Pin:</label>
+        <select name="pinColor">
+          <option value="" {{#unless selectedPinColor}}selected{{/unless}}>Auto</option>
+          {{#each pinImageChoices}}
+            <option value="{{value}}" {{#if selected}}selected{{/if}}>{{label}}</option>
+          {{/each}}
+        </select>
+      </div>
+      {{/if}}
     </div>
   {{/unless}}
 
-  {{!-- Linked Object field — visible only to users with file-browse permission --}}
+  {{!-- Pin selector for types without a font row (pin-only and handout only — media uses its own tab) --}}
+  {{#if (and showPinSelector (or (eq noteType "pin") (eq noteType "handout")))}}
+  <div class="form-group pin-select-group">
+    <label>Pin:</label>
+    <select name="pinColor">
+      <option value="" {{#unless selectedPinColor}}selected{{/unless}}>Auto</option>
+      {{#each pinImageChoices}}
+        <option value="{{value}}" {{#if selected}}selected{{/if}}>{{label}}</option>
+      {{/each}}
+    </select>
+  </div>
+  {{/if}}
+
+  {{!-- Media Note — tabbed interface --}}
+  {{#if (eq noteType "media")}}
+
+    {{!-- Tab buttons --}}
+    <div class="ib-tabs">
+      <button type="button" class="ib-tab-btn active" data-tab="note">
+        <i class="fas fa-file-alt"></i> Note
+      </button>
+      <button type="button" class="ib-tab-btn" data-tab="effects">
+        <i class="fas fa-wand-magic-sparkles"></i> Effects
+      </button>
+    </div>
+
+    {{!-- NOTE TAB --}}
+    <div class="ib-tab-panel active" data-panel="note">
+
+      {{!-- Media type toggle --}}
+      <div class="form-group ib-media-type-toggle">
+        <label>Media Type:</label>
+        <div class="ib-media-radios">
+          <label class="ib-radio-label">
+            <input type="radio" name="mediaMode" value="audio" {{#if (eq mediaMode "audio")}}checked{{/if}} />
+            <i class="fas fa-cassette-tape"></i> Audio
+          </label>
+          <label class="ib-radio-label">
+            <input type="radio" name="mediaMode" value="video" {{#if (eq mediaMode "video")}}checked{{/if}} />
+            <i class="fas fa-film"></i> Video
+          </label>
+        </div>
+      </div>
+
+      {{!-- AUDIO fields --}}
+      <div class="ib-audio-fields" {{#if (eq mediaMode "video")}}style="display:none"{{/if}}>
+        {{#if canViewSensitive}}
+        <div class="form-group">
+          <label for="audioPath">Audio File:</label>
+          <div class="file-picker">
+            <input type="text" name="audioPath" value="{{audioPath}}" placeholder="Select audio file..." readonly />
+            <button type="button" class="audio-picker-button" title="Browse Audio">
+              <i class="fas fa-music"></i>
+            </button>
+            <button type="button" class="preview-audio-btn" title="Preview Audio" {{#unless audioPath}}disabled{{/unless}}>
+              <i class="fas fa-play"></i>
+            </button>
+          </div>
+        </div>
+        {{/if}}
+      </div>
+
+      {{!-- VIDEO fields --}}
+      <div class="ib-video-fields" {{#if (eq mediaMode "audio")}}style="display:none"{{/if}}>
+        {{#if canViewSensitive}}
+        <div class="form-group">
+          <label for="videoPath">Video File:</label>
+          <div class="file-picker">
+            <input type="text" name="videoPath" value="{{videoPath}}" placeholder="Select video file (.mp4, .webm, .webp)..." readonly />
+            <button type="button" class="video-picker-button" title="Browse Video">
+              <i class="fas fa-video"></i>
+            </button>
+          </div>
+        </div>
+        {{/if}}
+        <div class="form-group">
+          <label for="videoFormat">Player Format:</label>
+          <select name="videoFormat">
+            {{#each videoFormats}}
+              <option value="{{@key}}" {{#if (eq ../videoFormat @key)}}selected{{/if}}>
+                {{this.label}}
+              </option>
+            {{/each}}
+          </select>
+        </div>
+      </div>
+
+      {{!-- Pin selector --}}
+      {{#if showPinSelector}}
+      <div class="form-group pin-select-group">
+        <label>Pin:</label>
+        <select name="pinColor">
+          <option value="" {{#unless selectedPinColor}}selected{{/unless}}>Auto</option>
+          {{#each pinImageChoices}}
+            <option value="{{value}}" {{#if selected}}selected{{/if}}>{{label}}</option>
+          {{/each}}
+        </select>
+      </div>
+      {{/if}}
+
+    </div>{{!-- /note tab --}}
+
+    {{!-- EFFECTS TAB --}}
+    <div class="ib-tab-panel" data-panel="effects">
+      <div class="ib-effects-section">
+
+        <h4>On Open</h4>
+        <label class="ib-effect-label">
+          <input type="checkbox" name="videoEffects.rollingShutter"
+            {{#if videoEffects.rollingShutter}}checked{{/if}} />
+          Rolling Shutter
+        </label>
+        <label class="ib-effect-label">
+          <input type="checkbox" name="videoEffects.mechanicalSound"
+            {{#if videoEffects.mechanicalSound}}checked{{/if}} />
+          Mechanical Sound
+        </label>
+
+        <h4>Playback</h4>
+        <label class="ib-effect-label">
+          <input type="checkbox" name="videoEffects.filmGrain"
+            {{#if videoEffects.filmGrain}}checked{{/if}} />
+          Film Grain
+        </label>
+        <div class="ib-intensity-row">
+          <span>Intensity</span>
+          <input type="range" name="videoEffects.filmGrainIntensity"
+            min="0.02" max="0.45" step="0.01"
+            value="{{videoEffects.filmGrainIntensity}}" />
+          <span class="ib-intensity-val"></span>
+        </div>
+        <label class="ib-effect-label">
+          <input type="checkbox" name="videoEffects.trackingGlitch"
+            {{#if videoEffects.trackingGlitch}}checked{{/if}} />
+          Tracking Glitch
+        </label>
+        <div class="ib-interval-row">
+          Every
+          <input type="number" name="videoEffects.glitchIntervalMin"
+            min="1" max="120" step="1"
+            value="{{videoEffects.glitchIntervalMin}}" />
+          –
+          <input type="number" name="videoEffects.glitchIntervalMax"
+            min="1" max="300" step="1"
+            value="{{videoEffects.glitchIntervalMax}}" />
+          seconds
+        </div>
+
+        <h4>Timestamp</h4>
+        <label class="ib-effect-label">
+          <input type="checkbox" name="videoEffects.timestampEnabled"
+            {{#if videoEffects.timestampEnabled}}checked{{/if}} />
+          CCTV Timestamp
+        </label>
+        <div class="ib-timestamp-fields">
+          <div class="form-group">
+            <label>Recording Start:</label>
+            <input type="datetime-local" name="videoEffects.recordingStartISO"
+              value="{{videoEffects.recordingStartISO}}" step="1" />
+          </div>
+          <div class="form-group">
+            <label>Centiseconds (0–99):</label>
+            <input type="number" name="videoEffects.recordingStartCenti"
+              min="0" max="99" step="1"
+              value="{{videoEffects.recordingStartCenti}}" />
+          </div>
+          <div class="form-group">
+            <label>Date Format:</label>
+            <div class="ib-date-format-row">
+              <label class="ib-radio-label">
+                <input type="radio" name="videoEffects.timestampDateFormat" value="us"
+                  {{#if (eq videoEffects.timestampDateFormat "us")}}checked{{/if}} />
+                MM-DD-YYYY
+              </label>
+              <label class="ib-radio-label">
+                <input type="radio" name="videoEffects.timestampDateFormat" value="intl"
+                  {{#if (eq videoEffects.timestampDateFormat "intl")}}checked{{/if}} />
+                DD-MM-YYYY
+              </label>
+            </div>
+          </div>
+          <div class="ib-ts-slider-row">
+            <span>X</span>
+            <input type="range" name="videoEffects.timestampX"
+              min="-1" max="1" step="0.01" value="{{videoEffects.timestampX}}" />
+            <span class="ib-ts-slider-val ib-ts-x-val"></span>
+          </div>
+          <div class="ib-ts-slider-row">
+            <span>Y</span>
+            <input type="range" name="videoEffects.timestampY"
+              min="-1" max="1" step="0.01" value="{{videoEffects.timestampY}}" />
+            <span class="ib-ts-slider-val ib-ts-y-val"></span>
+          </div>
+          <div class="ib-ts-slider-row">
+            <span>Size</span>
+            <input type="range" name="videoEffects.timestampFontSize"
+              min="8" max="60" step="1" value="{{videoEffects.timestampFontSize}}" />
+            <span class="ib-ts-slider-val ib-ts-size-val"></span>
+          </div>
+          <div class="ib-ts-color-row">
+            <span>Color</span>
+            <input type="color" name="videoEffects.timestampColor"
+              value="{{videoEffects.timestampColor}}" />
+          </div>
+        </div>
+
+        <h4>Audio</h4>
+        <label class="ib-effect-label">
+          <input type="checkbox" name="audioEffectEnabled"
+            {{#if audioEffectEnabled}}checked{{/if}} />
+          Tape Effect <span style="color:#aaa;font-size:10px">(audio mode only)</span>
+        </label>
+
+        <div class="ib-reset-row">
+          <button type="button" class="ib-reset-effects-btn">
+            <i class="fas fa-rotate-left"></i> Reset to Format Defaults
+          </button>
+        </div>
+
+      </div>
+    </div>{{!-- /effects tab --}}
+
+  {{/if}}{{!-- /media --}}
+
+  {{!-- Image Path — photo and handout only, sensitive --}}
+  {{#if (and canViewSensitive (or (eq noteType "photo") (eq noteType "handout")))}}
+    <div class="form-group" style="display: block;">
+      <label for="image">Image Path:</label>
+      <div class="file-picker">
+        <input type="text" name="image" value="{{image}}" placeholder="Enter image path" readonly />
+        <button type="button" class="file-picker-button">
+          <i class="fas fa-folder-open"></i> Browse
+        </button>
+      </div>
+    </div>
+  {{/if}}
+
+  <hr class="ib-section-divider">
+
+  {{!-- Linked Object — above connections, below second divider --}}
   {{#if canViewSensitive}}
   <div class="form-group ib-drop-zone">
     <label for="linkedObject">Linked Object:</label>
@@ -81,125 +335,6 @@
         </button>
       {{/if}}
     </div>
-  </div>
-  {{/if}}
-
-  {{!-- Media Note — Audio / Video mode toggle --}}
-  {{#if (eq noteType "media")}}
-    <div class="form-group ib-media-type-toggle">
-      <label>Media Type:</label>
-      <div class="ib-media-radios">
-        <label class="ib-radio-label">
-          <input type="radio" name="mediaMode" value="audio" {{#if (eq mediaMode "audio")}}checked{{/if}} />
-          <i class="fas fa-cassette-tape"></i> Audio
-        </label>
-        <label class="ib-radio-label">
-          <input type="radio" name="mediaMode" value="video" {{#if (eq mediaMode "video")}}checked{{/if}} />
-          <i class="fas fa-film"></i> Video
-        </label>
-      </div>
-    </div>
-
-    {{!-- AUDIO fields --}}
-    <div class="ib-audio-fields" {{#if (eq mediaMode "video")}}style="display:none"{{/if}}>
-      {{#if canViewSensitive}}
-      <div class="form-group">
-        <label for="audioPath">Audio File:</label>
-        <div class="file-picker">
-          <input type="text" name="audioPath" value="{{audioPath}}" placeholder="Select audio file..." readonly />
-          <button type="button" class="audio-picker-button" title="Browse Audio">
-            <i class="fas fa-music"></i>
-          </button>
-          <button type="button" class="preview-audio-btn" title="Preview Audio" {{#unless audioPath}}disabled{{/unless}}>
-            <i class="fas fa-play"></i>
-          </button>
-        </div>
-      </div>
-      {{/if}}
-      <div class="form-group">
-        <label for="audioEffectEnabled">Apply Tape Effect:</label>
-        <input type="checkbox" name="audioEffectEnabled" {{#if audioEffectEnabled}}checked{{/if}} />
-        <p class="notes">Lo-fi tape recording filter.</p>
-      </div>
-    </div>
-
-    {{!-- VIDEO fields --}}
-    <div class="ib-video-fields" {{#if (eq mediaMode "audio")}}style="display:none"{{/if}}>
-      {{#if canViewSensitive}}
-      <div class="form-group">
-        <label for="videoPath">Video File:</label>
-        <div class="file-picker">
-          <input type="text" name="videoPath" value="{{videoPath}}" placeholder="Select video file (.mp4, .webm, .webp)..." readonly />
-          <button type="button" class="video-picker-button" title="Browse Video">
-            <i class="fas fa-video"></i>
-          </button>
-        </div>
-      </div>
-      {{/if}}
-
-      <div class="form-group">
-        <label for="videoFormat">Player Format:</label>
-        <select name="videoFormat">
-          {{#each videoFormats}}
-            <option value="{{@key}}" {{#if (eq ../videoFormat @key)}}selected{{/if}}>
-              {{this.label}}
-            </option>
-          {{/each}}
-        </select>
-      </div>
-
-      <div class="form-group ib-video-effects">
-        <label>Effects on Open:</label>
-        <div class="ib-effects-grid">
-          <label class="ib-effect-label">
-            <input type="checkbox" name="videoEffects.whiteNoise"
-              {{#if videoEffects.whiteNoise}}checked{{/if}} />
-            White Noise
-          </label>
-          <label class="ib-effect-label">
-            <input type="checkbox" name="videoEffects.mechanicalSound"
-              {{#if videoEffects.mechanicalSound}}checked{{/if}} />
-            Mechanical Sound
-          </label>
-          <label class="ib-effect-label">
-            <input type="checkbox" name="videoEffects.trackingGlitch"
-              {{#if videoEffects.trackingGlitch}}checked{{/if}} />
-            Tracking Glitch
-          </label>
-          <label class="ib-effect-label">
-            <input type="checkbox" name="videoEffects.filmGrain"
-              {{#if videoEffects.filmGrain}}checked{{/if}} />
-            Film Grain
-          </label>
-        </div>
-      </div>
-    </div>
-  {{/if}}
-
-  {{!-- Image Path — visible only to users with file-browse permission --}}
-  {{#if (and canViewSensitive (or (eq noteType "photo") (eq noteType "handout")))}}
-    <div class="form-group" style="display: block;">
-      <label for="image">Image Path:</label>
-      <div class="file-picker">
-        <input type="text" name="image" value="{{image}}" placeholder="Enter image path" readonly />
-        <button type="button" class="file-picker-button">
-          <i class="fas fa-folder-open"></i> Browse
-        </button>
-      </div>
-    </div>
-  {{/if}}
-
-
-  {{!-- Pin Image — shown for all note types when pins are enabled --}}
-  {{#if showPinSelector}}
-  <div class="form-group pin-select-group">
-    <label>Pin:</label>
-    <select name="pinColor">
-      <option value="" {{#unless selectedPinColor}}selected{{/unless}}>Auto</option>
-      {{#each pinImageChoices}}
-        <option value="{{value}}" {{#if selected}}selected{{/if}}>{{label}}</option>
-      {{/each}}
-    </select>
   </div>
   {{/if}}
 

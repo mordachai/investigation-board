@@ -7,11 +7,6 @@ const HandlebarsApplicationMixin = foundry.applications.api.HandlebarsApplicatio
 /**
  * Video playback window for video-type media notes.
  * One singleton per drawing document (id: "video-player-{drawingId}").
- *
- * Phases:
- *  5 — local playback, format sizing, volume, click-to-play overlay
- *  6 — socket broadcast wiring (playVideo / pauseVideo / seekVideo / stopVideoBroadcast)
- *  7 — entry effects (white noise, mechanical sound, tracking glitch, film grain)
  */
 export class VideoPlayer extends HandlebarsApplicationMixin(ApplicationV2) {
   constructor(document, options = {}) {
@@ -22,6 +17,17 @@ export class VideoPlayer extends HandlebarsApplicationMixin(ApplicationV2) {
     this._lastSyncedTime = 0;
     this._seekThrottleTimer = null;
     this._syncInterval = null;
+
+    // Effect loop handles
+    this._grainRaf = null;
+    this._timestampRaf = null;
+    this._glitchTimeout = null;
+
+    // Effect state
+    this._timestampEl = null;
+    this._timestampBaseMs = null;
+    this._timestampDateFormat = "us";
+    this._grainWrapper = null;
   }
 
   static DEFAULT_OPTIONS = {
@@ -70,32 +76,30 @@ export class VideoPlayer extends HandlebarsApplicationMixin(ApplicationV2) {
 
     if (!container) return;
 
-    // Apply format padding as CSS variables so the frame margins are respected
+    // Apply format padding as CSS variables
     container.style.setProperty("--vp-pad-top",    `${format.padding.top}px`);
     container.style.setProperty("--vp-pad-right",  `${format.padding.right}px`);
     container.style.setProperty("--vp-pad-bottom", `${format.padding.bottom}px`);
     container.style.setProperty("--vp-pad-left",   `${format.padding.left}px`);
     container.style.setProperty("--vp-aspect",     `${format.aspectRatio}`);
 
-    // Size the window: 60% of the viewport width, clamped to a sensible minimum
+    // Size the window
     const winWidth   = Math.max(Math.round(window.innerWidth * 0.6), 400);
     const videoWidth  = winWidth - format.padding.left - format.padding.right;
     const videoHeight = Math.round(videoWidth / format.aspectRatio);
-    // Controls row height: 44px when GM (broadcast button), 0 for players
     const controlsH  = game.user.isGM ? 44 : 0;
     const totalHeight = videoHeight + format.padding.top + format.padding.bottom + controlsH;
     this.setPosition({ width: winWidth, height: totalHeight });
 
-    // Update window title to the note's text
+    // Update window title
     const titleEl = this.element.closest(".app")?.querySelector(".window-title");
     if (titleEl && context.title) titleEl.textContent = context.title;
 
     if (!video) return;
 
-    // Default volume
     video.volume = 0.8;
 
-    // ---- GM BROADCAST EVENTS (wired to socket in Phase 6) ----
+    // ---- GM BROADCAST EVENTS ----
     if (game.user.isGM) {
       video.addEventListener("play", () => {
         if (!this._broadcastActive) return;
@@ -124,15 +128,12 @@ export class VideoPlayer extends HandlebarsApplicationMixin(ApplicationV2) {
       });
     }
 
-    // ---- BROADCAST BUTTON (GM only) ----
+    // ---- BROADCAST BUTTON ----
     const broadcastBtn = this.element.querySelector(".ib-broadcast-btn");
     if (broadcastBtn) {
       broadcastBtn.addEventListener("click", () => {
-        if (this._broadcastActive) {
-          this._stopBroadcast();
-        } else {
-          this._startBroadcast();
-        }
+        if (this._broadcastActive) this._stopBroadcast();
+        else this._startBroadcast();
       });
     }
 
@@ -147,7 +148,7 @@ export class VideoPlayer extends HandlebarsApplicationMixin(ApplicationV2) {
       });
     }
 
-    // ---- ENTRY EFFECTS (Phase 7) ----
+    // ---- ENTRY EFFECTS ----
     this._runEntryEffects(context);
   }
 
@@ -155,10 +156,6 @@ export class VideoPlayer extends HandlebarsApplicationMixin(ApplicationV2) {
   // Broadcast helpers
   // ---------------------------------------------------------------------------
 
-  /**
-   * Start broadcasting — opens the window for all clients, then syncs playback.
-   * Socket wiring added in Phase 6.
-   */
   _startBroadcast() {
     if (!socket) return;
     const video = this.element?.querySelector(".ib-video-element");
@@ -167,13 +164,11 @@ export class VideoPlayer extends HandlebarsApplicationMixin(ApplicationV2) {
     this._broadcastActive = true;
     this._updateBroadcastButton(true);
 
-    // Tell all clients to open the window (Phase 6 socket emit)
     socket.emit(SOCKET_NAME, {
       action: "openVideoPlayer",
       drawingId: this.document.id,
     });
 
-    // If video is already playing, emit a playVideo with current time
     if (video && !video.paused) {
       this._emitVideoEvent("playVideo", video.currentTime);
     }
@@ -202,40 +197,26 @@ export class VideoPlayer extends HandlebarsApplicationMixin(ApplicationV2) {
     if (span) span.textContent = active ? "Stop Broadcast" : "Open for All";
   }
 
-  /**
-   * Emit a video sync event via socket.
-   * Only called when broadcast is active and this client is GM.
-   */
   _emitVideoEvent(action, currentTime) {
     if (!socket) return;
     socket.emit(SOCKET_NAME, { action, drawingId: this.document.id, currentTime });
   }
 
   // ---------------------------------------------------------------------------
-  // Incoming sync (called by socket handler — Phase 6)
+  // Incoming sync
   // ---------------------------------------------------------------------------
 
-  /**
-   * Synchronise local video element to an incoming broadcast event.
-   * @param {"playVideo"|"pauseVideo"|"seekVideo"} action
-   * @param {number} currentTime
-   */
   syncPlayback(action, currentTime) {
     const video = this.element?.querySelector(".ib-video-element");
     if (!video) return;
 
     this._lastSyncedTime = currentTime;
-
-    if (action === "seekVideo") {
-      video.currentTime = currentTime;
-      return;
-    }
-
     video.currentTime = currentTime;
+
+    if (action === "seekVideo") return;
 
     if (action === "playVideo") {
       video.play().catch(() => {
-        // Browser autoplay policy blocked the play — show the click-to-play overlay
         const overlay = this.element.querySelector(".ib-click-to-play");
         if (overlay) overlay.classList.add("visible");
       });
@@ -244,10 +225,6 @@ export class VideoPlayer extends HandlebarsApplicationMixin(ApplicationV2) {
     }
   }
 
-  /**
-   * Called when the GM stops the broadcast.
-   * Pauses the local video and clears broadcast state.
-   */
   onBroadcastStop() {
     const video = this.element?.querySelector(".ib-video-element");
     if (video) video.pause();
@@ -261,73 +238,238 @@ export class VideoPlayer extends HandlebarsApplicationMixin(ApplicationV2) {
   // ---------------------------------------------------------------------------
 
   _runEntryEffects(context) {
-    const noteData = this.document.flags[MODULE_ID] || {};
-    const effects = noteData.videoEffects ?? {};
-    const format = context.format;
+    // Stop any loops left over from a previous render
+    this._stopGrainLoop();
+    this._stopTimestampLoop();
+    this._stopGlitchInterval();
 
-    // Ensure the SVG filter defs are present in the document (injected once globally)
-    VideoPlayer._ensureSvgFilters();
+    const noteData = this.document.flags[MODULE_ID] || {};
+    const effects  = noteData.videoEffects ?? {};
+    const format   = context.format;
 
     const wrapper = this.element.querySelector(".ib-video-wrapper");
-    const video   = this.element.querySelector(".ib-video-element");
+    if (!wrapper) return;
+    this._grainWrapper = wrapper;
 
-    // White noise overlay — full-frame flash that fades out
-    if (effects.whiteNoise && wrapper) {
-      const noise = document.createElement("div");
-      noise.classList.add("ib-effect-noise");
-      wrapper.appendChild(noise);
-      noise.addEventListener("animationend", () => noise.remove(), { once: true });
+    // ---- Rolling shutter — dark scan band sweeping top → bottom ----
+    if (effects.rollingShutter) {
+      const shutter = document.createElement("div");
+      shutter.classList.add("ib-effect-rolling-shutter");
+      wrapper.appendChild(shutter);
+      shutter.addEventListener("animationend", () => shutter.remove(), { once: true });
     }
 
-    // Tracking glitch overlay — brief horizontal jitter
-    if (effects.trackingGlitch && wrapper) {
-      const glitch = document.createElement("div");
-      glitch.classList.add("ib-effect-glitch");
-      wrapper.appendChild(glitch);
-      glitch.addEventListener("animationend", () => glitch.remove(), { once: true });
-    }
-
-    // Film grain filter — stays on the video element while it exists
-    if (effects.filmGrain && video) {
-      video.classList.add("ib-film-grain");
-    }
-
-    // Mechanical sound — play format-specific SFX
+    // ---- Mechanical sound ----
     if (effects.mechanicalSound && format?.mechanicalSfx) {
       game.audio.play(format.mechanicalSfx, { volume: 0.6 }).catch(() => {});
+    }
+
+    // ---- Timestamp: needs base date to activate ----
+    const timestampEnabled = effects.timestampEnabled && !!effects.recordingStartISO;
+    if (timestampEnabled) this._initTimestamp(wrapper, effects);
+
+    // ---- Film grain — canvas RAF loop (also drives timestamp if both on) ----
+    if (effects.filmGrain) {
+      const intensity = effects.filmGrainIntensity ?? 0.15;
+      this._startGrainLoop(wrapper, intensity, timestampEnabled);
+    } else if (timestampEnabled) {
+      // Grain off but timestamp needs RAF
+      this._startTimestampLoop();
+    }
+
+    // ---- Tracking glitch — one immediately, then random recurring interval ----
+    if (effects.trackingGlitch) {
+      const minSec = effects.glitchIntervalMin ?? 8;
+      const maxSec = effects.glitchIntervalMax ?? 20;
+      this._spawnGlitch(wrapper);
+      this._startGlitchInterval(minSec, maxSec);
+    }
+  }
+
+  // ---------------------------------------------------------------------------
+  // Film grain — canvas-based RAF
+  // ---------------------------------------------------------------------------
+
+  _startGrainLoop(wrapper, intensity, driveTimestamp) {
+    const canvas = wrapper.querySelector(".ib-grain-canvas");
+    if (!canvas) return;
+    const ctx = canvas.getContext("2d");
+
+    const rect = wrapper.getBoundingClientRect();
+    canvas.width  = rect.width  || 640;
+    canvas.height = rect.height || 360;
+
+    const w     = canvas.width;
+    const h     = canvas.height;
+    const buf   = new Uint8ClampedArray(w * h * 4);
+    const alpha = Math.round(Math.min(Math.max(intensity, 0.02), 0.5) * 255);
+
+    let frame = 0;
+    const tick = () => {
+      // Draw grain every other frame (~30fps) for a natural flicker
+      if (frame % 2 === 0) {
+        for (let i = 0; i < buf.length; i += 4) {
+          const v = (Math.random() * 255) | 0;
+          buf[i] = buf[i + 1] = buf[i + 2] = v;
+          buf[i + 3] = Math.random() < 0.35 ? alpha : 0;
+        }
+        ctx.putImageData(new ImageData(buf, w, h), 0, 0);
+      }
+      frame++;
+
+      if (driveTimestamp) this._updateTimestamp();
+
+      this._grainRaf = requestAnimationFrame(tick);
+    };
+    this._grainRaf = requestAnimationFrame(tick);
+  }
+
+  _stopGrainLoop() {
+    if (this._grainRaf) {
+      cancelAnimationFrame(this._grainRaf);
+      this._grainRaf = null;
+    }
+  }
+
+  // ---------------------------------------------------------------------------
+  // Timestamp-only RAF (when grain is off)
+  // ---------------------------------------------------------------------------
+
+  _startTimestampLoop() {
+    const tick = () => {
+      this._updateTimestamp();
+      this._timestampRaf = requestAnimationFrame(tick);
+    };
+    this._timestampRaf = requestAnimationFrame(tick);
+  }
+
+  _stopTimestampLoop() {
+    if (this._timestampRaf) {
+      cancelAnimationFrame(this._timestampRaf);
+      this._timestampRaf = null;
+    }
+  }
+
+  // ---------------------------------------------------------------------------
+  // Timestamp
+  // ---------------------------------------------------------------------------
+
+  /**
+   * Parse the recording start into a base UTC millisecond value and store it.
+   * @param {HTMLElement} wrapper
+   * @param {object} effects  — noteData.videoEffects
+   */
+  _initTimestamp(wrapper, effects) {
+    const el = wrapper.querySelector(".ib-timestamp");
+    if (!el) return;
+    this._timestampEl = el;
+    el.style.display = "";
+
+    const iso   = effects.recordingStartISO ?? "";
+    const centi = Math.min(99, Math.max(0, effects.recordingStartCenti ?? 0));
+
+    // Parse datetime-local string (e.g. "1986-10-23T03:29:14") treating it as
+    // UTC so the displayed time always matches exactly what the GM typed.
+    const [datePart, timePart = "00:00:00"] = iso.split("T");
+    const [y, mo, d] = datePart.split("-").map(Number);
+    const tp = timePart.split(":").map(Number);
+    const h = tp[0] ?? 0, mi = tp[1] ?? 0, s = tp[2] ?? 0;
+
+    this._timestampBaseMs     = Date.UTC(y, mo - 1, d, h, mi, s) + centi * 10;
+    this._timestampDateFormat = effects.timestampDateFormat ?? "us";
+
+    // Apply position / style from saved settings
+    this.updateTimestampStyle({
+      x:        effects.timestampX        ?? 0,
+      y:        effects.timestampY        ?? -1,
+      fontSize: effects.timestampFontSize ?? 13,
+      color:    effects.timestampColor    ?? "#00e040",
+    });
+  }
+
+  /**
+   * Update timestamp position and style live — called from the edit dialog sliders.
+   * Safe to call even if the timestamp isn't currently shown.
+   * @param {object} opts
+   * @param {number} [opts.x]        — horizontal position, -1 (left) … 0 (center) … 1 (right)
+   * @param {number} [opts.y]        — vertical position,  -1 (bottom) … 1 (top)
+   * @param {number} [opts.fontSize] — font size in px
+   * @param {string} [opts.color]    — CSS color string
+   */
+  updateTimestampStyle({ x, y, fontSize, color } = {}) {
+    const el = this._timestampEl;
+    if (!el) return;
+    if (x        !== undefined) el.style.left     = `${50 + x * 45}%`;
+    if (y        !== undefined) el.style.bottom   = `${5 + (y + 1) * 42}%`;
+    if (fontSize !== undefined) el.style.fontSize = `${fontSize}px`;
+    if (color    !== undefined) {
+      el.style.color      = color;
+      el.style.textShadow = `0 0 6px ${color}99`;
     }
   }
 
   /**
-   * Inject the reusable SVG filter definitions into the document body once.
-   * Safe to call repeatedly — skipped if already present.
+   * Recompute and update the timestamp overlay from video.currentTime.
+   * Called every RAF tick when timestamp is enabled.
    */
-  static _ensureSvgFilters() {
-    if (document.getElementById("ib-svg-filters")) return;
+  _updateTimestamp() {
+    if (!this._timestampEl || this._timestampBaseMs == null) return;
+    const video = this.element?.querySelector(".ib-video-element");
+    if (!video) return;
 
-    const svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
-    svg.id = "ib-svg-filters";
-    svg.style.cssText = "position:absolute;width:0;height:0;overflow:hidden;pointer-events:none;";
-    svg.innerHTML = `
-      <defs>
-        <!-- White noise filter for the noise overlay div -->
-        <filter id="ib-noise-filter" x="0%" y="0%" width="100%" height="100%">
-          <feTurbulence type="fractalNoise" baseFrequency="0.65" numOctaves="3" stitchTiles="stitch" result="noise"/>
-          <feColorMatrix type="saturate" values="0" in="noise" result="grey"/>
-          <feBlend in="SourceGraphic" in2="grey" mode="screen"/>
-        </filter>
-        <!-- Film grain filter for the video element -->
-        <filter id="ib-grain-filter" x="0%" y="0%" width="100%" height="100%">
-          <feTurbulence type="fractalNoise" baseFrequency="0.80" numOctaves="4" stitchTiles="stitch" result="grain"/>
-          <feColorMatrix type="saturate" values="0" in="grain" result="grey_grain"/>
-          <feBlend in="SourceGraphic" in2="grey_grain" mode="overlay" result="blended"/>
-          <feComponentTransfer in="blended">
-            <feFuncA type="linear" slope="0.93"/>
-          </feComponentTransfer>
-        </filter>
-      </defs>
-    `;
-    document.body.appendChild(svg);
+    const offsetMs = Math.round(video.currentTime * 1000);
+    const totalMs  = this._timestampBaseMs + offsetMs;
+    const date     = new Date(totalMs);
+
+    const d  = date.getUTCDate();
+    const mo = date.getUTCMonth() + 1;
+    const y  = date.getUTCFullYear();
+    const h  = date.getUTCHours();
+    const mi = date.getUTCMinutes();
+    const s  = date.getUTCSeconds();
+    const cc = Math.floor((totalMs % 1000) / 10);
+
+    const p2 = n => String(n).padStart(2, "0");
+    const p4 = n => String(n).padStart(4, "0");
+
+    const dateStr = this._timestampDateFormat === "us"
+      ? `${p2(mo)}-${p2(d)}-${p4(y)}`
+      : `${p2(d)}-${p2(mo)}-${p4(y)}`;
+
+    this._timestampEl.textContent = `${dateStr}  ${p2(h)}:${p2(mi)}:${p2(s)}:${p2(cc)}`;
+  }
+
+  // ---------------------------------------------------------------------------
+  // Tracking glitch — recurring
+  // ---------------------------------------------------------------------------
+
+  _spawnGlitch(wrapper) {
+    const el = document.createElement("div");
+    el.classList.add("ib-effect-glitch");
+    wrapper.appendChild(el);
+    el.addEventListener("animationend", () => el.remove(), { once: true });
+  }
+
+  /**
+   * Schedule recurring glitches at random intervals between minSec and maxSec.
+   * Uses recursive setTimeout so the next glitch fires after the current one
+   * plays out, giving a natural feel.
+   */
+  _startGlitchInterval(minSec, maxSec) {
+    const range = Math.max(0, maxSec - minSec);
+    const schedule = () => {
+      const delay = (minSec + Math.random() * range) * 1000;
+      this._glitchTimeout = setTimeout(() => {
+        if (this._grainWrapper) this._spawnGlitch(this._grainWrapper);
+        schedule();
+      }, delay);
+    };
+    schedule();
+  }
+
+  _stopGlitchInterval() {
+    clearTimeout(this._glitchTimeout);
+    this._glitchTimeout = null;
   }
 
   // ---------------------------------------------------------------------------
@@ -337,7 +479,9 @@ export class VideoPlayer extends HandlebarsApplicationMixin(ApplicationV2) {
   async _onClose(options) {
     clearTimeout(this._seekThrottleTimer);
     clearInterval(this._syncInterval);
-    // If GM closes while broadcasting, stop the broadcast
+    this._stopGrainLoop();
+    this._stopTimestampLoop();
+    this._stopGlitchInterval();
     if (game.user.isGM && this._broadcastActive) {
       this._stopBroadcast();
     }

@@ -165,10 +165,32 @@ export class CustomDrawingSheet extends DrawingConfig {
       // Video fields
       videoPath: ibFlags.videoPath || "",
       videoFormat: ibFlags.videoFormat || "crt",
-      videoEffects: Object.assign(
-        { whiteNoise: true, mechanicalSound: true, trackingGlitch: true, filmGrain: false },
-        ibFlags.videoEffects || {}
-      ),
+      videoEffects: (() => {
+        // Hard defaults for every field (used as fallback for new or missing keys)
+        const base = {
+          rollingShutter: false,
+          mechanicalSound: true,
+          trackingGlitch: false,
+          filmGrain: false,
+          filmGrainIntensity: 0.15,
+          glitchIntervalMin: 8,
+          glitchIntervalMax: 20,
+          timestampEnabled: false,
+          recordingStartISO: new Date().toISOString().slice(0, 19),
+          recordingStartCenti: 0,
+          timestampDateFormat: "us",
+          timestampX: 0,
+          timestampY: -1,
+          timestampFontSize: 13,
+          timestampColor: "#00e040",
+        };
+        // For new notes (no saved effects yet) apply the format's defaults
+        const formatKey = ibFlags.videoFormat || "crt";
+        const formatDef = ibFlags.videoEffects
+          ? {}
+          : (VIDEO_FORMATS[formatKey]?.defaultEffects ?? {});
+        return Object.assign(base, formatDef, ibFlags.videoEffects || {});
+      })(),
       mediaMode,
       videoFormats: VIDEO_FORMATS,
       // Pin — bare filename stored in flags, or "" meaning "auto/random"
@@ -205,6 +227,75 @@ export class CustomDrawingSheet extends DrawingConfig {
   // ApplicationV2 lifecycle method
   _onRender(context, options) {
     super._onRender?.(context, options);
+
+    // ---- Tab switching (media notes only) ----
+    const tabBtns = this.element.querySelectorAll(".ib-tab-btn");
+    tabBtns.forEach(btn => {
+      btn.addEventListener("click", () => {
+        tabBtns.forEach(b => b.classList.remove("active"));
+        this.element.querySelectorAll(".ib-tab-panel").forEach(p => p.classList.remove("active"));
+        btn.classList.add("active");
+        this.element.querySelector(`.ib-tab-panel[data-panel="${btn.dataset.tab}"]`)?.classList.add("active");
+      });
+    });
+
+    // ---- Film grain intensity — live label ----
+    const grainRange = this.element.querySelector("[name='videoEffects.filmGrainIntensity']");
+    const grainVal   = this.element.querySelector(".ib-intensity-val");
+    if (grainRange && grainVal) {
+      const updateLabel = () => {
+        grainVal.textContent = `${Math.round(parseFloat(grainRange.value) * 100)}%`;
+      };
+      grainRange.addEventListener("input", updateLabel);
+      updateLabel();
+    }
+
+    // ---- Reset effects to format defaults ----
+    const resetBtn = this.element.querySelector(".ib-reset-effects-btn");
+    if (resetBtn) {
+      resetBtn.addEventListener("click", () => {
+        const formatKey = this.element.querySelector("[name='videoFormat']")?.value ?? "crt";
+        const defs = VIDEO_FORMATS[formatKey]?.defaultEffects ?? {};
+        const boolKeys = ["rollingShutter", "mechanicalSound", "trackingGlitch", "filmGrain", "timestampEnabled"];
+        boolKeys.forEach(k => {
+          const cb = this.element.querySelector(`[name="videoEffects.${k}"]`);
+          if (cb) cb.checked = !!defs[k];
+        });
+      });
+    }
+
+    // ---- Timestamp position/style — live update the open VideoPlayer ----
+    const getPlayer = () =>
+      foundry.applications.instances?.get(`video-player-${this.document.id}`);
+
+    const tsX    = this.element.querySelector("[name='videoEffects.timestampX']");
+    const tsY    = this.element.querySelector("[name='videoEffects.timestampY']");
+    const tsSize = this.element.querySelector("[name='videoEffects.timestampFontSize']");
+    const tsClr  = this.element.querySelector("[name='videoEffects.timestampColor']");
+    const xVal   = this.element.querySelector(".ib-ts-x-val");
+    const yVal   = this.element.querySelector(".ib-ts-y-val");
+    const szVal  = this.element.querySelector(".ib-ts-size-val");
+
+    const initLabel = (el, valEl, fmt) => { if (el && valEl) valEl.textContent = fmt(el.value); };
+    initLabel(tsX,    xVal,  v => parseFloat(v).toFixed(2));
+    initLabel(tsY,    yVal,  v => parseFloat(v).toFixed(2));
+    initLabel(tsSize, szVal, v => `${v}px`);
+
+    if (tsX) tsX.addEventListener("input", () => {
+      if (xVal) xVal.textContent = parseFloat(tsX.value).toFixed(2);
+      getPlayer()?.updateTimestampStyle({ x: parseFloat(tsX.value) });
+    });
+    if (tsY) tsY.addEventListener("input", () => {
+      if (yVal) yVal.textContent = parseFloat(tsY.value).toFixed(2);
+      getPlayer()?.updateTimestampStyle({ y: parseFloat(tsY.value) });
+    });
+    if (tsSize) tsSize.addEventListener("input", () => {
+      if (szVal) szVal.textContent = `${tsSize.value}px`;
+      getPlayer()?.updateTimestampStyle({ fontSize: parseInt(tsSize.value) });
+    });
+    if (tsClr) tsClr.addEventListener("input", () => {
+      getPlayer()?.updateTimestampStyle({ color: tsClr.value });
+    });
 
     // Start animating connections from this note
     startConnectionAnimation(this.document.id);
@@ -541,10 +632,21 @@ export class CustomDrawingSheet extends DrawingConfig {
             updates[`flags.${MODULE_ID}.audioPath`] = "";
             updates[`flags.${MODULE_ID}.videoFormat`] = data.videoFormat || "crt";
             updates[`flags.${MODULE_ID}.videoEffects`] = {
-              whiteNoise:      !!data["videoEffects.whiteNoise"],
-              mechanicalSound: !!data["videoEffects.mechanicalSound"],
-              trackingGlitch:  !!data["videoEffects.trackingGlitch"],
-              filmGrain:       !!data["videoEffects.filmGrain"],
+              rollingShutter:      !!data["videoEffects.rollingShutter"],
+              mechanicalSound:     !!data["videoEffects.mechanicalSound"],
+              trackingGlitch:      !!data["videoEffects.trackingGlitch"],
+              filmGrain:           !!data["videoEffects.filmGrain"],
+              filmGrainIntensity:  parseFloat(data["videoEffects.filmGrainIntensity"]) || 0.15,
+              glitchIntervalMin:   Math.max(1, parseInt(data["videoEffects.glitchIntervalMin"]) || 8),
+              glitchIntervalMax:   Math.max(1, parseInt(data["videoEffects.glitchIntervalMax"]) || 20),
+              timestampEnabled:    !!data["videoEffects.timestampEnabled"],
+              recordingStartISO:   data["videoEffects.recordingStartISO"] || "",
+              recordingStartCenti: Math.min(99, Math.max(0, parseInt(data["videoEffects.recordingStartCenti"]) || 0)),
+              timestampDateFormat: data["videoEffects.timestampDateFormat"] || "us",
+              timestampX:          parseFloat(data["videoEffects.timestampX"])        || 0,
+              timestampY:          parseFloat(data["videoEffects.timestampY"])        ?? -1,
+              timestampFontSize:   parseInt(data["videoEffects.timestampFontSize"])   || 13,
+              timestampColor:      data["videoEffects.timestampColor"]               || "#00e040",
             };
             // Only swap canvas sprite on mode change — the radio change handler
             // already handles immediate updates, but this covers Save-without-toggle.
