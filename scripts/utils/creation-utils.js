@@ -95,6 +95,7 @@ export async function createNote(noteType, { x = null, y = null } = {}) {
   if (noteType === "media") {
     extraFlags.image = getRandomCassetteImage();
     extraFlags.audioPath = "";
+    // Pin starts as Auto (audio mode). Switches to "none" when user toggles to video.
   }
 
   const created = await collaborativeCreate({

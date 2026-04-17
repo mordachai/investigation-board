@@ -65,7 +65,8 @@
       <div class="pin-select-inline-group">
         <label>Pin:</label>
         <select name="pinColor">
-          <option value="" {{#unless selectedPinColor}}selected{{/unless}}>Auto</option>
+          <option value="none" {{#if (eq selectedPinColor "none")}}selected{{/if}}>None</option>
+          <option value="" {{#if (eq selectedPinColor "")}}selected{{/if}}>Auto</option>
           {{#each pinImageChoices}}
             <option value="{{value}}" {{#if selected}}selected{{/if}}>{{label}}</option>
           {{/each}}
@@ -167,7 +168,8 @@
       <div class="form-group pin-select-group">
         <label>Pin:</label>
         <select name="pinColor">
-          <option value="" {{#unless selectedPinColor}}selected{{/unless}}>Auto</option>
+          <option value="none" {{#if (eq selectedPinColor "none")}}selected{{/if}}>None</option>
+          <option value="" {{#if (eq selectedPinColor "")}}selected{{/if}}>Auto</option>
           {{#each pinImageChoices}}
             <option value="{{value}}" {{#if selected}}selected{{/if}}>{{label}}</option>
           {{/each}}
@@ -182,45 +184,53 @@
       <div class="ib-effects-section">
 
         <h4>On Open</h4>
-        <label class="ib-effect-label">
-          <input type="checkbox" name="videoEffects.rollingShutter"
-            {{#if videoEffects.rollingShutter}}checked{{/if}} />
-          Rolling Shutter
-        </label>
-        <label class="ib-effect-label">
-          <input type="checkbox" name="videoEffects.mechanicalSound"
-            {{#if videoEffects.mechanicalSound}}checked{{/if}} />
-          Mechanical Sound
-        </label>
+        <div class="ib-effect-inline-row">
+          <label class="ib-effect-label">
+            <input type="checkbox" name="videoEffects.rollingShutter"
+              {{#if videoEffects.rollingShutter}}checked{{/if}} />
+            Rolling Shutter
+          </label>
+          <label class="ib-effect-label">
+            <input type="checkbox" name="videoEffects.mechanicalSound"
+              {{#if videoEffects.mechanicalSound}}checked{{/if}} />
+            Mechanical Sound
+          </label>
+        </div>
 
         <h4>Playback</h4>
-        <label class="ib-effect-label">
-          <input type="checkbox" name="videoEffects.filmGrain"
-            {{#if videoEffects.filmGrain}}checked{{/if}} />
-          Film Grain
-        </label>
-        <div class="ib-intensity-row">
-          <span>Intensity</span>
-          <input type="range" name="videoEffects.filmGrainIntensity"
-            min="0.02" max="0.45" step="0.01"
-            value="{{videoEffects.filmGrainIntensity}}" />
-          <span class="ib-intensity-val"></span>
-        </div>
-        <label class="ib-effect-label">
-          <input type="checkbox" name="videoEffects.trackingGlitch"
-            {{#if videoEffects.trackingGlitch}}checked{{/if}} />
-          Tracking Glitch
-        </label>
-        <div class="ib-interval-row">
-          Every
-          <input type="number" name="videoEffects.glitchIntervalMin"
-            min="1" max="120" step="1"
-            value="{{videoEffects.glitchIntervalMin}}" />
-          –
-          <input type="number" name="videoEffects.glitchIntervalMax"
-            min="1" max="300" step="1"
-            value="{{videoEffects.glitchIntervalMax}}" />
-          seconds
+        <div class="ib-effect-inline-row">
+          <div class="ib-effect-inline-col">
+            <label class="ib-effect-label">
+              <input type="checkbox" name="videoEffects.filmGrain"
+                {{#if videoEffects.filmGrain}}checked{{/if}} />
+              Film Grain
+            </label>
+            <div class="ib-intensity-row">
+              <span>Intensity</span>
+              <input type="range" name="videoEffects.filmGrainIntensity"
+                min="0.02" max="0.45" step="0.01"
+                value="{{videoEffects.filmGrainIntensity}}" />
+              <span class="ib-intensity-val"></span>
+            </div>
+          </div>
+          <div class="ib-effect-inline-col">
+            <label class="ib-effect-label">
+              <input type="checkbox" name="videoEffects.trackingGlitch"
+                {{#if videoEffects.trackingGlitch}}checked{{/if}} />
+              Tracking Glitch
+            </label>
+            <div class="ib-interval-row">
+              Every
+              <input type="number" name="videoEffects.glitchIntervalMin"
+                min="1" max="120" step="1"
+                value="{{videoEffects.glitchIntervalMin}}" />
+              –
+              <input type="number" name="videoEffects.glitchIntervalMax"
+                min="1" max="300" step="1"
+                value="{{videoEffects.glitchIntervalMax}}" />
+              s
+            </div>
+          </div>
         </div>
 
         <h4>Timestamp</h4>
@@ -256,28 +266,32 @@
               </label>
             </div>
           </div>
-          <div class="ib-ts-slider-row">
-            <span>X</span>
-            <input type="range" name="videoEffects.timestampX"
-              min="-1" max="1" step="0.01" value="{{videoEffects.timestampX}}" />
-            <span class="ib-ts-slider-val ib-ts-x-val"></span>
+          <div class="ib-ts-double-row">
+            <div class="ib-ts-slider-row">
+              <span>H</span>
+              <input type="range" name="videoEffects.timestampX"
+                min="-1" max="1" step="0.01" value="{{videoEffects.timestampX}}" />
+              <span class="ib-ts-slider-val ib-ts-x-val"></span>
+            </div>
+            <div class="ib-ts-slider-row">
+              <span>V</span>
+              <input type="range" name="videoEffects.timestampY"
+                min="-1" max="1" step="0.01" value="{{videoEffects.timestampY}}" />
+              <span class="ib-ts-slider-val ib-ts-y-val"></span>
+            </div>
           </div>
-          <div class="ib-ts-slider-row">
-            <span>Y</span>
-            <input type="range" name="videoEffects.timestampY"
-              min="-1" max="1" step="0.01" value="{{videoEffects.timestampY}}" />
-            <span class="ib-ts-slider-val ib-ts-y-val"></span>
-          </div>
-          <div class="ib-ts-slider-row">
-            <span>Size</span>
-            <input type="range" name="videoEffects.timestampFontSize"
-              min="8" max="60" step="1" value="{{videoEffects.timestampFontSize}}" />
-            <span class="ib-ts-slider-val ib-ts-size-val"></span>
-          </div>
-          <div class="ib-ts-color-row">
-            <span>Color</span>
-            <input type="color" name="videoEffects.timestampColor"
-              value="{{videoEffects.timestampColor}}" />
+          <div class="ib-ts-double-row">
+            <div class="ib-ts-slider-row">
+              <span>Size</span>
+              <input type="range" name="videoEffects.timestampFontSize"
+                min="8" max="60" step="1" value="{{videoEffects.timestampFontSize}}" />
+              <span class="ib-ts-slider-val ib-ts-size-val"></span>
+            </div>
+            <div class="ib-ts-color-row">
+              <span>Color</span>
+              <input type="color" name="videoEffects.timestampColor"
+                value="{{videoEffects.timestampColor}}" />
+            </div>
           </div>
         </div>
 
@@ -289,6 +303,9 @@
         </label>
 
         <div class="ib-reset-row">
+          <button type="button" class="ib-preview-video-btn">
+            <i class="fas fa-play"></i> Preview Video
+          </button>
           <button type="button" class="ib-reset-effects-btn">
             <i class="fas fa-rotate-left"></i> Reset to Format Defaults
           </button>

@@ -1,4 +1,4 @@
-import { MODULE_ID, SOCKET_NAME, VIDEO_EXTENSIONS, VIDEO_IMAGES, CASSETTE_IMAGES } from "../config.js";
+import { MODULE_ID, SOCKET_NAME, VIDEO_EXTENSIONS } from "../config.js";
 import { InvestigationBoardState } from "../state.js";
 import { collaborativeUpdate, collaborativeDelete, socket, activeGlobalSounds, activeVideoBroadcasts } from "../utils/socket-handler.js";
 import { truncateText, resolvePinImage, getAvailablePinFiles } from "../utils/helpers.js";
@@ -176,6 +176,7 @@ export class CustomDrawing extends Drawing {
       }
     }
   }
+
 
   /**
    * Override activateListeners to ensure the MouseInteractionManager is configured
@@ -717,7 +718,8 @@ export class CustomDrawing extends Drawing {
   async _loadPinTexture(noteData) {
     const pinSetting = game.settings.get(MODULE_ID, "pinColor");
 
-    if (pinSetting === "none") {
+    // Global "none" OR per-note "none" — destroy sprite for this note
+    if (pinSetting === "none" || noteData.pinColor === "none") {
       if (this.pinSprite) {
         if (this.pinSprite.parent) this.pinSprite.parent.removeChild(this.pinSprite);
         this.pinSprite.destroy();
