@@ -1,4 +1,4 @@
-import { MODULE_ID, SOCKET_NAME, VIDEO_EXTENSIONS } from "../config.js";
+import { MODULE_ID, SOCKET_NAME, VIDEO_EXTENSIONS, DOC_BACKGROUNDS } from "../config.js";
 import { InvestigationBoardState } from "../state.js";
 import { collaborativeUpdate, collaborativeDelete, socket, activeGlobalSounds, activeVideoBroadcasts } from "../utils/socket-handler.js";
 import { truncateText, resolvePinImage, getAvailablePinFiles } from "../utils/helpers.js";
@@ -16,6 +16,8 @@ export class CustomDrawing extends Drawing {
     this.bgShadow = null;
     this.pinSprite = null;
     this.noteText = null;
+    this.docTitleText = null;
+    this.docBodyText = null;
     this.photoImageSprite = null;
     this.photoMask = null;
   }
@@ -756,6 +758,20 @@ export class CustomDrawing extends Drawing {
     const noteData = this.document.flags[MODULE_ID];
     if (!noteData) return;
 
+    // Destroy document-only sprites when the note is no longer a document note
+    if (noteData.type !== "document") {
+      if (this.docTitleText && !this.docTitleText.destroyed) {
+        this.shape.removeChild(this.docTitleText);
+        this.docTitleText.destroy();
+        this.docTitleText = null;
+      }
+      if (this.docBodyText && !this.docBodyText.destroyed) {
+        this.shape.removeChild(this.docBodyText);
+        this.docBodyText.destroy();
+        this.docBodyText = null;
+      }
+    }
+
     const isPhoto = noteData.type === "photo";
     const isIndex = noteData.type === "index";
     const isHandout = noteData.type === "handout";
@@ -828,6 +844,131 @@ export class CustomDrawing extends Drawing {
       if (this.futuristicText) this.futuristicText.visible = false;
 
       return; // Early exit for media notes
+    }
+
+    // DOCUMENT NOTE LAYOUT (A4-style parchment/paper with title + body text)
+    if (noteData.type === "document") {
+      const docW = this.document.shape.width || 595;
+      const docH = this.document.shape.height || 842;
+      const MARGIN = Math.round(docW * 0.105);
+
+      // Destroy photo sprite if present from a previous type
+      if (this.photoImageSprite) {
+        if (this.photoImageSprite.parent) this.shape.removeChild(this.photoImageSprite);
+        this.photoImageSprite.destroy();
+        this.photoImageSprite = null;
+      }
+      if (this.photoMask) this.photoMask.visible = false;
+
+      // Background + shadow
+      const bgKey = noteData.docBackground || "parchment";
+      const bgImage = (DOC_BACKGROUNDS[bgKey] || DOC_BACKGROUNDS.parchment).path;
+
+      if (!this.bgSprite) {
+        this.bgSprite = new PIXI.Sprite();
+        this.shape.addChild(this.bgSprite);
+      }
+      if (!this.bgShadow) {
+        this.bgShadow = new PIXI.Sprite();
+        this.shape.addChildAt(this.bgShadow, 0);
+      }
+
+      try {
+        const texture = await PIXI.Assets.load(bgImage);
+        if (texture) {
+          if (this.bgShadow && !this.bgShadow.destroyed) {
+            this.bgShadow.texture = texture;
+            this.bgShadow.width = docW;
+            this.bgShadow.height = docH;
+            try { this.bgShadow.tint = 0x000000; } catch(e) {}
+            this.bgShadow.alpha = 0.35;
+            this.bgShadow.position.set(8, 8);
+            this.bgShadow.filters = [new PIXI.BlurFilter(4)];
+          }
+          if (this.bgSprite && !this.bgSprite.destroyed) {
+            this.bgSprite.texture = texture;
+            this.bgSprite.width = docW;
+            this.bgSprite.height = docH;
+            this.bgSprite.tint = 0xFFFFFF;
+          }
+        }
+      } catch(err) {
+        console.error(`Investigation Board: Failed to load document background: ${bgImage}`, err);
+      }
+
+      // Pin sprite
+      await this._loadPinTexture(noteData);
+
+      // Text setup
+      const font = noteData.font || game.settings.get(MODULE_ID, "font");
+      const textColor = noteData.textColor || "#000000";
+      const titleFontSize = Math.round((docW / 595) * 28);
+      const bodyFontSize = Math.round((docW / 595) * Math.max(8, noteData.fontSize || 14));
+      const titleAreaHeight = titleFontSize * 3; // space reserved for the title zone
+
+      // Title
+      const titleStr = noteData.title || "";
+      const titleStyle = new PIXI.TextStyle({
+        fontFamily: font,
+        fontSize: titleFontSize,
+        fill: textColor,
+        wordWrap: true,
+        wordWrapWidth: docW - MARGIN * 2,
+        align: "center",
+      });
+      if (!this.docTitleText || this.docTitleText.destroyed) {
+        this.docTitleText = new PIXI.Text(titleStr, titleStyle);
+        this.docTitleText.anchor.set(0.5, 0);
+        this.shape.addChild(this.docTitleText);
+      } else {
+        this.docTitleText.style = titleStyle;
+        this.docTitleText.text = titleStr;
+      }
+      this.docTitleText.anchor.set(0.5, 0);
+      this.docTitleText.visible = !!titleStr;
+      this.docTitleText.position.set(docW / 2, MARGIN);
+
+      // Body (HTMLText so bold/italic/alignment from journal pages are preserved)
+      const bodyStr = noteData.text || "";
+      // HTMLTextStyle (not TextStyle) sets the SVG foreignObject width so <p> blocks wrap.
+      // tagStyles locks the selected font on every inline tag — without this, <b> falls
+      // back to the browser default bold font instead of inheriting the note's font.
+      const HTMLTextStyle = PIXI.HTMLTextStyle ?? PIXI.TextStyle;
+      const tagFont = { fontFamily: font };
+      const bodyStyle = new HTMLTextStyle({
+        fontFamily: font,
+        fontSize: bodyFontSize,
+        fill: textColor,
+        wordWrap: true,
+        wordWrapWidth: docW - MARGIN * 2,
+        align: "left",
+        tagStyles: {
+          b:      { ...tagFont, fontWeight: 'bold' },
+          strong: { ...tagFont, fontWeight: 'bold' },
+          i:      { ...tagFont, fontStyle: 'italic' },
+          em:     { ...tagFont, fontStyle: 'italic' },
+          u:      tagFont,
+          s:      tagFont,
+          strike: tagFont,
+          span:   tagFont,
+          p:      tagFont,
+        },
+      });
+      if (!this.docBodyText || this.docBodyText.destroyed) {
+        this.docBodyText = new PIXI.HTMLText(bodyStr, bodyStyle);
+        this.docBodyText.anchor.set(0, 0);
+        this.shape.addChild(this.docBodyText);
+      } else {
+        this.docBodyText.style = bodyStyle;
+        this.docBodyText.text = bodyStr;
+      }
+      this.docBodyText.anchor.set(0, 0);
+      this.docBodyText.visible = true;
+      this.docBodyText.position.set(MARGIN, MARGIN + (titleStr ? titleAreaHeight + 20 : 0));
+
+      if (this.futuristicText) this.futuristicText.visible = false;
+
+      return; // Early exit for document notes
     }
 
     // PIN ONLY LAYOUT
@@ -1109,6 +1250,7 @@ export class CustomDrawing extends Drawing {
       this.noteText.anchor.set(0.5);
       this.shape.addChild(this.noteText);
     } else {
+      this.noteText.anchor.set(0.5); // reset in case this sprite was previously used by a document note
       this.noteText.style = textStyle;
       this.noteText.text = truncatedText;
     }

@@ -3,6 +3,7 @@ import {
   STICKY_TINTS,
   INK_COLORS,
   VIDEO_FORMATS,
+  DOC_BACKGROUNDS,
 } from '../config.js';
 import { getAvailablePinFiles } from '../utils/helpers.js';
 import { collaborativeUpdate } from '../utils/socket-handler.js';
@@ -88,6 +89,10 @@ export class CustomDrawingSheet extends DrawingConfig {
     context.videoEffects = customData.videoEffects;
     context.mediaMode = customData.mediaMode;
     context.videoFormats = customData.videoFormats;
+    // Document fields
+    context.title = customData.title;
+    context.docBackground = customData.docBackground;
+    context.docBackgrounds = DOC_BACKGROUNDS;
 
     // Enrich the linked object for display
     context.enrichedLinkedObject = context.linkedObject
@@ -137,6 +142,7 @@ export class CustomDrawingSheet extends DrawingConfig {
             index: 'Index Card',
             handout: 'Handout',
             media: 'Media Note',
+            document: 'Document Note',
           };
           targetLabel = typeLabels[targetData.type] || 'Note';
         }
@@ -222,6 +228,9 @@ export class CustomDrawingSheet extends DrawingConfig {
       videoFormats: VIDEO_FORMATS,
       // Pin — bare filename stored in flags, or "" meaning "auto/random"
       selectedPinColor: ibFlags.pinColor || '',
+      // Document fields
+      title: ibFlags.title || '',
+      docBackground: ibFlags.docBackground || 'parchment',
     };
     return data;
   }
@@ -800,6 +809,11 @@ export class CustomDrawingSheet extends DrawingConfig {
                 updates['shape.height'] = Math.round(w * 0.74);
               }
             }
+          }
+
+          if (noteType === 'document') {
+            updates[`flags.${MODULE_ID}.title`] = data.title || '';
+            updates[`flags.${MODULE_ID}.docBackground`] = data.docBackground || 'parchment';
           }
 
           if (data.linkedObject !== undefined) {

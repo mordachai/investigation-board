@@ -1,7 +1,67 @@
-import { MODULE_ID, CASSETTE_IMAGES, VIDEO_IMAGES } from "../config.js";
+import { MODULE_ID, CASSETTE_IMAGES, VIDEO_IMAGES, DOC_BACKGROUNDS } from "../config.js";
 import { InvestigationBoardState } from "../state.js";
 import { getActorDisplayName, getEffectiveScale } from "./helpers.js";
 import { collaborativeCreate, collaborativeCreateMany } from "./socket-handler.js";
+
+/**
+ * Strips HTML tags from journal page content, preserving paragraph breaks.
+ * Used for index card notes where plain PIXI.Text is sufficient.
+ * @param {string} html
+ * @returns {string}
+ */
+function stripHtml(html) {
+  const withBreaks = html
+    .replace(/<\/p>\s*<p[^>]*>/gi, '\n\n')
+    .replace(/<br\s*\/?>/gi, '\n')
+    .replace(/<\/?(h[1-6]|li|div|blockquote|tr)[^>]*>/gi, '\n');
+  const div = document.createElement('div');
+  div.innerHTML = withBreaks;
+  return (div.textContent || div.innerText || '').replace(/\n{3,}/g, '\n\n').trim();
+}
+
+/**
+ * Converts journal page HTML into PIXI.HTMLText-safe markup.
+ * Keeps bold, italic, underline, strikethrough, paragraph breaks, and text alignment.
+ * Converts headings, blockquotes, and list items into supported equivalents.
+ * @param {string} html
+ * @returns {string}
+ */
+function sanitizeForPixiHtml(html) {
+  if (!html) return "";
+  // <p> block elements work correctly when HTMLTextStyle is used — it sets the
+  // SVG foreignObject width so block content wraps within the note margin.
+  // text-align is preserved on <p> tags for justification support.
+  let s = html
+    // headings → bold paragraph
+    .replace(/<h[1-6][^>]*>([\s\S]*?)<\/h[1-6]>/gi, '<p><b>$1</b></p>')
+    // blockquotes → italic paragraph
+    .replace(/<blockquote[^>]*>([\s\S]*?)<\/blockquote>/gi, '<p><i>$1</i></p>')
+    // list items → bullet paragraph
+    .replace(/<li[^>]*>([\s\S]*?)<\/li>/gi, '<p>• $1</p>')
+    // strip list wrappers
+    .replace(/<\/?(ul|ol)[^>]*>/gi, '')
+    // figure captions → italic paragraph
+    .replace(/<figcaption[^>]*>([\s\S]*?)<\/figcaption>/gi, '<p><i>$1</i></p>')
+    // preserve only text-align from <p> style attributes, strip everything else
+    .replace(/<p([^>]*)>/gi, (_, attrs) => {
+      const m = attrs.match(/text-align\s*:\s*(left|center|right|justify)/i);
+      return m ? `<p style="text-align:${m[1]}">` : '<p>';
+    })
+    // remove images, figures, links (keep text), table structure
+    .replace(/<img[^>]*\/?>/gi, '')
+    .replace(/<\/?figure[^>]*>/gi, '')
+    .replace(/<a[^>]*>([\s\S]*?)<\/a>/gi, '$1')
+    .replace(/<td[^>]*>([\s\S]*?)<\/td>/gi, '$1 ')
+    .replace(/<tr[^>]*>([\s\S]*?)<\/tr>/gi, '<p>$1</p>')
+    .replace(/<\/?(?:table|thead|tbody|tfoot|th|caption)[^>]*>/gi, '')
+    // strip div/section wrappers
+    .replace(/<\/?(div|section|article)[^>]*>/gi, '');
+
+  // Strip non-whitelisted tags; <p> is included so text-align survives
+  s = s.replace(/<(?!\/?(?:b|strong|i|em|u|s|strike|br|p|span|font)\b)[^>]+>/gi, '');
+
+  return s.trim();
+}
 
 /** Returns a random cassette sprite path for an audio media note. */
 export function getRandomCassetteImage() {
@@ -32,12 +92,15 @@ export async function createNote(noteType, { x = null, y = null } = {}) {
   const handoutH = game.settings.get(MODULE_ID, "handoutNoteHeight") || 400;
   const mediaW = 400;
   const pinW = 40;
+  const docW = 595;
+  const docH = 842;
 
   const width = noteType === "photo" ? photoW
                 : noteType === "index" ? indexW
                 : noteType === "handout" ? handoutW
                 : noteType === "media" ? mediaW
                 : noteType === "pin" ? pinW
+                : noteType === "document" ? docW
                 : stickyW;
   // Media notes start as audio (cassette) by default; height updates if user sets a videoPath
   const height = noteType === "photo" ? Math.round(photoW / (225 / 290))
@@ -45,6 +108,7 @@ export async function createNote(noteType, { x = null, y = null } = {}) {
                  : noteType === "handout" ? handoutH
                  : noteType === "media" ? Math.round(mediaW * 0.74)
                  : noteType === "pin" ? pinW
+                 : noteType === "document" ? docH
                  : stickyW;
 
   // Final coordinates
@@ -69,15 +133,17 @@ export async function createNote(noteType, { x = null, y = null } = {}) {
   }
 
   // Get default text from settings (fallback if missing)
-  const defaultText = (noteType === "handout" || noteType === "pin")
+  const defaultText = (noteType === "handout" || noteType === "pin" || noteType === "document")
                     ? ""
                     : (game.settings.get(MODULE_ID, `${noteType}NoteDefaultText`) || "Notes");
 
   const extraFlags = {};
-  
+
   // Apply default colors from settings
   if (noteType !== "handout" && noteType !== "pin") {
-    extraFlags.tint = game.settings.get(MODULE_ID, "defaultNoteColor") || "#ffffff";
+    if (noteType !== "document") {
+      extraFlags.tint = game.settings.get(MODULE_ID, "defaultNoteColor") || "#ffffff";
+    }
     extraFlags.textColor = game.settings.get(MODULE_ID, "defaultInkColor") || "#000000";
   }
 
@@ -89,6 +155,12 @@ export async function createNote(noteType, { x = null, y = null } = {}) {
   // Set default image for handout notes
   if (noteType === "handout") {
     extraFlags.image = "modules/investigation-board/assets/newhandout.webp";
+  }
+
+  // Set default background for document notes
+  if (noteType === "document") {
+    extraFlags.docBackground = "parchment";
+    extraFlags.title = "";
   }
 
   // Set default image for media notes (audio/cassette default; swaps to VHS when videoPath is set)
@@ -104,8 +176,8 @@ export async function createNote(noteType, { x = null, y = null } = {}) {
     x: finalX,
     y: finalY,
     shape: { width, height },
-    fillColor: noteType === "handout" || noteType === "media" || noteType === "pin" ? "#000000" : "#ffffff",
-    fillAlpha: noteType === "handout" || noteType === "media" || noteType === "pin" ? 0.001 : 1,
+    fillColor: "#000000",
+    fillAlpha: (noteType === "handout" || noteType === "media" || noteType === "pin") ? 0.001 : 1,
     strokeColor: "#000000",
     strokeWidth: 0,
     strokeAlpha: 0,
@@ -831,6 +903,107 @@ export async function createHandoutNoteFromImage(imagePath, { x: dropX = null, y
         newDrawing.eventMode = 'auto';
         newDrawing.interactiveChildren = true;
       }
+    }, 250);
+  }
+}
+
+/**
+ * Creates an Index Card note from a text-type Journal Page.
+ * Strips HTML and prefixes the page title. Opens the edit dialog so the user
+ * can trim/adjust the text before saving.
+ * @param {JournalEntryPage} page
+ */
+export async function createTextIndexFromPage(page) {
+  const scene = canvas.scene;
+  if (!scene) { ui.notifications.error("Cannot create note: No active scene."); return; }
+
+  const body = stripHtml(page.text?.content || "");
+  const text = page.name ? `${page.name}\n\n${body}` : body;
+
+  const indexW = game.settings.get(MODULE_ID, "indexNoteWidth") || 600;
+  const indexH = Math.round(indexW / (600 / 400));
+  const sceneScale = getEffectiveScale();
+  const viewCenter = canvas.stage.pivot;
+
+  const created = await collaborativeCreate({
+    type: "r",
+    author: game.user.id,
+    x: viewCenter.x - (indexW * sceneScale) / 2,
+    y: viewCenter.y - (indexH * sceneScale) / 2,
+    shape: { width: indexW, height: indexH },
+    fillColor: "#ffffff",
+    fillAlpha: 1,
+    strokeColor: "#000000",
+    strokeWidth: 0,
+    strokeAlpha: 0,
+    locked: false,
+    flags: {
+      [MODULE_ID]: {
+        type: "index",
+        text,
+        fontSize: 9,
+        tint: game.settings.get(MODULE_ID, "defaultNoteColor") || "#ffffff",
+        textColor: game.settings.get(MODULE_ID, "defaultInkColor") || "#000000",
+        linkedObject: `@UUID[${page.uuid}]{${page.name}}`,
+      },
+      core: { sheetClass: "investigation-board.CustomDrawingSheet" }
+    },
+    ownership: { default: 3 },
+  });
+
+  if (InvestigationBoardState.isActive && created?.[0]) {
+    setTimeout(() => {
+      const d = canvas.drawings.get(created[0].id);
+      if (d) { d.eventMode = 'auto'; d.interactiveChildren = true; }
+    }, 250);
+  }
+}
+
+/**
+ * Creates a Document Note from a text-type Journal Page.
+ * Title comes from the page name; body preserves bold/italic/alignment as PIXI.HTMLText markup.
+ * @param {JournalEntryPage} page
+ * @param {"parchment"|"oldpaper"|"whitepaper"} [background]
+ */
+export async function createDocNoteFromPage(page, background = "parchment") {
+  const scene = canvas.scene;
+  if (!scene) { ui.notifications.error("Cannot create note: No active scene."); return; }
+
+  const body = sanitizeForPixiHtml(page.text?.content || "");
+  const sceneScale = getEffectiveScale();
+  const viewCenter = canvas.stage.pivot;
+
+  const created = await collaborativeCreate({
+    type: "r",
+    author: game.user.id,
+    x: viewCenter.x - (595 * sceneScale) / 2,
+    y: viewCenter.y - (842 * sceneScale) / 2,
+    shape: { width: 595, height: 842 },
+    fillColor: "#000000",
+    fillAlpha: 1,
+    strokeColor: "#000000",
+    strokeWidth: 0,
+    strokeAlpha: 0,
+    locked: false,
+    flags: {
+      [MODULE_ID]: {
+        type: "document",
+        title: page.name || "",
+        text: body,
+        docBackground: background,
+        textColor: game.settings.get(MODULE_ID, "defaultInkColor") || "#000000",
+        fontSize: 14,
+        linkedObject: `@UUID[${page.uuid}]{${page.name}}`,
+      },
+      core: { sheetClass: "investigation-board.CustomDrawingSheet" }
+    },
+    ownership: { default: 3 },
+  }, { skipAutoOpen: false });
+
+  if (InvestigationBoardState.isActive && created?.[0]) {
+    setTimeout(() => {
+      const d = canvas.drawings.get(created[0].id);
+      if (d) { d.eventMode = 'auto'; d.interactiveChildren = true; }
     }, 250);
   }
 }

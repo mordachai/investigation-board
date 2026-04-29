@@ -14,11 +14,13 @@ import {
 import { initSocket, socket, collaborativeUpdate } from "./utils/socket-handler.js";
 import { SetupWarningDialog } from "./apps/setup-warning.js";
 import { 
-  createNote, 
-  createPhotoNoteFromActor, 
-  createPhotoNoteFromScene, 
+  createNote,
+  createPhotoNoteFromActor,
+  createPhotoNoteFromScene,
   createPhotoNoteFromItem,
-  createHandoutNoteFromPage, 
+  createHandoutNoteFromPage,
+  createTextIndexFromPage,
+  createDocNoteFromPage,
   createMediaNoteFromSound,
   createHandoutNoteFromImage,
   importFolderAsNotes,
@@ -697,21 +699,69 @@ Hooks.on("getSceneContextOptions", (app, entryOptions) => {
 
 // Context menu hook for Journal pages
 Hooks.on("getJournalEntryPageContextOptions", (app, entryOptions) => {
+  // Image pages → Handout Note
   entryOptions.push({
     label: "Create Handout Note",
     icon: "fas fa-file-image",
     onClick: async (event, li) => {
       const page = _getJournalPageFromLi(li);
-      if (page?.type === "image") {
-        await createHandoutNoteFromPage(page);
-      } else {
-        ui.notifications.warn("Only image-type journal pages can be turned into handouts.");
-      }
+      if (page?.type === "image") await createHandoutNoteFromPage(page);
+      else ui.notifications.warn("Only image-type journal pages can be turned into handouts.");
     },
-    visible: (li) => {
+    visible: (li) => _getJournalPageFromLi(li)?.type === "image",
+  });
+
+  // Text pages → Index Card
+  entryOptions.push({
+    label: "Text to Index Card",
+    icon: "fa-regular fa-subtitles",
+    onClick: async (event, li) => {
       const page = _getJournalPageFromLi(li);
-      return page?.type === "image";
-    }
+      if (page) await createTextIndexFromPage(page);
+    },
+    visible: (li) => _getJournalPageFromLi(li)?.type === "text",
+  });
+
+  // Text pages → Document Note (background picker via small dialog)
+  entryOptions.push({
+    label: "Text to Document Note",
+    icon: "fas fa-scroll",
+    onClick: async (event, li) => {
+      const page = _getJournalPageFromLi(li);
+      if (!page) return;
+
+      const result = await foundry.applications.api.DialogV2.wait({
+        window: { title: "Create Document Note" },
+        content: `
+          <div class="form-group" style="margin-bottom:8px;">
+            <label style="font-weight:600;">Background:</label>
+            <select name="docBackground" style="width:100%;margin-top:4px;">
+              <option value="parchment">Parchment</option>
+              <option value="oldpaper">Old Paper</option>
+              <option value="whitepaper">White Paper</option>
+            </select>
+          </div>`,
+        classes: ["investigation-board-dialog"],
+        buttons: [{
+          action: "create",
+          label: "Create",
+          default: true,
+          callback: (event, button, dialog) => ({
+            confirmed: true,
+            background: dialog.element.querySelector("[name='docBackground']")?.value || "parchment",
+          }),
+        }, {
+          action: "cancel",
+          label: "Cancel",
+          callback: () => ({ confirmed: false }),
+        }],
+        rejectClose: false,
+        modal: true,
+      });
+
+      if (result?.confirmed) await createDocNoteFromPage(page, result.background);
+    },
+    visible: (li) => _getJournalPageFromLi(li)?.type === "text",
   });
 });
 

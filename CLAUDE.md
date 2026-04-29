@@ -6,11 +6,11 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 Investigation Board is a Foundry VTT module (currently targeting **v14**, Build 360) that enables collaborative investigation gameplay by allowing all users to create, edit, and move notes on the scene canvas. Notes are implemented as Foundry Drawing objects with custom rendering using PIXI.js sprites.
 
-**Note Types:** sticky, photo, index, handout, media, pin
+**Note Types:** sticky, photo, index, handout, media, pin, document
 
 **Key Features:**
 
-- Six note types with visual connection lines (yarn-like strings)
+- Seven note types with visual connection lines (yarn-like strings)
 - Collaborative editing via socket routing — all users can edit any note
 - Multiple visual themes (modern, futuristic, custom)
 - Pins render on top of connections via global container z-indexing
@@ -32,7 +32,7 @@ To test: refresh Foundry after code changes. Existing notes may need `canvas.dra
 ```text
 scripts/
 ├── main.js              # Entry point — all Foundry hooks, IB mode activation/deactivation
-├── config.js            # Constants: MODULE_ID, SOCKET_NAME, DEFAULT_PIN_FOLDER, PIN_COLORS, STICKY_TINTS, INK_COLORS
+├── config.js            # Constants: MODULE_ID, SOCKET_NAME, DEFAULT_PIN_FOLDER, PIN_COLORS, STICKY_TINTS, INK_COLORS, CASSETTE_IMAGES, VIDEO_IMAGES, VIDEO_EXTENSIONS, DOC_BACKGROUNDS, VIDEO_FORMATS
 ├── state.js             # Singleton: InvestigationBoardState { isActive }
 ├── settings.js          # Settings registration
 ├── apps/
@@ -41,12 +41,13 @@ scripts/
 │   ├── note-previewer.js     # NotePreviewer — floating preview of note content
 │   ├── setup-warning.js      # SetupWarningDialog — GM permission setup prompt
 │   ├── appearance-dialog.js  # AppearanceDialog — font/color/connection/pin settings
-│   └── note-defaults-dialog.js # NoteDefaultsDialog — dimensions and default text
+│   ├── note-defaults-dialog.js # NoteDefaultsDialog — dimensions and default text
+│   └── video-player.js       # VideoPlayer — ApplicationV2 video playback with broadcast sync
 ├── canvas/
 │   ├── custom-drawing.js    # CustomDrawing — PIXI sprite rendering, permission overrides
 │   └── connection-manager.js# All connection line logic, pins, preview, animations
 └── utils/
-    ├── creation-utils.js    # createNote() and all "create from X" helpers
+    ├── creation-utils.js    # createNote(), all "create from X" helpers, stripHtml(), sanitizeForPixiHtml(), getRandomCassetteImage(), getRandomVideoImage()
     ├── helpers.js           # getDynamicCharacterLimits, truncateText, getEffectiveScale, resolvePinImage, getAvailablePinFiles
     ├── socket-handler.js    # collaborativeUpdate/Create/Delete, socket listener
     └── audio-utils.js       # Tape effect for media notes
@@ -59,7 +60,8 @@ templates/
 ├── note-preview.html         # Note previewer template
 ├── setup-warning.html        # GM setup warning template
 ├── appearance-dialog.html    # Appearance settings dialog
-└── note-defaults-dialog.html # Note Defaults settings dialog
+├── note-defaults-dialog.html # Note Defaults settings dialog
+└── video-player.html         # VideoPlayer window (ApplicationV2)
 ```
 
 ### Module Entry Point: `scripts/main.js`
@@ -74,28 +76,33 @@ Registers all Foundry hooks and manages Investigation Board mode:
 - `Hooks.on("createDrawing")` — open edit dialog for creator, refresh interactivity/pins
 - `Hooks.on("preUpdateDrawing")` — route updates through socket for non-owners
 - `Hooks.on("preDeleteDrawing")` — protect IB notes from bulk deletion
-- `Hooks.on("updateDrawing")` — refresh sprites, connection lines, NotePreviewer on change; also calls `updatePins()` when `hidden` changes
+- `Hooks.on("updateDrawing")` — refresh sprites, connection lines, NotePreviewer and open VideoPlayer on change; also calls `updatePins()` when `hidden` changes
 - `Hooks.on("deleteDrawing")` — redraw connections when notes are deleted
 - `Hooks.on("canvasReady")` — cleanup containers, reset state, redraw all connections
 - `Hooks.on("dropCanvasData")` — link Foundry document to note on drag-drop
+- `ready` hook `dragover`/`drop` listeners — create handout notes from desktop image files or image URLs dropped on the canvas (`#board` element); priority: image file > `text/uri-list` URL with known image extension
 - Various context menu hooks for creating notes from other document types
 
 ### Note Types and Rendering
 
-Six note types in `drawing.flags['investigation-board'].type`:
+Seven note types in `drawing.flags['investigation-board'].type`:
 
 - **sticky** — 200×200, colored tints via `STICKY_TINTS`, ink color via `INK_COLORS`
 - **photo** — 225×290, polaroid layout (or horizontal in futuristic mode)
 - **index** — 600×400, default fontSize 9
 - **handout** — transparent background, image-only, resizable, `fillAlpha: 0.001`
-- **media** — 400×~296, cassette tape image, plays audio on click
+- **media** — 400×~296, two sub-modes: **audio** (cassette tape sprite, plays lo-fi audio on click) and **video** (video sprite, opens `VideoPlayer` window on click). Sub-mode stored in `flags.mediaMode` (`"audio"` | `"video"`). Video notes set `pinColor: "none"` automatically (no pin/connections).
 - **pin** — 40×40, standalone pin with no background
+- **document** — 595×842 (A4-ish), parchment/paper background sprite, title rendered with `PIXI.Text`, body rendered with `PIXI.HTMLText` (preserves bold/italic/alignment from journal pages). Background key (`parchment` | `oldpaper` | `whitepaper`) stored in `flags.docBackground`; textures defined in `DOC_BACKGROUNDS` in `config.js`. Has pin. Does NOT use `tint`.
 
 Rendering in `CustomDrawing._updateSprites()`:
 
 1. Check handout type FIRST — completely different sprite layout
-2. Check futuristic photo notes — horizontal layout
-3. All other types use shared layout logic
+2. Check document type — background sprite + title + HTMLText body; early return
+3. Check futuristic photo notes — horizontal layout
+4. All other types use shared layout logic
+
+**Document note sprites** — `bgShadow` (blurred black shadow at offset 8,8), `bgSprite` (background image), `docTitleText` (`PIXI.Text`, centered, hidden when empty), `docBodyText` (`PIXI.HTMLText` with `tagStyles` to lock the note font on every inline tag). Sprites are reused across `_doUpdateSprites()` calls (not destroyed). When a note switches away from type `"document"`, the doc-specific sprites are destroyed in the early type-mismatch block.
 
 **`_updateSprites()` concurrency guard:** The method uses `_spriteUpdateRunning` / `_spriteUpdateQueued` flags. If called while running, it queues one re-run. The queued call fires unawaited from the `finally` block — any state set *after* `await _updateSprites()` can be overridden by the queued run. Apply persistent visual state *inside* `_doUpdateSprites()`, not after it.
 
@@ -113,20 +120,38 @@ Rendering in `CustomDrawing._updateSprites()`:
 
 ```javascript
 flags['investigation-board'] = {
-  type: "sticky" | "photo" | "index" | "handout" | "media" | "pin",
+  type: "sticky" | "photo" | "index" | "handout" | "media" | "pin" | "document",
   text: "note content",
   image: "path/to/image.webp",        // photo, handout, media
-  audioPath: "path/to/audio.mp3",     // media only
-  audioEffectEnabled: true,           // media only — lo-fi tape effect
+  audioPath: "path/to/audio.mp3",     // media/audio only
+  audioEffectEnabled: true,           // media/audio only — lo-fi tape effect
+  mediaMode: "audio" | "video",       // media only — defaults to "audio"; derived from videoPath for legacy notes
+  videoPath: "path/to/video.mp4",     // media/video only
+  videoFormat: "crt",                 // media/video — key into VIDEO_FORMATS (cctv|crt|flatscreen|filmProjector|cellphone)
+  videoEffects: {                     // media/video — per-note effect overrides
+    rollingShutter: false,
+    mechanicalSound: true,
+    trackingGlitch: false,
+    filmGrain: false,
+    filmGrainIntensity: 0.15,
+    timestampEnabled: false,
+    recordingStartISO: "2024-01-01T00:00:00",  // defaults to current time on new notes
+    recordingStartCenti: 0,
+    timestampDateFormat: "us" | "eu",
+    timestampX: 0.6, timestampY: -0.75, timestampFontSize: 30, timestampColor: "#008425",
+    glitchIntervalMin: 2, glitchIntervalMax: 4,
+  },
   pinColor: "redPin.webp",            // bare filename; "" or absent = auto-random on next render
                                       // resolved at render time via resolvePinImage() so the folder
                                       // can change without touching note data
   identityName: "Character Name",      // futuristic photo only
   unknown: true,                       // photo only — shows "???" instead of name
   font: "Arial",                       // per-note, falls back to global (not handout/media/pin)
-  fontSize: 16,                        // per-note, index defaults to 9 (not handout/media/pin)
-  tint: "#ffff99",                     // sticky notes only (stored as tint in flags, not inkColor)
-  textColor: "#000000",               // sticky/index/photo (stored as textColor in flags)
+  fontSize: 16,                        // per-note, index defaults to 9; document defaults to 14 (not handout/media/pin)
+  tint: "#ffff99",                     // sticky notes only — NOT used by document notes
+  textColor: "#000000",               // sticky/index/photo/document (stored as textColor in flags)
+  title: "Document Title",            // document only — rendered above body; hidden when empty
+  docBackground: "parchment",         // document only — key into DOC_BACKGROUNDS ("parchment"|"oldpaper"|"whitepaper")
   linkedObject: "@UUID[...]{Name}",    // any note, set via drag-and-drop
   connections: [
     { targetId: "drawingId", color: "#FF0000", width: 3 }
@@ -184,8 +209,13 @@ GM-side handler in `utils/socket-handler.js` processes the request and performs 
 `module.json` must have `"socket": true`.
 
 **Socket actions handled by all clients** (not GM-only):
-- `playAudio` — plays audio globally on every connected client (media notes). Stops any existing instance of the same file first.
+- `playAudio` — plays audio globally on every connected client (media/audio notes). Stops any existing instance of the same file first.
 - `stopAudio` — stops a playing audio file globally.
+- `openVideoPlayer` — opens `VideoPlayer` window for the given `drawingId` on all clients (broadcast by GM).
+- `playVideo` / `pauseVideo` / `seekVideo` — sync video playback on all client `VideoPlayer` instances.
+- `stopVideoBroadcast` — closes/deactivates broadcast state on all clients.
+
+`activeVideoBroadcasts` (`Map<drawingId, { gmUserId }>`) in `socket-handler.js` tracks active broadcasts; clients skip sync events for broadcasts they're already the GM of.
 
 **Socket actions handled by GM only** (non-GM clients ignore these):
 - `createDrawing` — create a single IB note on behalf of a player
@@ -284,7 +314,8 @@ const fontSize = (settingsWidth / 200) * baseFontSize * fontBoost;
 ### Pin Note Context Menu
 
 Right-clicking a pin-only note (type `"pin"`) shows a context menu with:
-- **Convert to…** — five options: Sticky Note, Photo Note, Index Card, Handout Note, Media Note
+
+- **Convert to…** — six options: Sticky Note, Photo Note, Index Card, Handout Note, Media Note, Document Note
 
 The pin sprite (which lives in `pinsContainer` as a PIXI sibling, not a child of the Drawing) intercepts all pointer events. The `pointerdown` listener checks `event.button === 2 && noteData?.type === "pin"` to forward right-clicks to `drawing._showContextMenu(event)`. Other note types fall through to `onPinPointerDown` (connection mode).
 
@@ -366,24 +397,75 @@ In `utils/helpers.js`. Dynamic character limits scale inversely with font size u
 
 `preDeleteDrawing` hook returns `false` for IB notes unless `options.ibDelete` is set or the placeable is currently controlled (selected). This prevents "Clear All Drawings" from deleting IB notes.
 
+### creation-utils.js helpers
+
+Key exported functions beyond `createNote`:
+
+- `createTextIndexFromPage(page)` — creates an Index Card from a text-type journal page. Calls `stripHtml()` to get plain text, prefixes the page title, auto-links the page UUID.
+- `createDocNoteFromPage(page, background)` — creates a Document Note from a text-type journal page. Calls `sanitizeForPixiHtml()` to convert journal HTML to PIXI.HTMLText-safe markup (preserves `<b>`, `<i>`, `<u>`, `<s>`, `<p>` with text-align; strips images, figures, tables, divs).
+- `getRandomCassetteImage()` — synchronous; picks a random entry from `CASSETTE_IMAGES` and returns the full asset path.
+- `getRandomVideoImage()` — synchronous; picks a random entry from `VIDEO_IMAGES` and returns the full asset path.
+- `stripHtml(html)` — converts HTML to plain text, preserving paragraph and line breaks. Used by index card creation.
+- `sanitizeForPixiHtml(html)` — converts HTML to PIXI.HTMLText-safe markup. Whitelisted tags: `b`, `strong`, `i`, `em`, `u`, `s`, `strike`, `br`, `p`, `span`, `font`. Preserves `text-align` on `<p>` tags. Non-whitelisted tags are stripped (text content kept).
+
 ### Bulk Import
 
 `importFolderAsNotes(folder)` and `importPlaylistAsNotes(playlist)` in `creation-utils.js` create notes in a grid layout using `collaborativeCreateMany`. Supports Actor, Item, Scene, and Playlist folder types. Uses `foundry.applications.api.DialogV2.wait()` for confirmation, with an optional lo-fi audio effect checkbox for playlist imports.
 
 ### Additional Context Menus
 
-Beyond the directory context menus documented above, one more hook extends creation:
+Beyond the directory context menus documented above, these hooks extend creation:
 
 - `getHeaderControlsImagePopout` — adds "Create Handout Note" to the Image Popout header controls via `onClick` + `app.options.src` (v14 pattern; the old `renderImagePopout` + `menu.controls-dropdown` approach no longer works)
+- `getJournalEntryPageSheetHeaderButtons` (or equivalent v14 hook) — journal page context options:
+  - **Image pages** → "Create Handout Note" via `createHandoutNoteFromPage(page)`
+  - **Text pages** → "Text to Index Card" via `createTextIndexFromPage(page)` — strips HTML, prefixes page title, opens edit dialog
+  - **Text pages** → "Text to Document Note" via `createDocNoteFromPage(page, background)` — prompts for background (parchment/old paper/white paper) then creates a document note with PIXI.HTMLText-safe markup
 
 > **v14 note:** `renderJournalSheet` / `renderJournalPageSheet` + `app.contextMenus` was the v13 approach for journal image context menus. In v14, `JournalEntrySheet` is AppV2 and has no public `contextMenus` array — that feature is currently absent. Use `getHeaderControlsJournalEntrySheet` hook if re-implementing.
 
-### Clipboard Paste
+### Video Player (`apps/video-player.js`)
 
-`ready` hook listens for `paste` events on the document. When an image is pasted while IB mode is active (and focus is not on an input/textarea), it:
-1. Ensures `assets/ib-handouts/` directory exists via `FilePicker.browse`/`createDirectory`
-2. Uploads the pasted image with a timestamped unique filename
-3. Calls `createHandoutNoteFromImage(path)` with the uploaded path
+`VideoPlayer` extends `HandlebarsApplicationMixin(ApplicationV2)`. One singleton per drawing (`id: "video-player-{drawingId}"`). Opened by clicking a video media note on canvas, or via GM broadcast (`openVideoPlayer` socket action).
+
+**Format system** — `VIDEO_FORMATS` in `config.js` defines five formats (`cctv`, `crt`, `flatscreen`, `filmProjector`, `cellphone`). Each has `windowWidth`, `aspectRatio`, `padding`, optional `mechanicalSfx`, and `defaultEffects`. Format key stored in `flags.videoFormat`; effects stored in `flags.videoEffects`.
+
+**Visual effects (RAF-based):**
+
+- `filmGrain` — canvas element drawn at 30fps via `requestAnimationFrame`; intensity configurable
+- `timestamp` — live running clock overlay, driven by `video.currentTime` + `recordingStartISO`; shares the grain RAF loop when both are active
+- `trackingGlitch` — CSS animation `div` appended at random intervals (`_startGlitchInterval`)
+- `rollingShutter` — one-shot CSS animation on open
+- `mechanicalSound` — plays `format.mechanicalSfx` via `game.audio.play()` on open
+
+**Broadcast mode (GM only):**
+
+1. GM clicks "Open for All" (`_startBroadcast`) → `activeVideoBroadcasts.set(drawingId, ...)` + emits `openVideoPlayer` socket action
+2. GM `play`/`pause`/`seek` events emit corresponding socket actions
+3. Non-GM clients receive events and call `app.syncPlayback(action, currentTime)`
+4. A click-to-play overlay (`ib-click-to-play`) handles browsers that block autoplay
+
+`applyEffects(effects)` — hot-reloads running effects from the open edit dialog without closing/reopening the window.
+
+`updateTimestampStyle({ x, y, fontSize, color })` — partial live update of timestamp position/color from the edit dialog sliders without triggering a full `applyEffects`.
+
+**Edit dialog integration** — `CustomDrawingSheet._activateListeners()` wires up live preview for open `VideoPlayer` instances:
+
+- Timestamp X/Y/size/color sliders call `getPlayer()?.updateTimestampStyle(...)` on `input`.
+- Any change in the effects tab panel debounces 500ms then calls `getPlayer()?.applyEffects(this._readEffectsFromForm())`.
+- "Reset effects" button applies the current format's `defaultEffects` to all effect checkboxes without saving.
+- "Preview Video" button opens a `VideoPlayer` for the note inline.
+- Foundry AppV2 intercepts bubbled `change` events in capture phase — attach listeners directly to checkboxes/radios (target-phase) to reliably receive them.
+
+### Image Import (Clipboard and Drag-and-Drop)
+
+Three entry points all call `_uploadImageHandout(file, prefix)` then `createHandoutNoteFromImage(path)`:
+
+1. **Clipboard paste** — `paste` event on `document`; fires when IB mode is active and focus is not in an input/textarea
+2. **File drag-and-drop** — `dragover`/`drop` on the `#board` canvas element; handles actual image files (WhatsApp, desktop, Google Images)
+3. **URL drag-and-drop** — same `drop` handler, fallback path; fetches the URL, converts to `File`, then uploads. Only triggers when the URL ends with a known image extension (`/\.(png|jpe?g|gif|webp|avif|svg|bmp|tiff?)(\?.*)?$/i`).
+
+`_uploadImageHandout` ensures `assets/ib-handouts/` exists, generates a unique timestamped filename (`${prefix}_handout_${Date.now()}_${randomID}.${ext}`), and uploads via `FilePicker.upload`.
 
 ## Settings
 

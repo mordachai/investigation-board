@@ -36,6 +36,21 @@ export const VIDEO_IMAGES = ['video1.webp', 'video2.webp', 'video3.webp'];
 // File extensions treated as video (webp on a media note is always treated as video)
 export const VIDEO_EXTENSIONS = ['mp4', 'webm', 'webp'];
 
+export const DOC_BACKGROUNDS = {
+  parchment: {
+    label: 'Parchment',
+    path: 'modules/investigation-board/assets/doc_parchment.webp',
+  },
+  oldpaper: {
+    label: 'Old Paper',
+    path: 'modules/investigation-board/assets/doc_old.webp',
+  },
+  whitepaper: {
+    label: 'White Paper',
+    path: 'modules/investigation-board/assets/doc_white.webp',
+  },
+};
+
 /**
  * Video player window formats.
  *

@@ -1,7 +1,79 @@
 <form class="ib-note-config-form">
 
+  {{!-- DOCUMENT NOTE fields --}}
+  {{#if (eq noteType "document")}}
+    <div class="form-group">
+      <label for="title">Title:</label>
+      <input type="text" name="title" value="{{title}}" placeholder="Document title..." />
+    </div>
+
+    <div class="form-group">
+      <label for="text">Body Text:</label>
+      <textarea name="text" rows="6" placeholder="Document content...">{{text}}</textarea>
+    </div>
+
+    <hr class="ib-section-divider">
+
+    <div class="form-group">
+      <label for="docBackground">Background:</label>
+      <select name="docBackground">
+        {{#each docBackgrounds}}
+          <option value="{{@key}}" {{#if (eq ../docBackground @key)}}selected{{/if}}>{{this.label}}</option>
+        {{/each}}
+      </select>
+    </div>
+
+    <div class="form-group color-settings">
+      <div class="color-mosaic-group">
+        <label>Ink Color:</label>
+        <div class="color-mosaic ink-colors">
+          {{#each inkColors}}
+            <div class="color-option {{#if (eq ../textColor this)}}active{{/if}}"
+                 data-color="{{this}}"
+                 data-type="textColor"
+                 style="background-color: {{this}};"
+                 title="{{@key}}"></div>
+          {{/each}}
+          <input type="hidden" name="textColor" value="{{textColor}}" />
+        </div>
+      </div>
+    </div>
+
+    <div class="form-group font-settings">
+      <div class="font-select-group">
+        <label for="font">Font:</label>
+        <select name="font">
+          <option value="Rock Salt"            {{#if (eq font "Rock Salt")}}selected{{/if}}>Rock Salt</option>
+          <option value="Caveat"               {{#if (eq font "Caveat")}}selected{{/if}}>Caveat</option>
+          <option value="Courier New"          {{#if (eq font "Courier New")}}selected{{/if}}>Courier New</option>
+          <option value="Times New Roman"      {{#if (eq font "Times New Roman")}}selected{{/if}}>Times New Roman</option>
+          <option value="Signika"              {{#if (eq font "Signika")}}selected{{/if}}>Signika</option>
+          <option value="Arial"                {{#if (eq font "Arial")}}selected{{/if}}>Arial</option>
+          <option value="Typewriter Condensed" {{#if (eq font "Typewriter Condensed")}}selected{{/if}}>Typewriter Condensed</option>
+          <option value="IB Special Elite"     {{#if (eq font "IB Special Elite")}}selected{{/if}}>Special Elite</option>
+        </select>
+      </div>
+      <div class="font-size-group">
+        <label for="fontSize">Body Size:</label>
+        <input type="number" name="fontSize" value="{{fontSize}}" min="8" max="48" step="1" />
+      </div>
+      {{#if showPinSelector}}
+      <div class="pin-select-inline-group">
+        <label>Pin:</label>
+        <select name="pinColor">
+          <option value="none" {{#if (eq selectedPinColor "none")}}selected{{/if}}>None</option>
+          <option value="" {{#if (eq selectedPinColor "")}}selected{{/if}}>Auto</option>
+          {{#each pinImageChoices}}
+            <option value="{{value}}" {{#if selected}}selected{{/if}}>{{label}}</option>
+          {{/each}}
+        </select>
+      </div>
+      {{/if}}
+    </div>
+  {{/if}}
+
   {{!-- TEXT + APPEARANCE — sticky, photo, index only --}}
-  {{#unless (or (eq noteType "handout") (eq noteType "media") (eq noteType "pin"))}}
+  {{#unless (or (eq noteType "handout") (eq noteType "media") (eq noteType "pin") (eq noteType "document"))}}
     <div class="form-group">
       <label for="text">Note Text:</label>
       <textarea name="text" rows="4" placeholder="Enter note text...">{{text}}</textarea>
