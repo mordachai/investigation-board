@@ -1145,6 +1145,31 @@ body.investigation-board-mode .drawing:not([data-investigation-note='true']) {
   overflow-y: auto;
 }
 
+/* Inline editable text in previewer */
+.ib-editable-text {
+  cursor: text;
+  border-radius: 3px;
+  outline: none;
+  transition: box-shadow 0.15s ease;
+}
+
+.ib-editable-text:hover {
+  box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.2);
+}
+
+.ib-editable-text:focus {
+  box-shadow: inset 0 0 0 2px rgba(80, 120, 200, 0.5);
+}
+
+@keyframes ib-save-flash {
+  0%   { box-shadow: inset 0 0 0 2px rgba(60, 180, 60, 0.9); }
+  100% { box-shadow: none; }
+}
+
+.ib-editable-text.ib-saved-flash {
+  animation: ib-save-flash 0.8s ease-out forwards;
+}
+
 .preview-footer {
   display: flex;
   justify-content: flex-start;

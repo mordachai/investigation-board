@@ -1,5 +1,5 @@
 import { MODULE_ID, SOCKET_NAME } from "../config.js";
-import { socket, activeGlobalSounds } from "../utils/socket-handler.js";
+import { socket, activeGlobalSounds, collaborativeUpdate } from "../utils/socket-handler.js";
 import { applyTapeEffectToElement, applyTapeEffectToSound } from "../utils/audio-utils.js";
 
 // v13 namespaced imports
@@ -260,6 +260,9 @@ export class NotePreviewer extends HandlebarsApplicationMixin(ApplicationV2) {
       });
     });
 
+    // Inline text editing
+    this._bindInlineEditing(html);
+
     // Handle auto-play options passed from Context Menu
     if (options.autoplay) {
       if (localAudio && localAudio.paused) {
@@ -278,6 +281,41 @@ export class NotePreviewer extends HandlebarsApplicationMixin(ApplicationV2) {
         }
       }, 100);
     }
+  }
+
+  _bindInlineEditing(html) {
+    const editables = html.querySelectorAll(".ib-editable-text");
+    editables.forEach(el => {
+      el.addEventListener("keydown", (ev) => {
+        if ((ev.ctrlKey || ev.metaKey) && ev.key === "s") {
+          ev.preventDefault();
+          this._saveInlineText(el);
+        }
+        const noteType = this.document.flags[MODULE_ID]?.type;
+        if (ev.key === "Enter" && !ev.shiftKey && noteType !== "index") {
+          ev.preventDefault();
+          el.blur();
+        }
+      });
+      el.addEventListener("blur", () => this._saveInlineText(el));
+      el.addEventListener("mousedown", (ev) => ev.stopPropagation());
+    });
+  }
+
+  async _saveInlineText(el) {
+    const newText = el.innerText;
+    const field = el.dataset.field;
+    const currentText = this.document.flags[MODULE_ID]?.[field] ?? "";
+    if (newText === currentText) return;
+    await collaborativeUpdate(this.document.id, {
+      [`flags.${MODULE_ID}.${field}`]: newText
+    });
+    this._flashSaved(el);
+  }
+
+  _flashSaved(el) {
+    el.classList.add("ib-saved-flash");
+    setTimeout(() => el.classList.remove("ib-saved-flash"), 800);
   }
 
   async _onClose(options) {
