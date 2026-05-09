@@ -18,6 +18,11 @@ A Foundry VTT module that lets everyone create, edit, and move sticky and photo 
 
 Media notes now supports video too! There are some video effects available, and you can select the format of your video fr better immersion: Flat screen 16:9, CRT 4:3 and even Mobile portrait. There is even a timestamp tool so you can add the _when_ to the _who_ and _how_ of you mysteries!
 
+[<img width="1920" height="1080" alt="VideoNotes mp4_snapshot_01 21 798" src="https://github.com/user-attachments/assets/0f636b1c-8eda-489a-8074-0becf0927e42" />](https://youtu.be/Lvu1c6NTcsU)
+
+*My old high school principal, good times...*
+
+
 ## NEW FEATURE >> Doc Notes from Journal Texts
 Now you can turn Journal Text pages in Doc Notes (A4 Format)
 
