@@ -1,29 +1,78 @@
-import { MODULE_ID } from "../config.js";
+import { MODULE_ID, CASSETTE_IMAGES, VIDEO_IMAGES, DOC_BACKGROUNDS } from "../config.js";
 import { InvestigationBoardState } from "../state.js";
 import { getActorDisplayName, getEffectiveScale } from "./helpers.js";
 import { collaborativeCreate, collaborativeCreateMany } from "./socket-handler.js";
 
 /**
- * Internal helper to find a random cassette image from assets
+ * Strips HTML tags from journal page content, preserving paragraph breaks.
+ * Used for index card notes where plain PIXI.Text is sufficient.
+ * @param {string} html
+ * @returns {string}
  */
-async function _getRandomCassetteImage() {
-  let imagePath = "modules/investigation-board/assets/cassette1.webp"; // Default fallback
-  try {
-    const folder = "modules/investigation-board/assets/";
-    // v13 namespaced FilePicker
-    const FilePickerImpl = foundry.applications.apps.FilePicker.implementation;
-    const browse = await FilePickerImpl.browse("data", folder);
-    const cassettes = browse.files.filter(f => {
-      const filename = f.split("/").pop();
-      return filename.startsWith("cassette") && f.endsWith(".webp");
-    });
-    if (cassettes.length > 0) {
-      imagePath = cassettes[Math.floor(Math.random() * cassettes.length)];
-    }
-  } catch (err) {
-    console.warn("Investigation Board: Could not browse assets folder for cassettes", err);
-  }
-  return imagePath;
+function stripHtml(html) {
+  const withBreaks = html
+    .replace(/<\/p>\s*<p[^>]*>/gi, '\n\n')
+    .replace(/<br\s*\/?>/gi, '\n')
+    .replace(/<\/?(h[1-6]|li|div|blockquote|tr)[^>]*>/gi, '\n');
+  const div = document.createElement('div');
+  div.innerHTML = withBreaks;
+  return (div.textContent || div.innerText || '').replace(/\n{3,}/g, '\n\n').trim();
+}
+
+/**
+ * Converts journal page HTML into PIXI.HTMLText-safe markup.
+ * Keeps bold, italic, underline, strikethrough, paragraph breaks, and text alignment.
+ * Converts headings, blockquotes, and list items into supported equivalents.
+ * @param {string} html
+ * @returns {string}
+ */
+function sanitizeForPixiHtml(html) {
+  if (!html) return "";
+  // <p> block elements work correctly when HTMLTextStyle is used — it sets the
+  // SVG foreignObject width so block content wraps within the note margin.
+  // text-align is preserved on <p> tags for justification support.
+  let s = html
+    // headings → bold paragraph
+    .replace(/<h[1-6][^>]*>([\s\S]*?)<\/h[1-6]>/gi, '<p><b>$1</b></p>')
+    // blockquotes → italic paragraph
+    .replace(/<blockquote[^>]*>([\s\S]*?)<\/blockquote>/gi, '<p><i>$1</i></p>')
+    // list items → bullet paragraph
+    .replace(/<li[^>]*>([\s\S]*?)<\/li>/gi, '<p>• $1</p>')
+    // strip list wrappers
+    .replace(/<\/?(ul|ol)[^>]*>/gi, '')
+    // figure captions → italic paragraph
+    .replace(/<figcaption[^>]*>([\s\S]*?)<\/figcaption>/gi, '<p><i>$1</i></p>')
+    // preserve only text-align from <p> style attributes, strip everything else
+    .replace(/<p([^>]*)>/gi, (_, attrs) => {
+      const m = attrs.match(/text-align\s*:\s*(left|center|right|justify)/i);
+      return m ? `<p style="text-align:${m[1]}">` : '<p>';
+    })
+    // remove images, figures, links (keep text), table structure
+    .replace(/<img[^>]*\/?>/gi, '')
+    .replace(/<\/?figure[^>]*>/gi, '')
+    .replace(/<a[^>]*>([\s\S]*?)<\/a>/gi, '$1')
+    .replace(/<td[^>]*>([\s\S]*?)<\/td>/gi, '$1 ')
+    .replace(/<tr[^>]*>([\s\S]*?)<\/tr>/gi, '<p>$1</p>')
+    .replace(/<\/?(?:table|thead|tbody|tfoot|th|caption)[^>]*>/gi, '')
+    // strip div/section wrappers
+    .replace(/<\/?(div|section|article)[^>]*>/gi, '');
+
+  // Strip non-whitelisted tags; <p> is included so text-align survives
+  s = s.replace(/<(?!\/?(?:b|strong|i|em|u|s|strike|br|p|span|font)\b)[^>]+>/gi, '');
+
+  return s.trim();
+}
+
+/** Returns a random cassette sprite path for an audio media note. */
+export function getRandomCassetteImage() {
+  const name = CASSETTE_IMAGES[Math.floor(Math.random() * CASSETTE_IMAGES.length)];
+  return `modules/investigation-board/assets/${name}`;
+}
+
+/** Returns a random VHS tape sprite path for a video media note. */
+export function getRandomVideoImage() {
+  const name = VIDEO_IMAGES[Math.floor(Math.random() * VIDEO_IMAGES.length)];
+  return `modules/investigation-board/assets/${name}`;
 }
 
 export async function createNote(noteType, { x = null, y = null } = {}) {
@@ -43,18 +92,23 @@ export async function createNote(noteType, { x = null, y = null } = {}) {
   const handoutH = game.settings.get(MODULE_ID, "handoutNoteHeight") || 400;
   const mediaW = 400;
   const pinW = 40;
+  const docW = 595;
+  const docH = 842;
 
   const width = noteType === "photo" ? photoW
                 : noteType === "index" ? indexW
                 : noteType === "handout" ? handoutW
                 : noteType === "media" ? mediaW
                 : noteType === "pin" ? pinW
+                : noteType === "document" ? docW
                 : stickyW;
+  // Media notes start as audio (cassette) by default; height updates if user sets a videoPath
   const height = noteType === "photo" ? Math.round(photoW / (225 / 290))
                  : noteType === "index" ? Math.round(indexW / (600 / 400))
                  : noteType === "handout" ? handoutH
                  : noteType === "media" ? Math.round(mediaW * 0.74)
                  : noteType === "pin" ? pinW
+                 : noteType === "document" ? docH
                  : stickyW;
 
   // Final coordinates
@@ -63,21 +117,33 @@ export async function createNote(noteType, { x = null, y = null } = {}) {
 
   if (finalX === null || finalY === null) {
     const viewCenter = canvas.stage.pivot;
-    // Account for sceneScale in visual centering
-    finalX = viewCenter.x - (width * sceneScale) / 2;
-    finalY = viewCenter.y - (height * sceneScale) / 2;
+
+    // Cascade offset: each existing IB note shifts the new one diagonally so notes
+    // don't stack. Step size is 15% of the note's own dimensions, capped at 80 world
+    // units per step, cycling every 6 notes back to the centre.
+    const existingCount = canvas.drawings.placeables.filter(
+      d => d.document.flags[MODULE_ID]?.type
+    ).length;
+    const cascadeStep = existingCount % 6;
+    const stepX = Math.min(Math.round(width * 0.15), 80);
+    const stepY = Math.min(Math.round(height * 0.15), 80);
+
+    finalX = viewCenter.x - (width * sceneScale) / 2 + cascadeStep * stepX;
+    finalY = viewCenter.y - (height * sceneScale) / 2 + cascadeStep * stepY;
   }
 
   // Get default text from settings (fallback if missing)
-  const defaultText = (noteType === "handout" || noteType === "pin")
+  const defaultText = (noteType === "handout" || noteType === "pin" || noteType === "document")
                     ? ""
                     : (game.settings.get(MODULE_ID, `${noteType}NoteDefaultText`) || "Notes");
 
   const extraFlags = {};
-  
+
   // Apply default colors from settings
   if (noteType !== "handout" && noteType !== "pin") {
-    extraFlags.tint = game.settings.get(MODULE_ID, "defaultNoteColor") || "#ffffff";
+    if (noteType !== "document") {
+      extraFlags.tint = game.settings.get(MODULE_ID, "defaultNoteColor") || "#ffffff";
+    }
     extraFlags.textColor = game.settings.get(MODULE_ID, "defaultInkColor") || "#000000";
   }
 
@@ -91,10 +157,17 @@ export async function createNote(noteType, { x = null, y = null } = {}) {
     extraFlags.image = "modules/investigation-board/assets/newhandout.webp";
   }
 
-  // Set default image and audio for media notes
+  // Set default background for document notes
+  if (noteType === "document") {
+    extraFlags.docBackground = "parchment";
+    extraFlags.title = "";
+  }
+
+  // Set default image for media notes (audio/cassette default; swaps to VHS when videoPath is set)
   if (noteType === "media") {
-    extraFlags.image = await _getRandomCassetteImage();
+    extraFlags.image = getRandomCassetteImage();
     extraFlags.audioPath = "";
+    // Pin starts as Auto (audio mode). Switches to "none" when user toggles to video.
   }
 
   const created = await collaborativeCreate({
@@ -103,8 +176,8 @@ export async function createNote(noteType, { x = null, y = null } = {}) {
     x: finalX,
     y: finalY,
     shape: { width, height },
-    fillColor: noteType === "handout" || noteType === "media" || noteType === "pin" ? "#000000" : "#ffffff",
-    fillAlpha: noteType === "handout" || noteType === "media" || noteType === "pin" ? 0.001 : 1,
+    fillColor: "#000000",
+    fillAlpha: (noteType === "handout" || noteType === "media" || noteType === "pin") ? 0.001 : 1,
     strokeColor: "#000000",
     strokeWidth: 0,
     strokeAlpha: 0,
@@ -136,12 +209,8 @@ export async function createNote(noteType, { x = null, y = null } = {}) {
   }
 
   // Switch back to select tool so user can immediately manipulate the note
-  if (InvestigationBoardState.isActive) {
-    const drawingsControl = ui.controls?.controls?.drawings;
-    if (drawingsControl) {
-      drawingsControl.activeTool = "select";
-      ui.controls.render();
-    }
+  if (InvestigationBoardState.isActive && ui.controls) {
+    ui.controls.activate({ control: "drawings", tool: "select" });
   }
 
   return created?.[0];
@@ -378,15 +447,13 @@ export async function createMediaNoteFromSound(sound) {
   const x = viewCenter.x - (mediaW * sceneScale) / 2;
   const y = viewCenter.y - (height * sceneScale) / 2;
 
-  const imagePath = await _getRandomCassetteImage();
-
   const created = await collaborativeCreate({
     type: "r",
     author: game.user.id,
     x, y,
     shape: { width: mediaW, height },
     fillColor: "#000000",
-    fillAlpha: 0,
+    fillAlpha: 0.001,
     strokeColor: "#000000",
     strokeWidth: 0,
     strokeAlpha: 0,
@@ -395,7 +462,7 @@ export async function createMediaNoteFromSound(sound) {
       [MODULE_ID]: {
         type: "media",
         text: sound.name,
-        image: imagePath,
+        image: getRandomCassetteImage(),
         audioPath: sound.path,
         linkedObject: `@UUID[${sound.uuid}]{${sound.name}}`
       },
@@ -554,13 +621,8 @@ export async function importFolderAsNotes(folder) {
 
   const createDataArray = [];
   
+  // No pre-fetch needed — getRandomCassetteImage() is now synchronous
   const cassetteImages = [];
-  if (type === "Playlist") {
-    // Pre-fetch some random cassette images to avoid too many file browses
-    for(let i=0; i<5; i++) {
-      cassetteImages.push(await _getRandomCassetteImage());
-    }
-  }
 
   for (let i = 0; i < documents.length; i++) {
     const doc = documents[i];
@@ -615,11 +677,10 @@ export async function importFolderAsNotes(folder) {
         tint: "#ffffff"
       };
     } else if (type === "Playlist") { // doc is a PlaylistSound
-      const imagePath = cassetteImages[i % cassetteImages.length];
       noteData = {
         type: "media",
         text: doc.name,
-        image: imagePath,
+        image: getRandomCassetteImage(),
         audioPath: doc.path,
         linkedObject: `@UUID[${doc.uuid}]{${doc.name}}`,
         audioEffectEnabled: applyLoFi,
@@ -712,26 +773,20 @@ export async function importPlaylistAsNotes(playlist) {
   const spacing = 40;
 
   const createDataArray = [];
-  const cassetteImages = [];
-  for(let i=0; i<5; i++) {
-    cassetteImages.push(await _getRandomCassetteImage());
-  }
-
   const defaultInk = game.settings.get(MODULE_ID, "defaultInkColor") || "#000000";
 
   for (let i = 0; i < documents.length; i++) {
     const doc = documents[i];
     const col = i % cols;
     const row = Math.floor(i / cols);
-    
+
     const x = startX + col * (mediaW + spacing);
     const y = startY + row * (mediaH + spacing);
 
-    const imagePath = cassetteImages[i % cassetteImages.length];
     const noteData = {
       type: "media",
       text: doc.name,
-      image: imagePath,
+      image: getRandomCassetteImage(),
       audioPath: doc.path,
       linkedObject: `@UUID[${doc.uuid}]{${doc.name}}`,
       audioEffectEnabled: applyLoFi,
@@ -848,6 +903,107 @@ export async function createHandoutNoteFromImage(imagePath, { x: dropX = null, y
         newDrawing.eventMode = 'auto';
         newDrawing.interactiveChildren = true;
       }
+    }, 250);
+  }
+}
+
+/**
+ * Creates an Index Card note from a text-type Journal Page.
+ * Strips HTML and prefixes the page title. Opens the edit dialog so the user
+ * can trim/adjust the text before saving.
+ * @param {JournalEntryPage} page
+ */
+export async function createTextIndexFromPage(page) {
+  const scene = canvas.scene;
+  if (!scene) { ui.notifications.error("Cannot create note: No active scene."); return; }
+
+  const body = stripHtml(page.text?.content || "");
+  const text = page.name ? `${page.name}\n\n${body}` : body;
+
+  const indexW = game.settings.get(MODULE_ID, "indexNoteWidth") || 600;
+  const indexH = Math.round(indexW / (600 / 400));
+  const sceneScale = getEffectiveScale();
+  const viewCenter = canvas.stage.pivot;
+
+  const created = await collaborativeCreate({
+    type: "r",
+    author: game.user.id,
+    x: viewCenter.x - (indexW * sceneScale) / 2,
+    y: viewCenter.y - (indexH * sceneScale) / 2,
+    shape: { width: indexW, height: indexH },
+    fillColor: "#ffffff",
+    fillAlpha: 1,
+    strokeColor: "#000000",
+    strokeWidth: 0,
+    strokeAlpha: 0,
+    locked: false,
+    flags: {
+      [MODULE_ID]: {
+        type: "index",
+        text,
+        fontSize: 9,
+        tint: game.settings.get(MODULE_ID, "defaultNoteColor") || "#ffffff",
+        textColor: game.settings.get(MODULE_ID, "defaultInkColor") || "#000000",
+        linkedObject: `@UUID[${page.uuid}]{${page.name}}`,
+      },
+      core: { sheetClass: "investigation-board.CustomDrawingSheet" }
+    },
+    ownership: { default: 3 },
+  });
+
+  if (InvestigationBoardState.isActive && created?.[0]) {
+    setTimeout(() => {
+      const d = canvas.drawings.get(created[0].id);
+      if (d) { d.eventMode = 'auto'; d.interactiveChildren = true; }
+    }, 250);
+  }
+}
+
+/**
+ * Creates a Document Note from a text-type Journal Page.
+ * Title comes from the page name; body preserves bold/italic/alignment as PIXI.HTMLText markup.
+ * @param {JournalEntryPage} page
+ * @param {"parchment"|"oldpaper"|"whitepaper"} [background]
+ */
+export async function createDocNoteFromPage(page, background = "parchment") {
+  const scene = canvas.scene;
+  if (!scene) { ui.notifications.error("Cannot create note: No active scene."); return; }
+
+  const body = sanitizeForPixiHtml(page.text?.content || "");
+  const sceneScale = getEffectiveScale();
+  const viewCenter = canvas.stage.pivot;
+
+  const created = await collaborativeCreate({
+    type: "r",
+    author: game.user.id,
+    x: viewCenter.x - (595 * sceneScale) / 2,
+    y: viewCenter.y - (842 * sceneScale) / 2,
+    shape: { width: 595, height: 842 },
+    fillColor: "#000000",
+    fillAlpha: 1,
+    strokeColor: "#000000",
+    strokeWidth: 0,
+    strokeAlpha: 0,
+    locked: false,
+    flags: {
+      [MODULE_ID]: {
+        type: "document",
+        title: page.name || "",
+        text: body,
+        docBackground: background,
+        textColor: game.settings.get(MODULE_ID, "defaultInkColor") || "#000000",
+        fontSize: 14,
+        linkedObject: `@UUID[${page.uuid}]{${page.name}}`,
+      },
+      core: { sheetClass: "investigation-board.CustomDrawingSheet" }
+    },
+    ownership: { default: 3 },
+  }, { skipAutoOpen: false });
+
+  if (InvestigationBoardState.isActive && created?.[0]) {
+    setTimeout(() => {
+      const d = canvas.drawings.get(created[0].id);
+      if (d) { d.eventMode = 'auto'; d.interactiveChildren = true; }
     }, 250);
   }
 }

@@ -1,8 +1,9 @@
-import { MODULE_ID, PIN_COLORS, SOCKET_NAME } from "../config.js";
+import { MODULE_ID, SOCKET_NAME, VIDEO_EXTENSIONS, DOC_BACKGROUNDS } from "../config.js";
 import { InvestigationBoardState } from "../state.js";
-import { collaborativeUpdate, collaborativeDelete, socket, activeGlobalSounds } from "../utils/socket-handler.js";
-import { getDynamicCharacterLimits, truncateText, getEffectiveScale } from "../utils/helpers.js";
+import { collaborativeUpdate, collaborativeDelete, socket, activeGlobalSounds, activeVideoBroadcasts } from "../utils/socket-handler.js";
+import { truncateText, resolvePinImage, getAvailablePinFiles } from "../utils/helpers.js";
 import { NotePreviewer } from "../apps/note-previewer.js";
+import { VideoPlayer } from "../apps/video-player.js";
 import { drawAllConnectionLines } from "./connection-manager.js";
 
 // v13 namespaced imports
@@ -15,6 +16,8 @@ export class CustomDrawing extends Drawing {
     this.bgShadow = null;
     this.pinSprite = null;
     this.noteText = null;
+    this.docTitleText = null;
+    this.docBodyText = null;
     this.photoImageSprite = null;
     this.photoMask = null;
   }
@@ -116,55 +119,66 @@ export class CustomDrawing extends Drawing {
   }
 
   /**
-   * Override _onHandleDrag to enforce aspect ratio for handout notes during resizing.
-   * Also prevents resizing entirely for non-handout notes.
+   * Override _refreshState to hide selection handles for all non-handout IB notes.
+   * In v14, Drawing uses DrawingShapeControls (this.controls) for selection/resize handles.
+   * _refreshFrame() was deprecated in v14 and no longer called automatically.
    */
-  _onHandleDrag(event) {
+  _refreshState() {
+    super._refreshState();
     const noteData = this.document.flags?.[MODULE_ID];
-    if (!noteData?.type) return super._onHandleDrag(event);
+    if (!noteData?.type) return;
 
-    // Only handouts are allowed to be resized
-    if (noteData.type !== "handout") {
-      return; 
+    // Handout keeps full controls — leave Foundry's defaults untouched.
+    if (noteData.type === "handout") return;
+
+    // Pin notes never show a bounding box regardless of settings.
+    if (noteData.type === "pin") {
+      if (this.controls) this.controls.visible = false;
+      return;
     }
 
-    // Force aspect ratio preservation for handouts by simulating the shift key
-    event.interactionData.shiftKey = true;
-    return super._onHandleDrag(event);
+    if (!this.controls) return;
+
+    const showControls = game.settings.get(MODULE_ID, "showSelectionControls");
+    if (!showControls) {
+      // Default behaviour: no bounding box or handles for IB notes
+      this.controls.visible = false;
+      return;
+    }
+
+    // Let Foundry's super manage controls.visible (hover/selected state).
+    // Per-handle filtering is enforced by the patch in draw() so it survives
+    // any subsequent controls._refresh() calls triggered by position/rotation changes.
+    this._applyHandleVisibility();
   }
 
   /**
-   * Override _refreshFrame to hide selection frame and resize handles for all notes except handouts.
+   * Hides scale and translate handles, leaving only the rotate handle visible.
+   * Also hides scale handles when allowScaling is off.
+   * Called from _refreshState and from the patched controls._refresh.
    */
-  _refreshFrame() {
-    const noteData = this.document.flags?.[MODULE_ID];
-    const isIBNote = !!noteData?.type;
-    const isHandout = noteData?.type === "handout";
-
-    // Call super first to let Foundry do its thing
-    super._refreshFrame();
-
-    // If it's one of our notes but NOT a handout, we hide the selection frame and handles
-    if (isIBNote && !isHandout) {
-      if (this.frame) {
-        this.frame.visible = false;
-        this.frame.renderable = false;
-        if (this.frame.handleContainer) {
-          this.frame.handleContainer.visible = false;
-          this.frame.handleContainer.renderable = false;
-        }
-      }
-    } 
-    // For handouts, we want to ensure handles are visible when controlled
-    else if (isHandout && this.frame && this.controlled) {
-      this.frame.visible = true;
-      this.frame.renderable = true;
-      if (this.frame.handleContainer) {
-        this.frame.handleContainer.visible = true;
-        this.frame.handleContainer.renderable = true;
+  _applyHandleVisibility() {
+    if (!this.controls?.handles) return;
+    const allowScaling = game.settings.get(MODULE_ID, "allowScaling");
+    for (const handle of this.controls.handles.children) {
+      switch (handle.name) {
+        case "rotate":
+          handle.visible = true;
+          handle.cursor = 'pointer';
+          break;
+        case "scale":
+        case "scaleX":
+        case "scaleY":
+          handle.visible = allowScaling;
+          handle.cursor = 'pointer';
+          break;
+        default: // "translate" and anything else
+          handle.visible = false;
+          break;
       }
     }
   }
+
 
   /**
    * Override activateListeners to ensure the MouseInteractionManager is configured
@@ -187,8 +201,12 @@ export class CustomDrawing extends Drawing {
     const noteData = this.document.flags?.[MODULE_ID];
     if (noteData?.type === "pin") return;
     if (noteData?.type) {
-      // Open the detail view previewer
-      new NotePreviewer(this.document).render(true);
+      // Route video media notes to VideoPlayer, everything else to NotePreviewer
+      if (noteData.type === "media" && noteData.videoPath) {
+        new VideoPlayer(this.document).render(true);
+      } else {
+        new NotePreviewer(this.document).render(true);
+      }
       return;
     }
     return super._onClickLeft2(event);
@@ -226,12 +244,12 @@ export class CustomDrawing extends Drawing {
     const noteData = this.document.flags?.[MODULE_ID];
     if (!noteData) return;
 
+    // Extract screen coordinates — handle both Foundry-wrapped events (interactionData.originalEvent)
+    // and raw PIXI FederatedPointerEvents from pin sprite listeners (nativeEvent).
     const data = event.data || event.interactionData;
-    const originalEvent = data.originalEvent;
-    
-    // Positions
-    const x = originalEvent.clientX;
-    const y = originalEvent.clientY;
+    const originalEvent = data?.originalEvent ?? event.nativeEvent ?? event;
+    const x = originalEvent.clientX ?? 0;
+    const y = originalEvent.clientY ?? 0;
 
     // Remove any existing custom context menus
     document.querySelectorAll('.ib-context-menu').forEach(el => el.remove());
@@ -244,22 +262,22 @@ export class CustomDrawing extends Drawing {
     menu.style.zIndex = '10000';
 
     if (noteData.type === "pin") {
-       const editOption = document.createElement('div');
-       editOption.innerHTML = '<i class="fas fa-edit"></i> Edit';
-       editOption.classList.add('ib-context-menu-item');
-       editOption.onclick = (e) => {
-         e.stopPropagation();
-         this.document.sheet.render(true);
-         menu.remove();
-       };
+       // Edit option — kept for potential future use
+       // const editOption = document.createElement('div');
+       // editOption.innerHTML = '<i class="fas fa-edit"></i> Edit';
+       // editOption.classList.add('ib-context-menu-item');
+       // editOption.onclick = (e) => {
+       //   e.stopPropagation();
+       //   this.document.sheet.render(true);
+       //   menu.remove();
+       // };
 
        if (noteData.linkedObject) {
-         const linkMatch = noteData.linkedObject.match(/\[([^\]]+)\](?:\{([^\}]+)\})?/);
+         const linkMatch = noteData.linkedObject.match(/\[([^\]]+)\]/);
          if (linkMatch) {
            const uuid = linkMatch[1];
-           const name = linkMatch[2] || "Linked Object";
            const linkOption = document.createElement('div');
-           linkOption.innerHTML = `<i class="fas fa-link"></i> Open: ${name}`;
+           linkOption.innerHTML = `<i class="fas fa-link"></i> Open`;
            linkOption.classList.add('ib-context-menu-item');
            linkOption.onclick = async (e) => {
              e.stopPropagation();
@@ -282,6 +300,26 @@ export class CustomDrawing extends Drawing {
            menu.appendChild(linkOption);
          }
        }
+
+       // Convert-to options
+       const convertTypes = [
+         { id: 'sticky',  label: 'Sticky Note',  icon: 'fas fa-sticky-note' },
+         { id: 'photo',   label: 'Photo Note',   icon: 'fa-solid fa-camera-polaroid' },
+         { id: 'index',   label: 'Index Card',   icon: 'fa-regular fa-subtitles' },
+         { id: 'handout', label: 'Handout',      icon: 'fas fa-image' },
+         { id: 'media',   label: 'Media Note',   icon: 'fas fa-cassette-tape' },
+       ];
+       convertTypes.forEach(ct => {
+         const convertOption = document.createElement('div');
+         convertOption.innerHTML = `<i class="${ct.icon}"></i> Convert to ${ct.label}`;
+         convertOption.classList.add('ib-context-menu-item');
+         convertOption.onclick = (e) => {
+           e.stopPropagation();
+           menu.remove();
+           this._convertToNoteType(ct.id);
+         };
+         menu.appendChild(convertOption);
+       });
 
        const removeConnectionsOption = document.createElement('div');
        removeConnectionsOption.innerHTML = '<i class="fas fa-cut"></i> Remove Connections';
@@ -330,23 +368,6 @@ export class CustomDrawing extends Drawing {
          }
        };
 
-       menu.appendChild(editOption);
-
-       if (game.user.isGM) {
-         const isHidden = this.document.hidden;
-         const toggleVisOption = document.createElement('div');
-         toggleVisOption.innerHTML = isHidden
-           ? '<i class="fas fa-eye"></i> Reveal to Players'
-           : '<i class="fas fa-eye-slash"></i> Hide from Players';
-         toggleVisOption.classList.add('ib-context-menu-item');
-         toggleVisOption.onclick = async (e) => {
-           e.stopPropagation();
-           menu.remove();
-           await this.document.update({ hidden: !isHidden });
-         };
-         menu.appendChild(toggleVisOption);
-       }
-
        menu.appendChild(removeConnectionsOption);
        menu.appendChild(deleteOption);
        document.body.appendChild(menu);
@@ -364,8 +385,11 @@ export class CustomDrawing extends Drawing {
       menu.remove();
     };
 
-    // Media-specific options
-    if (noteData.type === "media" && noteData.audioPath) {
+    const isVideoMedia = noteData.type === "media" && !!noteData.videoPath;
+    const isAudioMedia = noteData.type === "media" && !!noteData.audioPath;
+
+    // Audio-media-specific options (existing cassette notes)
+    if (isAudioMedia) {
       const appId = `note-preview-${this.document.id}`;
       const app = foundry.applications.instances.get(appId);
       const audioEl = app?.element?.querySelector('.local-audio-player');
@@ -374,23 +398,20 @@ export class CustomDrawing extends Drawing {
       const isPlaying = isAppPlaying || isLegacyPlaying;
 
       const playMeOption = document.createElement('div');
-      
       if (isPlaying) {
         playMeOption.innerHTML = '<i class="fas fa-stop"></i> Stop for Me';
         playMeOption.onclick = (e) => {
           e.stopPropagation();
-          // Stop App Audio
           if (audioEl) audioEl.pause();
-          // Stop Legacy Audio
-          const sounds = Array.from(game.audio.playing.values()).filter(s => s.src === noteData.audioPath);
-          sounds.forEach(s => s.stop());
+          Array.from(game.audio.playing.values())
+            .filter(s => s.src === noteData.audioPath)
+            .forEach(s => s.stop());
           menu.remove();
         };
       } else {
         playMeOption.innerHTML = '<i class="fas fa-volume-up"></i> Play for Me';
         playMeOption.onclick = (e) => {
           e.stopPropagation();
-          // Open Preview with autoplay
           new NotePreviewer(this.document).render(true, { autoplay: true });
           menu.remove();
         };
@@ -401,32 +422,18 @@ export class CustomDrawing extends Drawing {
       if (game.user.isGM) {
         const isGlobalActive = activeGlobalSounds.has(noteData.audioPath) && activeGlobalSounds.get(noteData.audioPath).playing;
         const playAllOption = document.createElement('div');
-        
         if (isGlobalActive) {
           playAllOption.innerHTML = '<i class="fas fa-stop"></i> Stop for All';
           playAllOption.onclick = (e) => {
             e.stopPropagation();
-            // Try to use App control first
             if (app) {
-               const globalBtn = app.element.querySelector('.global-toggle');
-               if (globalBtn && globalBtn.classList.contains('active')) {
-                 globalBtn.click();
-                 menu.remove();
-                 return;
-               }
+              const globalBtn = app.element.querySelector('.global-toggle');
+              if (globalBtn?.classList.contains('active')) { globalBtn.click(); menu.remove(); return; }
             }
-
-            // Fallback to manual socket stop
             if (socket) {
-              socket.emit(SOCKET_NAME, {
-                action: "stopAudio",
-                audioPath: noteData.audioPath
-              });
+              socket.emit(SOCKET_NAME, { action: "stopAudio", audioPath: noteData.audioPath });
               const sound = activeGlobalSounds.get(noteData.audioPath);
-              if (sound) {
-                sound.stop();
-                activeGlobalSounds.delete(noteData.audioPath);
-              }
+              if (sound) { sound.stop(); activeGlobalSounds.delete(noteData.audioPath); }
             }
             menu.remove();
           };
@@ -434,7 +441,6 @@ export class CustomDrawing extends Drawing {
           playAllOption.innerHTML = '<i class="fas fa-broadcast-tower"></i> Play for All';
           playAllOption.onclick = (e) => {
             e.stopPropagation();
-            // Unified: Open Preview and broadcast
             new NotePreviewer(this.document).render(true, { autobroadcast: true });
             menu.remove();
           };
@@ -444,12 +450,56 @@ export class CustomDrawing extends Drawing {
       }
     }
 
+    // Video-media-specific options
+    if (isVideoMedia) {
+      const videoPlayOption = document.createElement('div');
+      videoPlayOption.innerHTML = '<i class="fas fa-play"></i> Play Video';
+      videoPlayOption.classList.add('ib-context-menu-item');
+      videoPlayOption.onclick = (e) => {
+        e.stopPropagation();
+        new VideoPlayer(this.document).render(true);
+        menu.remove();
+      };
+      menu.appendChild(videoPlayOption);
+
+      if (game.user.isGM) {
+        const isBroadcasting = activeVideoBroadcasts.has(this.document.id);
+        const broadcastOption = document.createElement('div');
+        if (isBroadcasting) {
+          broadcastOption.innerHTML = '<i class="fas fa-stop"></i> Stop Broadcast';
+          broadcastOption.onclick = (e) => {
+            e.stopPropagation();
+            const playerAppId = `video-player-${this.document.id}`;
+            const playerApp = foundry.applications.instances.get(playerAppId);
+            if (playerApp) playerApp._stopBroadcast();
+            else if (socket) socket.emit(SOCKET_NAME, { action: "stopVideoBroadcast", drawingId: this.document.id });
+            menu.remove();
+          };
+        } else {
+          broadcastOption.innerHTML = '<i class="fas fa-broadcast-tower"></i> Open for All';
+          broadcastOption.onclick = (e) => {
+            e.stopPropagation();
+            const playerApp = new VideoPlayer(this.document);
+            playerApp.render(true);
+            setTimeout(() => playerApp._startBroadcast(), 300);
+            menu.remove();
+          };
+        }
+        broadcastOption.classList.add('ib-context-menu-item');
+        menu.appendChild(broadcastOption);
+      }
+    }
+
     const viewOption = document.createElement('div');
     viewOption.innerHTML = '<i class="fas fa-magnifying-glass"></i> View';
     viewOption.classList.add('ib-context-menu-item');
     viewOption.onclick = (e) => {
       e.stopPropagation();
-      new NotePreviewer(this.document).render(true);
+      if (isVideoMedia) {
+        new VideoPlayer(this.document).render(true);
+      } else {
+        new NotePreviewer(this.document).render(true);
+      }
       menu.remove();
     };
 
@@ -516,13 +566,12 @@ export class CustomDrawing extends Drawing {
 
     // Linked Object Option
     if (noteData.linkedObject) {
-      const linkMatch = noteData.linkedObject.match(/\[([^\]]+)\](?:\{([^\}]+)\})?/);
+      const linkMatch = noteData.linkedObject.match(/\[([^\]]+)\]/);
       if (linkMatch) {
         const uuid = linkMatch[1];
-        const name = linkMatch[2] || "Linked Object";
-        
+
         const linkOption = document.createElement('div');
-        linkOption.innerHTML = `<i class="fas fa-link"></i> Open: ${name}`;
+        linkOption.innerHTML = `<i class="fas fa-link"></i> Open`;
         linkOption.classList.add('ib-context-menu-item');
         linkOption.onclick = async (e) => {
           e.stopPropagation();
@@ -590,15 +639,26 @@ export class CustomDrawing extends Drawing {
   async draw() {
     await super.draw();
     // Only apply IB-specific rendering to IB notes. Regular drawings must not
-    // have their scale or PIXI transform overridden by this module.
-    if (!this.document.flags[MODULE_ID]?.type) {
-      this.scale.set(1, 1); // Clear any leftover scale from old code
-      return this;
-    }
+    // have their rendering overridden by this module.
+    if (!this.document.flags[MODULE_ID]?.type) return this;
 
     this.element?.setAttribute("data-investigation-note", "true");
-    const sceneScale = getEffectiveScale();
-    this.scale.set(sceneScale);
+
+    // Patch this.controls._refresh (created fresh each draw() by Foundry) so that
+    // our per-handle visibility is reapplied after every Foundry controls refresh.
+    // This prevents position/rotation updates from resetting handle visibility.
+    const noteType = this.document.flags[MODULE_ID]?.type;
+    if (this.controls && noteType && noteType !== "handout" && noteType !== "pin") {
+      const originalRefresh = this.controls._refresh.bind(this.controls);
+      const self = this;
+      this.controls._refresh = function() {
+        originalRefresh();
+        if (game.settings.get(MODULE_ID, "showSelectionControls")) {
+          self._applyHandleVisibility();
+        }
+      };
+    }
+
     await this._updateSprites();
     import("./connection-manager.js").then(m => {
       m.updatePins();
@@ -610,16 +670,10 @@ export class CustomDrawing extends Drawing {
   // Ensure sprites update correctly on refresh.
   async refresh() {
     await super.refresh();
-    // Only apply IB-specific rendering to IB notes. Regular drawings must not
-    // have their scale or PIXI transform overridden by this module.
-    if (!this.document.flags[MODULE_ID]?.type) {
-      this.scale.set(1, 1); // Clear any leftover scale from old code
-      return this;
-    }
+    // Only apply IB-specific rendering to IB notes.
+    if (!this.document.flags[MODULE_ID]?.type) return this;
 
     this.element?.setAttribute("data-investigation-note", "true");
-    const sceneScale = getEffectiveScale();
-    this.scale.set(sceneScale);
     await this._updateSprites();
     import("./connection-manager.js").then(m => {
       m.updatePins();
@@ -647,23 +701,92 @@ export class CustomDrawing extends Drawing {
     }
   }
 
+  /**
+   * Load (or destroy) the pin sprite for this note.
+   *
+   * The global "pinColor" setting controls visibility:
+   *   "none"   → destroy any existing sprite and bail out.
+   *   "random" → pick a random image from the pin folder on first render,
+   *              persist the choice to the note's flags so every client
+   *              shows the same pin.
+   *
+   * The per-note flag `noteData.pinColor` stores the bare filename
+   * (e.g. "redPin.webp").  resolvePinImage() prepends the configured
+   * folder at render time, so switching the folder setting instantly
+   * re-resolves every note without touching flag data.
+   *
+   * @param {object} noteData  The investigation-board flags for this drawing.
+   */
+  async _loadPinTexture(noteData) {
+    const pinSetting = game.settings.get(MODULE_ID, "pinColor");
+
+    // Global "none" OR per-note "none" — destroy sprite for this note
+    if (pinSetting === "none" || noteData.pinColor === "none") {
+      if (this.pinSprite) {
+        if (this.pinSprite.parent) this.pinSprite.parent.removeChild(this.pinSprite);
+        this.pinSprite.destroy();
+        this.pinSprite = null;
+      }
+      return;
+    }
+
+    if (!this.pinSprite || this.pinSprite.destroyed) {
+      if (this.pinSprite) this.pinSprite.destroy();
+      this.pinSprite = new PIXI.Sprite();
+    }
+
+    let pinFilename = noteData.pinColor;
+    if (!pinFilename) {
+      const files = await getAvailablePinFiles();
+      pinFilename = files[Math.floor(Math.random() * files.length)];
+      await collaborativeUpdate(this.document.id, { [`flags.${MODULE_ID}.pinColor`]: pinFilename });
+    }
+
+    const pinImage = resolvePinImage(pinFilename);
+    try {
+      const texture = await PIXI.Assets.load(pinImage);
+      if (texture && this.pinSprite && !this.pinSprite.destroyed) {
+        this.pinSprite.texture = texture;
+      }
+    } catch (err) {
+      console.error(`Investigation Board: Failed to load pin texture: ${pinImage}`, err);
+    }
+  }
+
   async _doUpdateSprites() {
+    if (!this.shape) return;
     const noteData = this.document.flags[MODULE_ID];
     if (!noteData) return;
+
+    // Destroy document-only sprites when the note is no longer a document note
+    if (noteData.type !== "document") {
+      if (this.docTitleText && !this.docTitleText.destroyed) {
+        this.shape.removeChild(this.docTitleText);
+        this.docTitleText.destroy();
+        this.docTitleText = null;
+      }
+      if (this.docBodyText && !this.docBodyText.destroyed) {
+        this.shape.removeChild(this.docBodyText);
+        this.docBodyText.destroy();
+        this.docBodyText = null;
+      }
+    }
 
     const isPhoto = noteData.type === "photo";
     const isIndex = noteData.type === "index";
     const isHandout = noteData.type === "handout";
     const isMedia = noteData.type === "media";
 
-    // MEDIA NOTE LAYOUT (Cassette tape)
+    // MEDIA NOTE LAYOUT (Cassette tape or VHS tape)
     if (isMedia) {
+      const isVideo = isVideoMedia(noteData);
       const drawingWidth = this.document.shape.width || 400;
-      const drawingHeight = this.document.shape.height || Math.round(drawingWidth * 0.74);
+      // Audio cassette ratio: 0.74 (470×350) — VHS tape ratio: 0.571 (875×500)
+      const drawingHeight = this.document.shape.height || Math.round(drawingWidth * (isVideo ? 0.571 : 0.74));
 
       // No background sprite for media (we use photoImageSprite for the cassette)
       if (this.bgSprite) {
-        this.removeChild(this.bgSprite);
+        this.shape.removeChild(this.bgSprite);
         this.bgSprite.destroy();
         this.bgSprite = null;
       }
@@ -671,16 +794,18 @@ export class CustomDrawing extends Drawing {
       if (!this.photoImageSprite || !this.photoImageSprite.parent) {
         if (this.photoImageSprite) this.photoImageSprite.destroy();
         this.photoImageSprite = new PIXI.Sprite();
-        this.addChild(this.photoImageSprite);
+        this.shape.addChild(this.photoImageSprite);
       }
 
       // --- Cassette Shadow ---
       if (!this.bgShadow) {
         this.bgShadow = new PIXI.Sprite();
-        this.addChildAt(this.bgShadow, 0); // Put it behind everything
+        this.shape.addChildAt(this.bgShadow, 0); // Put it behind everything
       }
 
-      const imagePath = noteData.image || "modules/investigation-board/assets/cassette1.webp";
+      const fallbackImage = isVideo ? "modules/investigation-board/assets/video1.webp"
+                                     : "modules/investigation-board/assets/cassette1.webp";
+      const imagePath = noteData.image || fallbackImage;
       try {
         const texture = await PIXI.Assets.load(imagePath);
         if (texture) {
@@ -711,43 +836,8 @@ export class CustomDrawing extends Drawing {
         console.error(`Failed to load media image: ${imagePath}`, err);
       }
 
-      // --- Pin Sprite ---
-      const pinSetting = game.settings.get(MODULE_ID, "pinColor");
-      if (pinSetting === "none") {
-        if (this.pinSprite) {
-          this.removeChild(this.pinSprite);
-          this.pinSprite.destroy();
-          this.pinSprite = null;
-        }
-      } else {
-        if (!this.pinSprite || !this.pinSprite.parent) {
-          if (this.pinSprite) this.pinSprite.destroy();
-          this.pinSprite = new PIXI.Sprite();
-          this.addChild(this.pinSprite);
-        }
-
-        let pinColor = noteData.pinColor;
-        if (!pinColor) {
-          pinColor = (pinSetting === "random")
-            ? PIN_COLORS[Math.floor(Math.random() * PIN_COLORS.length)]
-            : `${pinSetting}Pin.webp`;
-          await collaborativeUpdate(this.document.id, { [`flags.${MODULE_ID}.pinColor`]: pinColor });
-        }
-
-        const pinImage = `modules/investigation-board/assets/${pinColor}`;
-        try {
-          const texture = await PIXI.Assets.load(pinImage);
-          if (texture && this.pinSprite && this.pinSprite.parent) {
-            this.pinSprite.texture = texture;
-            this.pinSprite.width = 40;
-            this.pinSprite.height = 40;
-            // Center horizontally based on the actual drawing width
-            this.pinSprite.position.set(drawingWidth / 2 - 20, 3);
-          }
-        } catch (err) {
-          console.error(`Failed to load pin texture: ${pinImage}`, err);
-        }
-      }
+      // --- Pin Sprite (managed by updatePins, just load texture here) ---
+      await this._loadPinTexture(noteData);
 
       // Hide text for media notes on canvas
       if (this.noteText) this.noteText.visible = false;
@@ -756,56 +846,152 @@ export class CustomDrawing extends Drawing {
       return; // Early exit for media notes
     }
 
+    // DOCUMENT NOTE LAYOUT (A4-style parchment/paper with title + body text)
+    if (noteData.type === "document") {
+      const docW = this.document.shape.width || 595;
+      const docH = this.document.shape.height || 842;
+      const MARGIN = Math.round(docW * 0.105);
+
+      // Destroy photo sprite if present from a previous type
+      if (this.photoImageSprite) {
+        if (this.photoImageSprite.parent) this.shape.removeChild(this.photoImageSprite);
+        this.photoImageSprite.destroy();
+        this.photoImageSprite = null;
+      }
+      if (this.photoMask) this.photoMask.visible = false;
+
+      // Background + shadow
+      const bgKey = noteData.docBackground || "parchment";
+      const bgImage = (DOC_BACKGROUNDS[bgKey] || DOC_BACKGROUNDS.parchment).path;
+
+      if (!this.bgSprite) {
+        this.bgSprite = new PIXI.Sprite();
+        this.shape.addChild(this.bgSprite);
+      }
+      if (!this.bgShadow) {
+        this.bgShadow = new PIXI.Sprite();
+        this.shape.addChildAt(this.bgShadow, 0);
+      }
+
+      try {
+        const texture = await PIXI.Assets.load(bgImage);
+        if (texture) {
+          if (this.bgShadow && !this.bgShadow.destroyed) {
+            this.bgShadow.texture = texture;
+            this.bgShadow.width = docW;
+            this.bgShadow.height = docH;
+            try { this.bgShadow.tint = 0x000000; } catch(e) {}
+            this.bgShadow.alpha = 0.35;
+            this.bgShadow.position.set(8, 8);
+            this.bgShadow.filters = [new PIXI.BlurFilter(4)];
+          }
+          if (this.bgSprite && !this.bgSprite.destroyed) {
+            this.bgSprite.texture = texture;
+            this.bgSprite.width = docW;
+            this.bgSprite.height = docH;
+            this.bgSprite.tint = 0xFFFFFF;
+          }
+        }
+      } catch(err) {
+        console.error(`Investigation Board: Failed to load document background: ${bgImage}`, err);
+      }
+
+      // Pin sprite
+      await this._loadPinTexture(noteData);
+
+      // Text setup
+      const font = noteData.font || game.settings.get(MODULE_ID, "font");
+      const textColor = noteData.textColor || "#000000";
+      const titleFontSize = Math.round((docW / 595) * 28);
+      const bodyFontSize = Math.round((docW / 595) * Math.max(8, noteData.fontSize || 14));
+      const titleAreaHeight = titleFontSize * 3; // space reserved for the title zone
+
+      // Title
+      const titleStr = noteData.title || "";
+      const titleStyle = new PIXI.TextStyle({
+        fontFamily: font,
+        fontSize: titleFontSize,
+        fill: textColor,
+        wordWrap: true,
+        wordWrapWidth: docW - MARGIN * 2,
+        align: "center",
+      });
+      if (!this.docTitleText || this.docTitleText.destroyed) {
+        this.docTitleText = new PIXI.Text(titleStr, titleStyle);
+        this.docTitleText.anchor.set(0.5, 0);
+        this.shape.addChild(this.docTitleText);
+      } else {
+        this.docTitleText.style = titleStyle;
+        this.docTitleText.text = titleStr;
+      }
+      this.docTitleText.anchor.set(0.5, 0);
+      this.docTitleText.visible = !!titleStr;
+      this.docTitleText.position.set(docW / 2, MARGIN);
+
+      // Body (HTMLText so bold/italic/alignment from journal pages are preserved)
+      const bodyStr = noteData.text || "";
+      // HTMLTextStyle (not TextStyle) sets the SVG foreignObject width so <p> blocks wrap.
+      // tagStyles locks the selected font on every inline tag — without this, <b> falls
+      // back to the browser default bold font instead of inheriting the note's font.
+      const HTMLTextStyle = PIXI.HTMLTextStyle ?? PIXI.TextStyle;
+      const tagFont = { fontFamily: font };
+      const bodyStyle = new HTMLTextStyle({
+        fontFamily: font,
+        fontSize: bodyFontSize,
+        fill: textColor,
+        wordWrap: true,
+        wordWrapWidth: docW - MARGIN * 2,
+        align: "left",
+        tagStyles: {
+          b:      { ...tagFont, fontWeight: 'bold' },
+          strong: { ...tagFont, fontWeight: 'bold' },
+          i:      { ...tagFont, fontStyle: 'italic' },
+          em:     { ...tagFont, fontStyle: 'italic' },
+          u:      tagFont,
+          s:      tagFont,
+          strike: tagFont,
+          span:   tagFont,
+          p:      tagFont,
+        },
+      });
+      if (!this.docBodyText || this.docBodyText.destroyed) {
+        this.docBodyText = new PIXI.HTMLText(bodyStr, bodyStyle);
+        this.docBodyText.anchor.set(0, 0);
+        this.shape.addChild(this.docBodyText);
+      } else {
+        this.docBodyText.style = bodyStyle;
+        this.docBodyText.text = bodyStr;
+      }
+      this.docBodyText.anchor.set(0, 0);
+      this.docBodyText.visible = true;
+      this.docBodyText.position.set(MARGIN, MARGIN + (titleStr ? titleAreaHeight + 20 : 0));
+
+      if (this.futuristicText) this.futuristicText.visible = false;
+
+      return; // Early exit for document notes
+    }
+
     // PIN ONLY LAYOUT
     if (noteData.type === "pin") {
-      const width = this.document.shape.width || 40;
-      const height = this.document.shape.height || 40;
-
       // No background for pin-only
       if (this.bgSprite) {
-        this.removeChild(this.bgSprite);
+        this.shape.removeChild(this.bgSprite);
         this.bgSprite.destroy();
         this.bgSprite = null;
       }
       if (this.bgShadow) {
-        this.removeChild(this.bgShadow);
+        this.shape.removeChild(this.bgShadow);
         this.bgShadow.destroy();
         this.bgShadow = null;
       }
       if (this.photoImageSprite) {
-        this.removeChild(this.photoImageSprite);
+        this.shape.removeChild(this.photoImageSprite);
         this.photoImageSprite.destroy();
         this.photoImageSprite = null;
       }
 
-      // --- Pin Sprite ---
-      const pinSetting = game.settings.get(MODULE_ID, "pinColor");
-      if (!this.pinSprite || !this.pinSprite.parent) {
-        if (this.pinSprite) this.pinSprite.destroy();
-        this.pinSprite = new PIXI.Sprite();
-        this.addChild(this.pinSprite);
-      }
-
-      let pinColor = noteData.pinColor;
-      if (!pinColor) {
-        pinColor = (pinSetting === "random")
-          ? PIN_COLORS[Math.floor(Math.random() * PIN_COLORS.length)]
-          : (pinSetting === "none" ? "redPin.webp" : `${pinSetting}Pin.webp`);
-        await collaborativeUpdate(this.document.id, { [`flags.${MODULE_ID}.pinColor`]: pinColor });
-      }
-
-      const pinImage = `modules/investigation-board/assets/${pinColor}`;
-      try {
-        const texture = await PIXI.Assets.load(pinImage);
-        if (texture && this.pinSprite && this.pinSprite.parent) {
-          this.pinSprite.texture = texture;
-          this.pinSprite.width = width;
-          this.pinSprite.height = height;
-          this.pinSprite.position.set(0, 0);
-        }
-      } catch (err) {
-        console.error(`Failed to load pin texture: ${pinImage}`, err);
-      }
+      // --- Pin Sprite (managed by updatePins, just load texture here) ---
+      await this._loadPinTexture(noteData);
 
       // Hide text
       if (this.noteText) this.noteText.visible = false;
@@ -821,7 +1007,7 @@ export class CustomDrawing extends Drawing {
 
       // No background sprite for handouts (transparent)
       if (this.bgSprite) {
-        this.removeChild(this.bgSprite);
+        this.shape.removeChild(this.bgSprite);
         this.bgSprite.destroy();
         this.bgSprite = null;
       }
@@ -835,7 +1021,7 @@ export class CustomDrawing extends Drawing {
           this.photoImageSprite = null;
         }
         this.photoImageSprite = new PIXI.Sprite();
-        this.addChild(this.photoImageSprite);
+        this.shape.addChild(this.photoImageSprite);
       }
 
       const imagePath = noteData.image || "modules/investigation-board/assets/newhandout.webp";
@@ -868,10 +1054,11 @@ export class CustomDrawing extends Drawing {
           this.photoImageSprite.mask = null;
           if (this.photoMask) this.photoMask.visible = false;
 
-          // Ensure sprite is visible and has correct properties
-          this.photoImageSprite.visible = true;
+          // Respect document.hidden — players never see it, GM gets dimmed via parent alpha (_getTargetAlpha → 0.4)
+          const hiddenForPlayer = this.document.hidden && !game.user.isGM;
+          this.photoImageSprite.visible = !hiddenForPlayer;
           this.photoImageSprite.alpha = 1;
-          this.photoImageSprite.renderable = true;
+          this.photoImageSprite.renderable = !hiddenForPlayer;
         }
       } catch (err) {
         console.error(`Failed to load handout image: ${imagePath}`, err);
@@ -880,94 +1067,32 @@ export class CustomDrawing extends Drawing {
         }
       }
 
-      // --- Pin Sprite ---
-      const pinSetting = game.settings.get(MODULE_ID, "pinColor");
-      if (pinSetting === "none") {
-        if (this.pinSprite) {
-          this.removeChild(this.pinSprite);
-          this.pinSprite.destroy();
-          this.pinSprite = null;
-        }
-      } else {
-        // Check if sprite exists and has a valid parent, recreate if orphaned
-        if (!this.pinSprite || !this.pinSprite.parent) {
-          // Destroy old sprite if it exists
-          if (this.pinSprite) {
-            this.pinSprite.destroy();
-          }
-          this.pinSprite = new PIXI.Sprite();
-          this.addChild(this.pinSprite);
-        }
-
-        let pinColor = noteData.pinColor;
-        if (!pinColor) {
-          pinColor = (pinSetting === "random")
-            ? PIN_COLORS[Math.floor(Math.random() * PIN_COLORS.length)]
-            : `${pinSetting}Pin.webp`;
-          // Use collaborative update to save pin color (works for all users)
-          await collaborativeUpdate(this.document.id, { [`flags.${MODULE_ID}.pinColor`]: pinColor });
-        }
-
-        const pinImage = `modules/investigation-board/assets/${pinColor}`;
-        try {
-          const texture = await PIXI.Assets.load(pinImage);
-          if (texture && this.pinSprite && this.pinSprite.parent) {
-            this.pinSprite.texture = texture;
-            this.pinSprite.width = 40;
-            this.pinSprite.height = 40;
-            // Position at 5% from top, centered horizontally
-            this.pinSprite.position.set(
-              drawingWidth / 2 - 20,
-              drawingHeight * 0.05
-            );
-          }
-        } catch (err) {
-          console.error(`Failed to load pin texture: ${pinImage}`, err);
-          if (this.pinSprite) {
-            this.pinSprite.texture = PIXI.Texture.EMPTY;
-          }
-        }
-      }
+      // --- Pin Sprite (managed by updatePins, just load texture here) ---
+      await this._loadPinTexture(noteData);
 
       // Hide text sprites (handouts don't have text)
-      if (this.noteText) {
-        this.noteText.visible = false;
-      }
-      if (this.futuristicText) {
-        this.futuristicText.visible = false;
-      }
-
-      // Ensure the drawing itself is visible for handouts
-      this.visible = true;
-      this.alpha = 1;
-      this.renderable = true;
-
-      // Force PIXI render update by multiple methods
-      this.transform.updateTransform(this.parent.transform);
-
-      // Mark all children as needing update
-      if (this.photoImageSprite) {
-        this.photoImageSprite.updateTransform();
-      }
-      if (this.pinSprite) {
-        this.pinSprite.updateTransform();
-      }
+      if (this.noteText) this.noteText.visible = false;
+      if (this.futuristicText) this.futuristicText.visible = false;
 
       return; // Early exit for handout notes
     }
     
     // STANDARD LAYOUT (Modern photo notes, sticky, index, etc.)
-    const width = isPhoto
-      ? game.settings.get(MODULE_ID, "photoNoteWidth")
-      : isIndex
-        ? game.settings.get(MODULE_ID, "indexNoteWidth") || 600
-        : game.settings.get(MODULE_ID, "stickyNoteWidth");
-    
-    const height = isPhoto
-      ? Math.round(width / (225 / 290))
-      : isIndex
-        ? Math.round(width / (600 / 400))
-        : width;
+    // Use document shape dimensions as the authoritative size — they match the settings
+    // at creation time and correctly reflect any subsequent scaling by the user.
+    const width = this.document.shape.width
+      || (isPhoto
+        ? game.settings.get(MODULE_ID, "photoNoteWidth")
+        : isIndex
+          ? game.settings.get(MODULE_ID, "indexNoteWidth") || 600
+          : game.settings.get(MODULE_ID, "stickyNoteWidth"));
+
+    const height = this.document.shape.height
+      || (isPhoto
+        ? Math.round(width / (225 / 290))
+        : isIndex
+          ? Math.round(width / (600 / 400))
+          : width);
     
     // Background Image: Always use modern mode assets
     const bgImage = isPhoto ? "modules/investigation-board/assets/photoFrame.webp" 
@@ -976,13 +1101,13 @@ export class CustomDrawing extends Drawing {
     
     if (!this.bgSprite) {
       this.bgSprite = new PIXI.Sprite();
-      this.addChild(this.bgSprite);
+      this.shape.addChild(this.bgSprite);
     }
-    
+
     // --- Background Shadow ---
     if (!this.bgShadow) {
       this.bgShadow = new PIXI.Sprite();
-      this.addChildAt(this.bgShadow, 0); // Behind the background
+      this.shape.addChildAt(this.bgShadow, 0); // Behind the background
     }
     
     try {
@@ -1030,7 +1155,7 @@ export class CustomDrawing extends Drawing {
       if (!this.photoImageSprite || this.photoImageSprite.destroyed) {
         if (this.photoImageSprite) this.photoImageSprite = null;
         this.photoImageSprite = new PIXI.Sprite();
-        this.addChild(this.photoImageSprite);
+        this.shape.addChild(this.photoImageSprite);
       }
       try {
         const texture = await PIXI.Assets.load(fgImage);
@@ -1073,7 +1198,7 @@ export class CustomDrawing extends Drawing {
           // Apply Mask to clip overflow
           if (!this.photoMask) {
             this.photoMask = new PIXI.Graphics();
-            this.addChild(this.photoMask);
+            this.shape.addChild(this.photoMask);
           }
           this.photoMask.clear();
           this.photoMask.beginFill(0xffffff);
@@ -1094,66 +1219,39 @@ export class CustomDrawing extends Drawing {
       if (this.photoMask) this.photoMask.visible = false;
     }
     
-    // --- Pin Handling ---
-    {
-      const pinSetting = game.settings.get(MODULE_ID, "pinColor");
-      if (pinSetting === "none") {
-        if (this.pinSprite) {
-          this.removeChild(this.pinSprite);
-          this.pinSprite.destroy();
-          this.pinSprite = null;
-        }
-      } else {
-        if (!this.pinSprite) {
-          this.pinSprite = new PIXI.Sprite();
-          this.addChild(this.pinSprite);
-        }
-        let pinColor = noteData.pinColor;
-        if (!pinColor) {
-          pinColor = (pinSetting === "random")
-            ? PIN_COLORS[Math.floor(Math.random() * PIN_COLORS.length)]
-            : `${pinSetting}Pin.webp`;
-          // Use collaborative update to save pin color (works for all users)
-          await collaborativeUpdate(this.document.id, { [`flags.${MODULE_ID}.pinColor`]: pinColor });
-        }
-        const pinImage = `modules/investigation-board/assets/${pinColor}`;
-        try {
-          const texture = await PIXI.Assets.load(pinImage);
-          if (texture && this.pinSprite) {
-            this.pinSprite.texture = texture;
-            this.pinSprite.width = 40;
-            this.pinSprite.height = 40;
-            this.pinSprite.position.set(width / 2 - 20, 3);
-          }
-        } catch (err) {
-          console.error(`Failed to load pin texture: ${pinImage}`, err);
-          if (this.pinSprite) {
-            this.pinSprite.texture = PIXI.Texture.EMPTY;
-          }
-        }
-      }
-    }
+    // --- Pin Handling (managed by updatePins, just load texture here) ---
+    await this._loadPinTexture(noteData);
 
     // Default text layout.
+    // Font size is anchored to the settings-based note width, NOT the document shape width.
+    // This means scaling the note frame (via the scale handle) gives more text area without
+    // changing the character size — the user controls size explicitly via the edit panel.
+    const settingsWidth = isPhoto
+      ? game.settings.get(MODULE_ID, "photoNoteWidth")
+      : isIndex
+        ? game.settings.get(MODULE_ID, "indexNoteWidth") || 600
+        : game.settings.get(MODULE_ID, "stickyNoteWidth");
+
     const font = noteData.font || game.settings.get(MODULE_ID, "font");
     const defaultFontSize = isIndex ? 9 : game.settings.get(MODULE_ID, "baseFontSize");
     const baseFontSize = noteData.fontSize || defaultFontSize;
     const fontBoost = font === "Caveat" ? 1.6 : 1.0;
-    const fontSize = (width / 200) * baseFontSize * fontBoost;
+    const fontSize = (settingsWidth / 200) * baseFontSize * fontBoost;
     const textStyle = new PIXI.TextStyle({
       fontFamily: font,
       fontSize: fontSize,
       fill: noteData.textColor || "#000000",
       wordWrap: true,
-      wordWrapWidth: width - 2, // Increased from -15 to give more room for italics
+      wordWrapWidth: width - 2, // Uses document shape width — scaling adds more wrap space
       align: "center",
     });
-    const truncatedText = truncateText(noteData.text || "Default Text", font, noteData.type, fontSize);
+    const truncatedText = truncateText(noteData.text || "Default Text", font, noteData.type, fontSize, width, height);
     if (!this.noteText || this.noteText.destroyed) {
       this.noteText = new PIXI.Text(truncatedText, textStyle);
       this.noteText.anchor.set(0.5);
-      this.addChild(this.noteText);
+      this.shape.addChild(this.noteText);
     } else {
+      this.noteText.anchor.set(0.5); // reset in case this sprite was previously used by a document note
       this.noteText.style = textStyle;
       this.noteText.text = truncatedText;
     }
@@ -1168,54 +1266,88 @@ export class CustomDrawing extends Drawing {
   _getPinPosition() {
     const noteData = this.document.flags[MODULE_ID];
     if (!noteData) return { x: this.document.x, y: this.document.y };
-    const sceneScale = getEffectiveScale();
 
-    // Handout notes use dynamic positioning based on drawing height
-    if (noteData.type === "handout") {
-      const width = (this.document.shape.width || 400) * sceneScale;
-      const height = (this.document.shape.height || 400) * sceneScale;
-      return {
-        x: this.document.x + width / 2,
-        y: this.document.y + (height * 0.05) + (20 * sceneScale) 
-      };
-    }
+    const noteWidth = this.document.shape.width || 200;
+    const noteHeight = this.document.shape.height || 200;
 
-    // Media notes (cassettes) center horizontally based on actual width
-    if (noteData.type === "media") {
-      const width = (this.document.shape.width || 400) * sceneScale;
-      return {
-        x: this.document.x + width / 2,
-        y: this.document.y + (23 * sceneScale)
-      };
-    }
-    
-    // Pin-only notes
     if (noteData.type === "pin") {
-      const width = (this.document.shape.width || 40) * sceneScale;
-      const height = (this.document.shape.height || 40) * sceneScale;
       return {
-        x: this.document.x + width / 2,
-        y: this.document.y + height / 2
+        x: this.document.x + noteWidth / 2,
+        y: this.document.y + noteHeight / 2
       };
     }
 
-    const isPhoto = noteData.type === "photo";
-    const isIndex = noteData.type === "index";
-
-    // Get note width based on type
-    let width;
-    if (isPhoto) {
-      width = game.settings.get(MODULE_ID, "photoNoteWidth") * sceneScale;
-    } else if (isIndex) {
-      width = (game.settings.get(MODULE_ID, "indexNoteWidth") || 600) * sceneScale;
-    } else {
-      width = game.settings.get(MODULE_ID, "stickyNoteWidth") * sceneScale;
+    if (noteData.type === "handout") {
+      return {
+        x: this.document.x + noteWidth / 2,
+        y: this.document.y + noteHeight * 0.05 + 20
+      };
     }
 
-    // Pin center is at (width/2, 23) relative to drawing position
+    // sticky, photo, index, media — pin is centered horizontally, near the top
     return {
-      x: this.document.x + width / 2,
-      y: this.document.y + (23 * sceneScale)
+      x: this.document.x + noteWidth / 2,
+      y: this.document.y + 23
     };
   }
+
+  /**
+   * Convert this pin-only note into a different note type, keeping connections and linkedObject.
+   */
+  /**
+   * Convert this pin-only note into a different note type.
+   * Deletes the pin and creates a fresh note of the target type at the same position,
+   * preserving connections and the linked object.
+   */
+  async _convertToNoteType(targetType) {
+    // Capture everything we need before the delete destroys the document
+    const existing  = this.document.flags[MODULE_ID] || {};
+    const savedX    = this.document.x;
+    const savedY    = this.document.y;
+    const savedConns = (existing.connections || []).slice();
+    const savedLink  = existing.linkedObject || "";
+    const pinId      = this.document.id;
+
+    // Collect notes with incoming connections pointing at this pin, before deleting it
+    const incomingNotes = canvas.drawings.placeables.filter(d => {
+      if (d.document.id === pinId) return false;
+      return d.document.flags[MODULE_ID]?.connections?.some(c => c.targetId === pinId);
+    });
+
+    // Delete the pin (bypass the bulk-deletion guard)
+    await collaborativeDelete(pinId);
+
+    // Create the replacement note at the same position.
+    // createNote() handles all dimensions, fill, defaults, and opens the edit sheet.
+    const { createNote } = await import("../utils/creation-utils.js");
+    const newDoc = await createNote(targetType, { x: savedX, y: savedY });
+
+    if (newDoc?.id) {
+      // Restore outgoing connections and linked object on the new note
+      const updates = {};
+      if (savedLink)         updates[`flags.${MODULE_ID}.linkedObject`] = savedLink;
+      if (savedConns.length) updates[`flags.${MODULE_ID}.connections`]  = savedConns;
+      if (Object.keys(updates).length) await collaborativeUpdate(newDoc.id, updates);
+
+      // Re-point incoming connections from the old pin ID to the new note ID
+      for (const other of incomingNotes) {
+        const conns = other.document.flags[MODULE_ID].connections.map(c =>
+          c.targetId === pinId ? { ...c, targetId: newDoc.id } : c
+        );
+        await collaborativeUpdate(other.document.id, { [`flags.${MODULE_ID}.connections`]: conns });
+      }
+    }
+  }
+}
+
+/**
+ * Returns true if the given media note flags describe a video (not audio) note.
+ * Detection is based on the videoPath field — if set, it's a video note regardless
+ * of extension. The extension check on videoPath is a belt-and-suspenders guard.
+ * @param {object} noteData  flags[MODULE_ID] from a media note
+ */
+export function isVideoMedia(noteData) {
+  if (!noteData?.videoPath) return false;
+  const ext = noteData.videoPath.split(".").pop().toLowerCase();
+  return VIDEO_EXTENSIONS.includes(ext);
 }

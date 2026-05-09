@@ -9,9 +9,10 @@
                     </div>
                     
                     {{#if (ne boardMode "futuristic")}}
-                        <div class="photo-frame-text {{fontClass}}" style="color: {{textColor}};">
-                            {{text}}
-                        </div>
+                        <div class="photo-frame-text {{fontClass}} ib-editable-text"
+                             contenteditable="true"
+                             data-field="text"
+                             style="color: {{textColor}};">{{text}}</div>
                     {{/if}}
 
                     {{#if (and (eq boardMode "futuristic") identityName)}}
@@ -65,12 +66,15 @@
                     <img src="{{backgroundPath}}" class="preview-background-img" alt="Background" />
                 {{/if}}
             {{/if}}
-            <div class="preview-text" style="font-size: {{previewFontSize}}px; color: {{textColor}};">{{text}}</div>
+            <div class="preview-text ib-editable-text"
+                 contenteditable="true"
+                 data-field="text"
+                 style="font-size: {{previewFontSize}}px; color: {{textColor}};">{{text}}</div>
         </div>
     {{/if}}
 
         
-        {{#if enrichedLinkedObject}}
+        {{#if (and canViewSensitive enrichedLinkedObject)}}
         <div class="preview-footer">
             <div class="preview-link-label">Linked Reference:</div>
             <div class="preview-link">
