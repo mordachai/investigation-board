@@ -4,23 +4,27 @@ This module is free. Wanna do a cool thing?
 
 ---
 
-## Notice: Foundry v13 development frozen. Foundry v14 upgrade on the way!
-
-What that means? Well, no new features or issues solving for the v13 version, it will stay as is at the moment with all the current capabilities.
-
-Foundry v14 migration is already done (for me only, not publishd yet ;) ). All tests seems to be working, we have some small improvements and I'm working on adding video notes, because I really want to run some adventures with the _found footage_ vibe. So stay tunned.
-
-<img width="1280" height="720" alt="image" src="https://github.com/user-attachments/assets/407120e6-8299-493b-887d-d1478d60d91e" />
+#### Note: If you're looking for a version that works in v13 this is the one: [IB-4.10.1](https://github.com/mordachai/investigation-board/releases/download/v4.10.1/module.json) (Last Foundry v13 working version)
 
 ---
 
 # Investigation Board
 
-![Foundry v13](https://img.shields.io/badge/foundry-v13-green?style=for-the-badge) ![Github All Releases](https://img.shields.io/github/downloads/mordachai/investigation-board/total.svg?style=for-the-badge) ![GitHub Release](https://img.shields.io/github/v/release/mordachai/investigation-board?display_name=tag&style=for-the-badge&label=Current%20version)
+![Foundry v14](https://img.shields.io/badge/foundry-v14-blue?style=for-the-badge) ![Github All Releases](https://img.shields.io/github/downloads/mordachai/investigation-board/total.svg?style=for-the-badge) ![GitHub Release](https://img.shields.io/github/v/release/mordachai/investigation-board?display_name=tag&style=for-the-badge&label=Current%20version)
 
 A Foundry VTT module that lets everyone create, edit, and move sticky and photo notes on the scene. A must-have for investigative games like City of Mist, Call of Cthulhu, and all your conspiracy adventures.
 
-## NEW FEATURE >> Investigation Office
+## NEW FEATURE >> Video Notes >> [Check YouTube Video](https://youtu.be/Lvu1c6NTcsU)
+
+Media notes now supports video too! There are some video effects available, and you can select the format of your video fr better immersion: Flat screen 16:9, CRT 4:3 and even Mobile portrait. There is even a timestamp tool so you can add the _when_ to the _who_ and _how_ of you mysteries!
+
+## NEW FEATURE >> Doc Notes from Journal Texts
+Now you can turn Journal Text pages in Doc Notes (A4 Format)
+
+<img width="1688" height="892" alt="image" src="https://github.com/user-attachments/assets/d16b91cd-e1f2-4067-9b33-93c56a9d2c83" />
+
+
+## FEATURE >> Investigation Office
 
 Just added a new scene to IB! Whether it's your detective desk at the precinct or the missing professor's desk at the university, you can watch the creation process here: https://youtu.be/ApPb84eDF4I
 
@@ -28,7 +32,7 @@ Just added a new scene to IB! Whether it's your detective desk at the precinct o
 
 ---
 
-## NEW FEATURE >> Hide/Reveal Notes
+## FEATURE >> Hide/Reveal Notes
 
 Added in the context menu of any note the option to hide/reveal the note for the players. Hidden notes appear with reduced opacity for GMs. This should help to prepare notes before hand. Connection stays visible all the time.
 
@@ -36,7 +40,7 @@ Added in the context menu of any note the option to hide/reveal the note for the
 
 ---
 
-## NEW FEATURE >> Extra Fonts: Typewriter & Special Elite
+## FEATURE >> Extra Fonts: Typewriter & Special Elite
 
 Added these two new fonts as options. Also fixed a bug that prevented fonts to load on systems that not have them installed locally.
 
@@ -50,13 +54,13 @@ https://github.com/user-attachments/assets/9d578c0b-380e-4942-91fc-0a43d6c27296
 
 <img width="1200" height="655" alt="image" src="https://github.com/user-attachments/assets/329f44f1-0c5a-455e-b3d1-d585cc3ed665" />
 
-## NEW FEATURE >> Note Colors:
+## FEATURE >> Note Colors:
 
 Sticky notes now have color options. You can also choose the ink color for any note. Included options in game settings to let each player set their own default color set.
 
 ---
 
-## NEW FEATURE >> Handout Notes from Images in Journals:
+## FEATURE >> Handout Notes from Images in Journals:
 
 Journals, specially the ones containing adventures can be full of images. Now instead of just showing the pretty images to the players you can pass them around as handout notes.
 
@@ -64,13 +68,13 @@ Journals, specially the ones containing adventures can be full of images. Now in
 
 ---
 
-## NEW FEATURE >> Handout Notes from Clipboard buffer:
+## FEATURE >> Handout Notes from Clipboard buffer:
 
 If you Ctrl+C an area in your screen and Ctrl+V while in Drawing mode a note will appear. Even better, if you copy an image file in your file explorer and Control+V in canvas a note will be created with the correct transparency set if the image has transparency.
 
 ---
 
-## NEW FEATURE >> Automatic Scene Scale:
+## FEATURE >> Automatic Scene Scale:
 
 The module now automatically adapts to your map size. Whether you are on a small 1280px map or a massive 5000px scene, your notes, pins, and yarn connections will stay proportional. You can even set a global multiplier if you want them a bit larger or smaller on all maps.
 
@@ -88,7 +92,7 @@ Speed up your board building! While dragging a yarn connection (after clicking a
 
 ---
 
-## NEW FEATURE >> Only Pins:
+## FEATURE >> Only Pins:
 
 We reach the peak: we are now able to create only pins and connections. Its practically Zen at this point.
 
@@ -96,7 +100,7 @@ We reach the peak: we are now able to create only pins and connections. Its prac
 
 ---
 
-## NEW FEATURE >> Create photo notes from Folder:
+## FEATURE >> Create photo notes from Folder:
 
 You can now create photo notes from all items on a folder. It ignores subfolders, if you want to import a subfolder right-click on it and import. it works for Scenes, Actors, Items and Playlits.
 
@@ -104,7 +108,7 @@ You can now create photo notes from all items on a folder. It ignores subfolders
 
 ---
 
-## NEW FEATURE >> Notes From Items:
+## FEATURE >> Notes From Items:
 
 You can now create photo notes from items too. They will be automatically linked to them.
 
@@ -112,7 +116,7 @@ You can now create photo notes from items too. They will be automatically linked
 
 ---
 
-## NEW FEATURE >> Old Tape Sound Effects:
+## FEATURE >> Old Tape Sound Effects:
 
 <img width="609" height="482" alt="image" src="https://github.com/user-attachments/assets/d8a8d34b-8ef8-41f7-9b83-ecb16241fee1" />
 
@@ -120,7 +124,7 @@ Now you can activate a sound effect filter to make the audio even more immersive
 
 ---
 
-## NEW FEATURE >> Connecting Notes:
+## FEATURE >> Connecting Notes:
 
 Click on a pin, click on the other. That's it.
 
