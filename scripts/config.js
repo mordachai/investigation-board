@@ -7,6 +7,16 @@ export const PIN_COLORS = [
   'yellowPin.webp',
   'greenPin.webp',
 ];
+
+export const DEFAULT_STAMP_FOLDER = 'modules/investigation-board/assets/stamps';
+export const STAMP_IMAGES = [
+  'classified.webp',
+  'deceased.webp',
+  'evidence.webp',
+  'missing.webp',
+  'redacted.webp',
+  'x-mark.webp',
+];
 export const SOCKET_NAME = `module.${MODULE_ID}`;
 
 export const STICKY_TINTS = {

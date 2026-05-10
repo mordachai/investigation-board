@@ -1,4 +1,4 @@
-import { MODULE_ID, STICKY_TINTS, INK_COLORS, DEFAULT_PIN_FOLDER } from "../config.js";
+import { MODULE_ID, STICKY_TINTS, INK_COLORS, DEFAULT_PIN_FOLDER, DEFAULT_STAMP_FOLDER } from "../config.js";
 import { invalidatePinFilesCache } from "../utils/helpers.js";
 
 const { ApplicationV2, HandlebarsApplicationMixin } = foundry.applications.api;
@@ -46,6 +46,8 @@ export class AppearanceDialog extends HandlebarsApplicationMixin(ApplicationV2) 
     const currentInkColor    = game.settings.get(MODULE_ID, "defaultInkColor");
     const currentPinColor    = game.settings.get(MODULE_ID, "pinColor");
     const currentPinFolder   = game.settings.get(MODULE_ID, "pinImagesFolder") || DEFAULT_PIN_FOLDER;
+    const currentStampFolder = game.settings.get(MODULE_ID, "stampImagesFolder") || DEFAULT_STAMP_FOLDER;
+    const currentStampTint   = game.settings.get(MODULE_ID, "stampTint") || "#cc0000";
 
     return {
       // Current values
@@ -55,6 +57,8 @@ export class AppearanceDialog extends HandlebarsApplicationMixin(ApplicationV2) 
       defaultInkColor:    currentInkColor,
       pinColor:           currentPinColor,
       pinImagesFolder:    currentPinFolder,
+      stampImagesFolder:  currentStampFolder,
+      stampTint:          currentStampTint,
       connectionLineWidth: game.settings.get(MODULE_ID, "connectionLineWidth"),
 
       // Choices for selects
@@ -96,6 +100,17 @@ export class AppearanceDialog extends HandlebarsApplicationMixin(ApplicationV2) 
         }
       }).browse();
     });
+
+    html.querySelector('[data-action="browse-stamps"]')?.addEventListener("click", () => {
+      const input = html.querySelector('[name="stampImagesFolder"]');
+      new FilePicker({
+        type: "folder",
+        current: input?.value || DEFAULT_STAMP_FOLDER,
+        callback: (path) => {
+          if (input) input.value = path;
+        }
+      }).browse();
+    });
   }
 
   async _save() {
@@ -106,7 +121,7 @@ export class AppearanceDialog extends HandlebarsApplicationMixin(ApplicationV2) 
       return isNaN(val) ? null : val;
     };
 
-    const strKeys = ["font", "defaultNoteColor", "defaultInkColor", "pinColor", "pinImagesFolder"];
+    const strKeys = ["font", "defaultNoteColor", "defaultInkColor", "pinColor", "pinImagesFolder", "stampImagesFolder", "stampTint"];
     const numKeys = ["baseFontSize", "connectionLineWidth"];
 
     for (const key of strKeys) {

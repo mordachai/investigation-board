@@ -244,6 +244,11 @@ Hooks.on("dropCanvasData", (canvas, data) => {
 });
 
 Hooks.once("init", () => {
+  // Kick off font downloads immediately — the earlier they start, the less
+  // likely canvasReady fires before they arrive.
+  const moduleFonts = ["Rock Salt", "Caveat", "Typewriter Condensed", "IB Special Elite"];
+  moduleFonts.forEach(f => document.fonts.load(`1em "${f}"`).catch(() => {}));
+
   registerSettings();
   CONFIG.Drawing.objectClass = CustomDrawing;
 
@@ -591,9 +596,22 @@ Hooks.on("deleteDrawing", (drawing, options, userId) => {
   const noteData = drawing.flags[MODULE_ID];
   if (!noteData) return;
 
-  // Redraw pins and all connection lines to remove orphaned connections
-  updatePins();
-  drawAllConnectionLines();
+  // Destroy the pin sprite immediately if the placeable is still accessible.
+  // The sprite lives in pinsContainer outside the drawing's own PIXI hierarchy
+  // and won't be cleaned up automatically when the placeable is destroyed.
+  const placeable = canvas.drawings.placeables.find(p => p.document.id === drawing.id);
+  if (placeable?.pinSprite && !placeable.pinSprite.destroyed) {
+    placeable.pinSprite.destroy();
+    placeable.pinSprite = null;
+  }
+
+  // Defer until after the canvas layer finishes removing the placeable from its
+  // collection. That way updatePins() rebuilds the list without the deleted note,
+  // even if the immediate destroy above couldn't run (placeable already gone).
+  setTimeout(() => {
+    updatePins();
+    drawAllConnectionLines();
+  }, 0);
 });
 
 /**
@@ -877,6 +895,16 @@ Hooks.on("canvasReady", async () => {
     updatePins();
     drawAllConnectionLines();
   }, 100);
+
+  // After all CSS fonts are confirmed loaded, refresh IB notes so PIXI.Text
+  // re-renders with the correct font. Guards against the race where canvasReady
+  // fires while fonts are still downloading.
+  document.fonts.ready.then(() => {
+    if (!canvas.drawings) return;
+    canvas.drawings.placeables.forEach(d => {
+      if (d.document.flags[MODULE_ID]?.type) d.refresh();
+    });
+  });
 });
 
 // Adds "Create Handout Note" to the Image Popout header controls dropdown (v14 AppV2 approach).

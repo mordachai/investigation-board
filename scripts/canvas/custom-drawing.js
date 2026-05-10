@@ -1,7 +1,7 @@
 import { MODULE_ID, SOCKET_NAME, VIDEO_EXTENSIONS, DOC_BACKGROUNDS } from "../config.js";
 import { InvestigationBoardState } from "../state.js";
 import { collaborativeUpdate, collaborativeDelete, socket, activeGlobalSounds, activeVideoBroadcasts } from "../utils/socket-handler.js";
-import { truncateText, resolvePinImage, getAvailablePinFiles } from "../utils/helpers.js";
+import { truncateText, resolvePinImage, getAvailablePinFiles, resolveStampImage, getAvailableStampFiles } from "../utils/helpers.js";
 import { NotePreviewer } from "../apps/note-previewer.js";
 import { VideoPlayer } from "../apps/video-player.js";
 import { drawAllConnectionLines } from "./connection-manager.js";
@@ -20,6 +20,7 @@ export class CustomDrawing extends Drawing {
     this.docBodyText = null;
     this.photoImageSprite = null;
     this.photoMask = null;
+    this.stampSprite = null;
   }
 
   /**
@@ -250,6 +251,19 @@ export class CustomDrawing extends Drawing {
     const originalEvent = data?.originalEvent ?? event.nativeEvent ?? event;
     const x = originalEvent.clientX ?? 0;
     const y = originalEvent.clientY ?? 0;
+
+    // Convert right-click screen position → note-local offset (for stamp placement)
+    const worldPos = canvas.canvasCoordinatesFromClient({ x, y });
+    const noteW = this.document.shape.width || 200;
+    const noteH = this.document.shape.height || 200;
+    const noteRot = (this.document.rotation ?? 0) * (Math.PI / 180);
+    const dx = worldPos.x - (this.document.x + noteW / 2);
+    const dy = worldPos.y - (this.document.y + noteH / 2);
+    const cos = Math.cos(-noteRot);
+    const sin = Math.sin(-noteRot);
+    const clamp = (v, half) => Math.max(-half * 0.8, Math.min(half * 0.8, v));
+    const stampOffsetX = clamp(dx * cos - dy * sin, noteW / 2);
+    const stampOffsetY = clamp(dx * sin + dy * cos, noteH / 2);
 
     // Remove any existing custom context menus
     document.querySelectorAll('.ib-context-menu').forEach(el => el.remove());
@@ -615,6 +629,65 @@ export class CustomDrawing extends Drawing {
       }
     };
 
+    const STAMPABLE_TYPES = ["photo", "document", "index", "handout"];
+    if (STAMPABLE_TYPES.includes(noteData.type)) {
+      const STAMP_LABELS = {
+        'classified.webp': 'Classified',
+        'deceased.webp':   'Deceased',
+        'evidence.webp':   'Evidence',
+        'missing.webp':    'Missing',
+        'redacted.webp':   'Redacted',
+        'x-mark.webp':     'X Mark',
+      };
+
+      const stampItem = document.createElement('div');
+      stampItem.classList.add('ib-context-menu-item', 'ib-has-submenu');
+      stampItem.innerHTML = '<i class="fas fa-stamp"></i><span style="flex:1">Stamp</span><i class="fas fa-caret-right"></i>';
+
+      const submenu = document.createElement('div');
+      submenu.classList.add('ib-submenu');
+      stampItem.appendChild(submenu);
+
+      // Populate stamp options asynchronously — fast enough before hover fires
+      getAvailableStampFiles().then(files => {
+        files.forEach(filename => {
+          const label = STAMP_LABELS[filename]
+            ?? filename.replace(/\.(webp|png)$/i, '').replace(/-/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
+          const item = document.createElement('div');
+          item.classList.add('ib-context-menu-item');
+          item.innerHTML = `<i class="fas fa-stamp"></i> ${label}`;
+          if (noteData.stamp?.key === filename) item.classList.add('ib-active');
+          item.onclick = async (e) => {
+            e.stopPropagation();
+            menu.remove();
+            const rotation = (Math.random() * 40) - 20;
+            await collaborativeUpdate(this.document.id, {
+              [`flags.${MODULE_ID}.stamp`]: { key: filename, rotation, offsetX: stampOffsetX, offsetY: stampOffsetY }
+            });
+          };
+          submenu.appendChild(item);
+        });
+
+        const sep = document.createElement('div');
+        sep.classList.add('ib-context-menu-separator');
+        submenu.appendChild(sep);
+
+        const removeStampItem = document.createElement('div');
+        removeStampItem.classList.add('ib-context-menu-item');
+        removeStampItem.innerHTML = '<i class="fas fa-times"></i> Remove Stamp';
+        removeStampItem.onclick = async (e) => {
+          e.stopPropagation();
+          menu.remove();
+          await collaborativeUpdate(this.document.id, {
+            [`flags.${MODULE_ID}.stamp`]: null
+          });
+        };
+        submenu.appendChild(removeStampItem);
+      });
+
+      menu.appendChild(stampItem);
+    }
+
     menu.appendChild(removeConnectionsOption);
     menu.appendChild(deleteOption);
     document.body.appendChild(menu);
@@ -753,6 +826,79 @@ export class CustomDrawing extends Drawing {
     }
   }
 
+  async _loadStampTexture(noteData) {
+    const STAMPABLE_TYPES = ["photo", "document", "index", "handout"];
+    const stamp = noteData.stamp;
+
+    if (!STAMPABLE_TYPES.includes(noteData.type) || !stamp?.key) {
+      if (this.stampSprite && !this.stampSprite.destroyed) {
+        if (this.stampSprite.parent) this.stampSprite.parent.removeChild(this.stampSprite);
+        this.stampSprite.destroy();
+        this.stampSprite = null;
+      }
+      return;
+    }
+
+    if (!this.stampSprite || this.stampSprite.destroyed) {
+      if (this.stampSprite) this.stampSprite.destroy();
+      this.stampSprite = new PIXI.Sprite();
+      this.stampSprite.anchor.set(0.5);
+    }
+
+    const w = this.document.shape.width || 200;
+    const h = this.document.shape.height || 200;
+    const rot = ((stamp.rotation ?? 0) * Math.PI) / 180;
+
+    // Only reload texture when the stamp image actually changed
+    if (this.stampSprite._ibStampKey !== stamp.key) {
+      const stampPath = resolveStampImage(stamp.key);
+      try {
+        const texture = await PIXI.Assets.load(stampPath);
+        if (!texture || !this.stampSprite || this.stampSprite.destroyed) return;
+        this.stampSprite.texture = texture;
+        this.stampSprite._ibStampKey = stamp.key;
+      } catch (err) {
+        console.error(`Investigation Board: Failed to load stamp: ${stampPath}`, err);
+        return;
+      }
+    }
+
+    if (!this.stampSprite || this.stampSprite.destroyed) return;
+
+    const STAMP_SIZES = { 'x-mark.webp': 0.70 };
+    const stampRatio = this.stampSprite.texture.width / this.stampSprite.texture.height;
+    const maxSize = Math.min(w, h) * (STAMP_SIZES[stamp.key] ?? 0.35);
+    if (maxSize / stampRatio <= maxSize) {
+      this.stampSprite.width = maxSize;
+      this.stampSprite.height = maxSize / stampRatio;
+    } else {
+      this.stampSprite.height = maxSize;
+      this.stampSprite.width = maxSize * stampRatio;
+    }
+
+    this.stampSprite.rotation = rot;
+    this.stampSprite.alpha = 0.85;
+    try {
+      this.stampSprite.tint = game.settings.get(MODULE_ID, "stampTint") || "#cc0000";
+    } catch(e) { this.stampSprite.tint = 0xcc0000; }
+
+    // Clamp center using the actual rotated bounding box so the stamp never
+    // escapes the note edges regardless of tilt or aspect ratio.
+    const halfSprW = this.stampSprite.width / 2;
+    const halfSprH = this.stampSprite.height / 2;
+    const aabbHalfW = halfSprW * Math.abs(Math.cos(rot)) + halfSprH * Math.abs(Math.sin(rot));
+    const aabbHalfH = halfSprW * Math.abs(Math.sin(rot)) + halfSprH * Math.abs(Math.cos(rot));
+    const cx = Math.max(-w / 2 + aabbHalfW, Math.min(w / 2 - aabbHalfW, stamp.offsetX ?? 0));
+    const cy = Math.max(-h / 2 + aabbHalfH, Math.min(h / 2 - aabbHalfH, stamp.offsetY ?? 0));
+    this.stampSprite.position.set(w / 2 + cx, h / 2 + cy);
+
+    // Re-add only if not already the topmost child — avoids render tree churn on every refresh
+    if (this.shape.children.at(-1) !== this.stampSprite) {
+      if (this.stampSprite.parent) this.stampSprite.parent.removeChild(this.stampSprite);
+      this.shape.addChild(this.stampSprite);
+    }
+  }
+
   async _doUpdateSprites() {
     if (!this.shape) return;
     const noteData = this.document.flags[MODULE_ID];
@@ -842,6 +988,7 @@ export class CustomDrawing extends Drawing {
       // Hide text for media notes on canvas
       if (this.noteText) this.noteText.visible = false;
 
+      await this._loadStampTexture(noteData);
       return; // Early exit for media notes
     }
 
@@ -965,6 +1112,7 @@ export class CustomDrawing extends Drawing {
       this.docBodyText.visible = true;
       this.docBodyText.position.set(MARGIN, MARGIN + (titleStr ? titleAreaHeight + 20 : 0));
 
+      await this._loadStampTexture(noteData);
       return; // Early exit for document notes
     }
 
@@ -993,6 +1141,7 @@ export class CustomDrawing extends Drawing {
       // Hide text
       if (this.noteText) this.noteText.visible = false;
 
+      await this._loadStampTexture(noteData);
       return;
     }
 
@@ -1069,6 +1218,7 @@ export class CustomDrawing extends Drawing {
       // Hide text sprites (handouts don't have text)
       if (this.noteText) this.noteText.visible = false;
 
+      await this._loadStampTexture(noteData);
       return; // Early exit for handout notes
     }
     
@@ -1254,6 +1404,7 @@ export class CustomDrawing extends Drawing {
       this.noteText.position.set(width / 2, isPhoto ? height - 25 : height / 2);
     }
 
+    await this._loadStampTexture(noteData);
   }
 
   _getPinPosition() {

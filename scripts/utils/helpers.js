@@ -1,4 +1,4 @@
-import { MODULE_ID, BASE_FONT_SIZE, DEFAULT_PIN_FOLDER, PIN_COLORS } from "../config.js";
+import { MODULE_ID, BASE_FONT_SIZE, DEFAULT_PIN_FOLDER, PIN_COLORS, DEFAULT_STAMP_FOLDER, STAMP_IMAGES } from "../config.js";
 
 // ---------------------------------------------------------------------------
 // Pin image helpers
@@ -57,6 +57,45 @@ export async function getAvailablePinFiles() {
   }
 
   return _pinFilesCache;
+}
+
+// ---------------------------------------------------------------------------
+// Stamp image helpers
+// ---------------------------------------------------------------------------
+
+let _stampFilesCache = null;
+let _stampFolderCache = null;
+
+export function invalidateStampFilesCache() {
+  _stampFilesCache = null;
+  _stampFolderCache = null;
+}
+
+export function resolveStampImage(filename) {
+  const folder = game.settings.get(MODULE_ID, "stampImagesFolder") || DEFAULT_STAMP_FOLDER;
+  return `${folder}/${filename}`;
+}
+
+export async function getAvailableStampFiles() {
+  const FilePicker = foundry.applications.apps.FilePicker.implementation;
+  const folder = game.settings.get(MODULE_ID, "stampImagesFolder") || DEFAULT_STAMP_FOLDER;
+
+  if (_stampFolderCache === folder && _stampFilesCache !== null) {
+    return _stampFilesCache;
+  }
+
+  try {
+    const result = await FilePicker.browse("data", folder);
+    _stampFilesCache = result.files
+      .filter(f => /\.(webp|png)$/i.test(f))
+      .map(f => f.split("/").pop());
+    _stampFolderCache = folder;
+  } catch {
+    _stampFilesCache = [...STAMP_IMAGES];
+    _stampFolderCache = folder;
+  }
+
+  return _stampFilesCache;
 }
 
 export function getBaseCharacterLimits() {

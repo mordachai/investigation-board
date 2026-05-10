@@ -1,5 +1,5 @@
-import { MODULE_ID, DEFAULT_PIN_FOLDER } from "./config.js";
-import { invalidatePinFilesCache } from "./utils/helpers.js";
+import { MODULE_ID, DEFAULT_PIN_FOLDER, DEFAULT_STAMP_FOLDER } from "./config.js";
+import { invalidatePinFilesCache, invalidateStampFilesCache } from "./utils/helpers.js";
 import { NoteDefaultsDialog } from "./apps/note-defaults-dialog.js";
 import { AppearanceDialog } from "./apps/appearance-dialog.js";
 
@@ -119,6 +119,28 @@ export const registerSettings = function() {
     default: DEFAULT_PIN_FOLDER,
     onChange: () => {
       invalidatePinFilesCache();
+      refreshAllDrawings();
+    }
+  });
+
+  game.settings.register(MODULE_ID, "stampTint", {
+    name: "Stamp Tint Color",
+    scope: "world",
+    config: false,
+    type: String,
+    default: "#990000",
+    onChange: () => refreshAllDrawings()
+  });
+
+  game.settings.register(MODULE_ID, "stampImagesFolder", {
+    name: "Stamp Images Folder",
+    hint: "Path to a folder containing .webp or .png stamp images. Change to use a custom stamp set.",
+    scope: "world",
+    config: false,
+    type: String,
+    default: DEFAULT_STAMP_FOLDER,
+    onChange: () => {
+      invalidateStampFilesCache();
       refreshAllDrawings();
     }
   });

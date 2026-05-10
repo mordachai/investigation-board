@@ -960,8 +960,135 @@ export async function createTextIndexFromPage(page) {
 }
 
 /**
+ * Splits sanitized PIXI.HTMLText markup into page-sized chunks.
+ *
+ * Uses a character-count heuristic calibrated against actual rendering:
+ * ~2200 characters (including HTML tags) fills one A4 doc note at the default
+ * 14 pt body font (Rock Salt). This scales with font size but not font family.
+ * Paragraphs too long for a single page are split at sentence then word boundaries.
+ *
+ * @param {string} sanitizedHtml - Output of sanitizeForPixiHtml()
+ * @param {object} opts
+ * @param {string} opts.titleStr  - Title (only on page 1 — reduces usable height)
+ * @param {number} opts.docW      - Note width in world units (595)
+ * @param {number} opts.docH      - Note height in world units (842)
+ * @param {number} opts.fontSize  - Body font size in pt (default 14)
+ * @returns {string[]}
+ */
+function splitHtmlIntoDocPages(sanitizedHtml, { titleStr, docW, docH, fontSize }) {
+  const MARGIN = Math.round(docW * 0.105);
+  const titleFontSize = Math.round((docW / 595) * 28);
+  const bodyFontSize = Math.round((docW / 595) * Math.max(8, fontSize || 14));
+  const titleAreaHeight = titleFontSize * 3;
+
+  // Usable body heights
+  const firstPageBodyH = docH - MARGIN - (titleStr ? titleAreaHeight + 20 : 0) - MARGIN;
+  const otherPageBodyH = docH - MARGIN * 2;
+
+  // Calibrated at 16 pt — scale inversely with font size
+  const BASE_CHARS = 2500;
+  const scale = 16 / bodyFontSize;
+  const charsPerPage   = Math.round(BASE_CHARS * scale);
+  // First page: title adds visual weight at the top — use 80% to leave breathing room
+  // at the bottom rather than the bare height ratio (~85.5%).
+  const charsFirstPage = titleStr
+    ? Math.round(charsPerPage * 0.80)
+    : charsPerPage;
+
+  // Extract <p>…</p> blocks as atomic chunks
+  const rawChunks = [];
+  const pRegex = /<p[^>]*>[\s\S]*?<\/p>/gi;
+  let lastIdx = 0, pm;
+  while ((pm = pRegex.exec(sanitizedHtml)) !== null) {
+    const before = sanitizedHtml.slice(lastIdx, pm.index).trim();
+    if (before) rawChunks.push(before);
+    rawChunks.push(pm[0]);
+    lastIdx = pm.index + pm[0].length;
+  }
+  const tail = sanitizedHtml.slice(lastIdx).trim();
+  if (tail) rawChunks.push(tail);
+  if (rawChunks.length === 0) return [sanitizedHtml];
+
+  // Split a paragraph whose char count alone exceeds maxChars.
+  // Splits at sentence boundaries (". Capital") first, then at words.
+  function splitPara(paraHtml, maxChars) {
+    const match = paraHtml.match(/^(<p[^>]*>)([\s\S]*?)(<\/p>)$/i);
+    if (!match) return [paraHtml];
+    const [, open, inner, close] = match;
+
+    const bySentence = inner.split(/(?<=[.!?])\s+(?=[A-Z"'<(])/);
+    const parts = bySentence.length > 1 ? bySentence : inner.split(/\s+/);
+    if (parts.length <= 1) return [paraHtml];
+
+    const result = [];
+    let current = [];
+    for (const part of parts) {
+      current.push(part);
+      if ((open + current.join(' ') + close).length > maxChars && current.length > 1) {
+        current.pop();
+        result.push(open + current.join(' ') + close);
+        current = [part];
+      }
+    }
+    if (current.length > 0) result.push(open + current.join(' ') + close);
+    return result.length > 0 ? result : [paraHtml];
+  }
+
+  // Pre-expand any paragraph that alone exceeds a full page
+  const chunks = [];
+  for (const chunk of rawChunks) {
+    if (chunk.length > charsPerPage) {
+      chunks.push(...splitPara(chunk, charsPerPage));
+    } else {
+      chunks.push(chunk);
+    }
+  }
+
+  // Fill pages — split mid-paragraph when a chunk straddles a page boundary
+  const pages = [];
+  let pageStart = 0;
+  let isFirst = true;
+
+  while (pageStart < chunks.length) {
+    const limit = isFirst ? charsFirstPage : charsPerPage;
+    let i = pageStart;
+    let running = 0;
+
+    while (i < chunks.length) {
+      const chunkLen = chunks[i].length;
+      if (running + chunkLen > limit) {
+        // This chunk straddles the boundary. Try to split it so the fitting
+        // portion stays on this page and the overflow goes to the next.
+        const remaining = limit - running;
+        if (remaining > 100 && chunks[i].match(/^<p/i)) {
+          const sub = splitPara(chunks[i], remaining);
+          if (sub.length > 1) {
+            // Replace the chunk in-place: first sub goes on this page, rest next
+            chunks.splice(i, 1, ...sub);
+            // Include the first sub-chunk on this page
+            running += chunks[i].length;
+            i++;
+          }
+        }
+        break;
+      }
+      running += chunkLen;
+      i++;
+    }
+
+    if (i === pageStart) i = pageStart + 1; // always at least one chunk per page
+    pages.push(chunks.slice(pageStart, i).join(''));
+    pageStart = i;
+    isFirst = false;
+  }
+
+  return pages.length > 0 ? pages : [sanitizedHtml];
+}
+
+/**
  * Creates a Document Note from a text-type Journal Page.
  * Title comes from the page name; body preserves bold/italic/alignment as PIXI.HTMLText markup.
+ * If the text is too long for one page, multiple notes are created in a horizontal row.
  * @param {JournalEntryPage} page
  * @param {"parchment"|"oldpaper"|"whitepaper"} [background]
  */
@@ -972,13 +1099,63 @@ export async function createDocNoteFromPage(page, background = "parchment") {
   const body = sanitizeForPixiHtml(page.text?.content || "");
   const sceneScale = getEffectiveScale();
   const viewCenter = canvas.stage.pivot;
+  const docW = 595, docH = 842;
+  const fontSize = 14;
+  const titleStr = page.name || "";
+  const textColor = game.settings.get(MODULE_ID, "defaultInkColor") || "#000000";
 
-  const created = await collaborativeCreate({
+  const pageTexts = splitHtmlIntoDocPages(body, { titleStr, docW, docH, fontSize });
+
+  if (pageTexts.length <= 1) {
+    // Single page — original behaviour, opens edit dialog
+    const created = await collaborativeCreate({
+      type: "r",
+      author: game.user.id,
+      x: viewCenter.x - (docW * sceneScale) / 2,
+      y: viewCenter.y - (docH * sceneScale) / 2,
+      shape: { width: docW, height: docH },
+      fillColor: "#000000",
+      fillAlpha: 1,
+      strokeColor: "#000000",
+      strokeWidth: 0,
+      strokeAlpha: 0,
+      locked: false,
+      flags: {
+        [MODULE_ID]: {
+          type: "document",
+          title: titleStr,
+          text: body,
+          docBackground: background,
+          textColor,
+          fontSize,
+          linkedObject: `@UUID[${page.uuid}]{${page.name}}`,
+        },
+        core: { sheetClass: "investigation-board.CustomDrawingSheet" }
+      },
+      ownership: { default: 3 },
+    }, { skipAutoOpen: false });
+
+    if (InvestigationBoardState.isActive && created?.[0]) {
+      setTimeout(() => {
+        const d = canvas.drawings.get(created[0].id);
+        if (d) { d.eventMode = 'auto'; d.interactiveChildren = true; }
+      }, 250);
+    }
+    return;
+  }
+
+  // Multiple pages — lay them out in a horizontal row centred on the viewport
+  const spacing = 40;
+  const totalWidth = docW * pageTexts.length + spacing * (pageTexts.length - 1);
+  const startX = viewCenter.x - (totalWidth * sceneScale) / 2;
+  const startY = viewCenter.y - (docH * sceneScale) / 2;
+
+  const createDataArray = pageTexts.map((pageText, idx) => ({
     type: "r",
     author: game.user.id,
-    x: viewCenter.x - (595 * sceneScale) / 2,
-    y: viewCenter.y - (842 * sceneScale) / 2,
-    shape: { width: 595, height: 842 },
+    x: startX + idx * (docW + spacing),
+    y: startY,
+    shape: { width: docW, height: docH },
     fillColor: "#000000",
     fillAlpha: 1,
     strokeColor: "#000000",
@@ -988,24 +1165,22 @@ export async function createDocNoteFromPage(page, background = "parchment") {
     flags: {
       [MODULE_ID]: {
         type: "document",
-        title: page.name || "",
-        text: body,
+        title: idx === 0 ? titleStr : "",
+        text: pageText,
         docBackground: background,
-        textColor: game.settings.get(MODULE_ID, "defaultInkColor") || "#000000",
-        fontSize: 14,
+        textColor,
+        fontSize,
         linkedObject: `@UUID[${page.uuid}]{${page.name}}`,
       },
       core: { sheetClass: "investigation-board.CustomDrawingSheet" }
     },
     ownership: { default: 3 },
-  }, { skipAutoOpen: false });
+  }));
 
-  if (InvestigationBoardState.isActive && created?.[0]) {
-    setTimeout(() => {
-      const d = canvas.drawings.get(created[0].id);
-      if (d) { d.eventMode = 'auto'; d.interactiveChildren = true; }
-    }, 250);
-  }
+  await collaborativeCreateMany(createDataArray, { skipAutoOpen: true });
+  ui.notifications.info(
+    `Investigation Board: Created ${pageTexts.length} document pages from "${page.name}".`
+  );
 }
 
 

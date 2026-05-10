@@ -649,6 +649,42 @@ body.investigation-board-mode .drawing:not([data-investigation-note='true']) {
   color: #7a7971;
 }
 
+.ib-context-menu-item.ib-active {
+  color: #ff6400;
+}
+
+.ib-context-menu-item.ib-active i {
+  color: #ff6400;
+}
+
+.ib-context-menu-separator {
+  height: 1px;
+  background: #4b4a44;
+  margin: 4px 0;
+}
+
+.ib-has-submenu {
+  position: relative;
+}
+
+.ib-submenu {
+  display: none;
+  position: absolute;
+  left: 100%;
+  top: 0;
+  background: #1a1c1e;
+  border: 1px solid #4b4a44;
+  border-radius: 3px;
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.7);
+  padding: 4px 0;
+  min-width: 160px;
+  z-index: 10001;
+}
+
+.ib-has-submenu:hover > .ib-submenu {
+  display: block;
+}
+
 /* ========================= */
 /* Linked Object & Drop Zone */
 /* ========================= */
