@@ -20,6 +20,10 @@
                             <div class="reel left"></div>
                             <div class="reel right"></div>
                         </div>
+                        {{#if text}}
+                        <div class="media-label-text {{fontClass}} {{#if isVideoDisplay}}vhs{{else}}cassette{{/if}}"
+                             style="color: {{textColor}}; font-size: {{mediaLabelFontSize}}px;">{{text}}</div>
+                        {{/if}}
                     </div>
                     {{#if audioPath}}
                         <div class="media-interface">

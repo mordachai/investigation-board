@@ -235,6 +235,49 @@
         </div>
       </div>
 
+      {{!-- Label text — rendered directly on the cassette or VHS sprite on canvas --}}
+      <div class="form-group">
+        <label>Label Text:</label>
+        <textarea name="text" rows="3"
+          placeholder="{{#if (eq mediaMode "video")}}Write on the VHS label...{{else}}Write on the cassette label...{{/if}}"
+          data-placeholder-audio="Write on the cassette label..."
+          data-placeholder-video="Write on the VHS label...">{{text}}</textarea>
+      </div>
+
+      <div class="form-group color-settings">
+        <div class="color-mosaic-group">
+          <label>Ink Color:</label>
+          <div class="color-mosaic ink-colors">
+            {{#each inkColors}}
+              <div class="color-option {{#if (eq ../textColor this)}}active{{/if}}"
+                   data-color="{{this}}" data-type="textColor"
+                   style="background-color: {{this}};" title="{{@key}}"></div>
+            {{/each}}
+            <input type="hidden" name="textColor" value="{{textColor}}" />
+          </div>
+        </div>
+      </div>
+
+      <div class="form-group font-settings">
+        <div class="font-select-group">
+          <label>Font:</label>
+          <select name="font">
+            <option value="Rock Salt"            {{#if (eq font "Rock Salt")}}selected{{/if}}>Rock Salt</option>
+            <option value="Caveat"               {{#if (eq font "Caveat")}}selected{{/if}}>Caveat</option>
+            <option value="Courier New"          {{#if (eq font "Courier New")}}selected{{/if}}>Courier New</option>
+            <option value="Times New Roman"      {{#if (eq font "Times New Roman")}}selected{{/if}}>Times New Roman</option>
+            <option value="Signika"              {{#if (eq font "Signika")}}selected{{/if}}>Signika</option>
+            <option value="Arial"                {{#if (eq font "Arial")}}selected{{/if}}>Arial</option>
+            <option value="Typewriter Condensed" {{#if (eq font "Typewriter Condensed")}}selected{{/if}}>Typewriter Condensed</option>
+            <option value="IB Special Elite"     {{#if (eq font "IB Special Elite")}}selected{{/if}}>Special Elite</option>
+          </select>
+        </div>
+        <div class="font-size-group">
+          <label>Size:</label>
+          <input type="number" name="fontSize" value="{{fontSize}}" min="6" max="36" step="1" />
+        </div>
+      </div>
+
       {{!-- Pin selector --}}
       {{#if showPinSelector}}
       <div class="form-group pin-select-group">

@@ -931,6 +931,42 @@ body.investigation-board-mode .drawing:not([data-investigation-note='true']) {
   display: none; /* Only show when playing */
 }
 
+/* Label text overlay on cassette / VHS tape in Note Preview */
+.media-label-text {
+  position: absolute;
+  z-index: 3;
+  left: 50%;
+  text-align: center;
+  pointer-events: none;
+  line-height: 1.3;
+  word-break: break-word;
+  white-space: pre-wrap;
+}
+
+/* Cassette (audio) — label sits below the reel window; matches canvas textY = 30% */
+.media-label-text.cassette {
+  top: 30%;
+  width: 50%;
+  transform: translate(-50%, -50%);
+}
+
+/* VHS tape (video) — label spans the front face; matches canvas textY = 50% */
+.media-label-text.vhs {
+  top: 50%;
+  width: 65%;
+  transform: translate(-50%, -50%);
+}
+
+/* Font-family variants for the tape label — mirrors .photo-frame-text and .preview-text-container */
+.media-label-text.rock-salt         { font-family: 'Rock Salt', cursive; }
+.media-label-text.caveat            { font-family: 'Caveat', cursive; }
+.media-label-text.courier-new       { font-family: 'Courier New', monospace; }
+.media-label-text.times-new-roman   { font-family: 'Times New Roman', serif; }
+.media-label-text.signika           { font-family: 'Signika', sans-serif; }
+.media-label-text.arial             { font-family: 'Arial', sans-serif; }
+.media-label-text.typewriter-condensed { font-family: 'Typewriter Condensed', monospace; }
+.media-label-text.special-elite     { font-family: 'IB Special Elite', cursive; }
+
 .cassette-wrapper.playing .cassette-reels {
   display: block;
 }
@@ -1061,6 +1097,12 @@ body.investigation-board-mode .drawing:not([data-investigation-note='true']) {
 /* Sticky note tinting in preview */
 .preview-text-container.has-background.sticky-note-tinted {
   background: transparent !important;
+}
+
+/* Note config dialog — add breathing room between form rows */
+.ib-note-config-form .form-group {
+  margin-top: 8px;
+  margin-bottom: 8px;
 }
 
 /* Fix for dark mode labels */

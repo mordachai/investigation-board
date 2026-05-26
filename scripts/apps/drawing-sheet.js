@@ -162,7 +162,9 @@ export class CustomDrawingSheet extends DrawingConfig {
 
     const noteType = this.document.flags[MODULE_ID]?.type || 'sticky';
     const defaultFontSize =
-      noteType === 'index' ? 9 : game.settings.get(MODULE_ID, 'baseFontSize');
+      noteType === 'index' ? 9
+      : noteType === 'media' ? 10   // compact default for tape labels
+      : game.settings.get(MODULE_ID, 'baseFontSize');
 
     const ibFlags = this.document.flags[MODULE_ID] || {};
     const isVideoNote = !!ibFlags.videoPath;
@@ -530,11 +532,18 @@ export class CustomDrawingSheet extends DrawingConfig {
     );
     const audioFields = this.element.querySelector('.ib-audio-fields');
     const videoFields = this.element.querySelector('.ib-video-fields');
+    // Label text placeholder — update when mode changes
+    const labelTextarea = this.element.querySelector("textarea[name='text'][data-placeholder-audio]");
     mediaRadios.forEach((radio) => {
       radio.addEventListener('change', async () => {
         const isVideo = radio.value === 'video';
         if (audioFields) audioFields.style.display = isVideo ? 'none' : '';
         if (videoFields) videoFields.style.display = isVideo ? '' : 'none';
+        if (labelTextarea) {
+          labelTextarea.placeholder = isVideo
+            ? labelTextarea.dataset.placeholderVideo
+            : labelTextarea.dataset.placeholderAudio;
+        }
 
         // Persist mediaMode explicitly in flags so the sheet re-render (triggered by
         // ApplicationV2's auto-render-on-document-update) reads the correct value and
@@ -727,11 +736,7 @@ export class CustomDrawingSheet extends DrawingConfig {
           const updates = {};
 
           // Only save text for notes that have text fields
-          if (
-            noteType !== 'handout' &&
-            noteType !== 'media' &&
-            noteType !== 'pin'
-          ) {
+          if (noteType !== 'handout' && noteType !== 'pin') {
             updates[`flags.${MODULE_ID}.text`] = data.text || '';
           }
 
@@ -820,12 +825,8 @@ export class CustomDrawingSheet extends DrawingConfig {
             updates[`flags.${MODULE_ID}.linkedObject`] = data.linkedObject;
           }
 
-          // Save font and fontSize to note flags (skip for handouts, media, and pins)
-          if (
-            noteType !== 'handout' &&
-            noteType !== 'media' &&
-            noteType !== 'pin'
-          ) {
+          // Save font and fontSize to note flags (skip for handouts and pins)
+          if (noteType !== 'handout' && noteType !== 'pin') {
             if (data.font !== undefined) {
               updates[`flags.${MODULE_ID}.font`] = data.font;
             }

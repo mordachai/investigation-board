@@ -943,6 +943,9 @@ export class CustomDrawing extends Drawing {
     // MEDIA NOTE LAYOUT (Cassette tape or VHS tape)
     if (isMedia) {
       const isVideo = isVideoMedia(noteData);
+      // isVideoDisplay uses the mediaMode flag so layout/text position is correct even
+      // when a video-mode note has no videoPath set yet (isVideo would be false then).
+      const isVideoDisplay = (noteData.mediaMode ?? (noteData.videoPath ? 'video' : 'audio')) === 'video';
       const drawingWidth = this.document.shape.width || 400;
       // Audio cassette ratio: 0.74 (470×350) — VHS tape ratio: 0.571 (875×500)
       const drawingHeight = this.document.shape.height || Math.round(drawingWidth * (isVideo ? 0.571 : 0.74));
@@ -1002,8 +1005,44 @@ export class CustomDrawing extends Drawing {
       // --- Pin Sprite (managed by updatePins, just load texture here) ---
       await this._loadPinTexture(noteData);
 
-      // Hide text for media notes on canvas
-      if (this.noteText) this.noteText.visible = false;
+      // Show handwritten label text on cassette (audio) or VHS tape (video) notes.
+      // Position differs between the two: cassette label is below the reel window;
+      // VHS label spans the upper front face.
+      const labelText = noteData.text || "";
+      if (labelText) {
+        const font = noteData.font || game.settings.get(MODULE_ID, "font");
+        const defaultFontSize = isVideoDisplay ? 25 : 18;
+        const baseFontSize = noteData.fontSize ?? defaultFontSize;
+        const fontBoost = font === "Caveat" ? 1.6 : 1.0;
+        const fontSize = (drawingWidth / 400) * baseFontSize * fontBoost;
+
+        // Label geometry: VHS label is wider and sits higher than a cassette label
+        const wrapWidth = isVideoDisplay ? drawingWidth * 0.65 : drawingWidth * 0.50;
+        const textX    = drawingWidth / 2;
+        const textY    = isVideoDisplay ? drawingHeight * 0.5 : drawingHeight * 0.30;
+
+        const textStyle = new PIXI.TextStyle({
+          fontFamily: font,
+          fontSize,
+          fill: noteData.textColor || "#1a1a1a",
+          wordWrap: true,
+          wordWrapWidth: wrapWidth,
+          align: "center",
+        });
+
+        if (!this.noteText || this.noteText.destroyed) {
+          this.noteText = new PIXI.Text(labelText, textStyle);
+          this.noteText.anchor.set(0.5);
+          this.shape.addChild(this.noteText);
+        } else {
+          this.noteText.style = textStyle;
+          this.noteText.text = labelText;
+        }
+        this.noteText.position.set(textX, textY);
+        this.noteText.visible = true;
+      } else {
+        if (this.noteText) this.noteText.visible = false;
+      }
 
       await this._loadStampTexture(noteData);
       return; // Early exit for media notes

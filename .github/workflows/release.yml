@@ -57,6 +57,17 @@ jobs:
           echo "title=$TITLE" >> $GITHUB_OUTPUT
           echo "Preparing release for $TITLE v$VERSION"
 
+      - name: Update module.json URLs for this release
+        run: |
+          VERSION=${{ steps.module-info.outputs.version }}
+          REPO=${{ github.repository }}
+          jq \
+            --arg manifest "https://github.com/${REPO}/releases/download/v${VERSION}/module.json" \
+            --arg download "https://github.com/${REPO}/releases/download/v${VERSION}/module.zip" \
+            '.manifest = $manifest | .download = $download' \
+            module.json > module.json.tmp
+          mv module.json.tmp module.json
+
       - name: Create module.zip
         run: |
           # Create the zip with only essential module files
@@ -78,7 +89,7 @@ jobs:
           unzip -l module.zip
 
       - name: Create Release
-        uses: softprops/action-gh-release@v1
+        uses: softprops/action-gh-release@v4.10.1
         with:
           tag_name: v${{ steps.module-info.outputs.version }}
           name: ${{ steps.module-info.outputs.title }} v${{ steps.module-info.outputs.version }}
@@ -94,7 +105,7 @@ jobs:
             Or download `module.zip` and install manually.
 
             ### Compatibility
-            - Foundry VTT v13.332+
+            - Foundry VTT v14+
 
             See [CHANGELOG.md](https://github.com/${{ github.repository }}/blob/main/CHANGELOG.md) for details.
           files: |

@@ -70,6 +70,12 @@ export class NotePreviewer extends HandlebarsApplicationMixin(ApplicationV2) {
 
     const fontBoost = font === "Caveat" ? 1.25 : 1.0;
 
+    // Media label text — same mode detection as the canvas renderer
+    const mediaMode = noteData?.mediaMode ?? (noteData?.videoPath ? 'video' : 'audio');
+    const isVideoDisplay = mediaMode === 'video';
+    const mediaDefaultFontSize = isVideoDisplay ? 22 : 16;
+    const mediaLabelFontSize = Math.round((noteData?.fontSize ?? mediaDefaultFontSize) * fontBoost);
+
     return {
       noteType: noteType,
       text: noteData?.text || "",
@@ -82,6 +88,8 @@ export class NotePreviewer extends HandlebarsApplicationMixin(ApplicationV2) {
       showSeparateText: showSeparateText,
       tint: noteData?.tint || "#ffffff",
       textColor: noteData?.textColor || "#000000",
+      isVideoDisplay: isVideoDisplay,
+      mediaLabelFontSize: mediaLabelFontSize,
       isGM: game.user.isGM,
       isGlobalActive: isGlobalActive,
       linkedObject: noteData?.linkedObject || "",
