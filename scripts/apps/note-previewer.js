@@ -199,9 +199,10 @@ export class NotePreviewer extends HandlebarsApplicationMixin(ApplicationV2) {
           localAudio.pause();
         }
 
-        socket.emit(SOCKET_NAME, { 
-            action: "playAudio", 
+        socket.emit(SOCKET_NAME, {
+            action: "playAudio",
             audioPath: audioPath,
+            drawingId: this.document.id,
             applyEffect: audioEffectEnabled,
             offset: offset
         });

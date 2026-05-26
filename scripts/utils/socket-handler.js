@@ -167,13 +167,13 @@ export function handleSocketMessage(data) {
       }
 
       (async () => {
-        const sound = await game.audio.play(data.audioPath, { 
+        const sound = await game.audio.play(data.audioPath, {
           volume: 0.8,
           offset: data.offset || 0
         });
         if (sound) {
           activeGlobalSounds.set(data.audioPath, sound);
-          
+
           if (data.applyEffect) {
             applyTapeEffectToSound(sound);
           }
@@ -185,6 +185,24 @@ export function handleSocketMessage(data) {
               activeGlobalSounds.delete(data.audioPath);
             }
           }, (sound.duration * 1000) + 1000 || 5000);
+        }
+
+        // Auto-open the NotePreviewer for this client so players see the cassette animation
+        // and have access to the music-volume slider. Mirrors the openVideoPlayer pattern.
+        if (data.drawingId) {
+          const { NotePreviewer } = await import("../apps/note-previewer.js");
+          const drawing = canvas.drawings?.get(data.drawingId)?.document
+                       ?? game.scenes.active?.drawings.get(data.drawingId);
+          if (drawing) {
+            const appId = `note-preview-${data.drawingId}`;
+            let app = foundry.applications.instances.get(appId);
+            if (!app) {
+              app = new NotePreviewer(drawing);
+              await app.render(true);
+            } else {
+              app.bringToTop?.();
+            }
+          }
         }
       })();
     }

@@ -63,13 +63,18 @@ export function applyTapeEffectToSound(sound) {
         if (!sourceNode) return;
 
         try {
-            // Disconnect from default destination (usually game.audio.master or context.destination)
+            // Disconnect from default destination (usually sound.gainNode)
             // Note: disconnect() without arguments removes all outgoing connections
             sourceNode.disconnect();
-            
-            // Apply the tape effect chain and connect it to the master destination
-            // In Foundry v13, game.audio.master is the primary gain node
-            const destination = game.audio.master || game.audio.context.destination;
+
+            // Route through the Sound's own gainNode so that:
+            //   - sound.volume (set via the volume: option) is respected
+            //   - game.audio.music.gainNode (the music-channel slider) is respected
+            //   - the filter chain sits BEFORE Foundry's gain, not after
+            // Fallback order: sound.gainNode → music channel gainNode → context.destination
+            const destination = sound.gainNode
+                ?? game.audio.music?.gainNode
+                ?? game.audio.context.destination;
             applyTapeEffect(game.audio.context, sourceNode, destination);
         } catch (err) {
             console.warn("Investigation Board: Failed to redirect Sound node for tape effect", err);
@@ -103,8 +108,9 @@ export function applyTapeEffectToElement(audioElement) {
         }
         
         
-        // Connect source to the tape effect chain, then to master destination
-        const destination = game.audio.master || context.destination;
+        // Connect source through the music-channel gainNode so the music-volume slider works.
+        // Fallback: music channel gainNode → context.destination
+        const destination = game.audio.music?.gainNode ?? context.destination;
         return applyTapeEffect(context, source, destination);
     } catch (err) {
         console.warn("Investigation Board: Could not apply audio effect to element", err);

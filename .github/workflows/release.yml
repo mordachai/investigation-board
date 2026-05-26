@@ -89,7 +89,7 @@ jobs:
           unzip -l module.zip
 
       - name: Create Release
-        uses: softprops/action-gh-release@v4.10.1
+        uses: softprops/action-gh-release@v2
         with:
           tag_name: v${{ steps.module-info.outputs.version }}
           name: ${{ steps.module-info.outputs.title }} v${{ steps.module-info.outputs.version }}
