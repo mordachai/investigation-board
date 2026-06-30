@@ -1601,7 +1601,9 @@ export class CustomDrawing extends Drawing {
       this.noteText.text = truncatedText;
     }
     if (this.noteText && !this.noteText.destroyed) {
-      this.noteText.position.set(width / 2, isPhoto ? height - 25 : height / 2);
+      // Offset scales with height so caption stays anchored in the white strip at any note size
+      const photoTextOffset = height * (25 / 290);
+      this.noteText.position.set(width / 2, isPhoto ? height - photoTextOffset : height / 2);
     }
 
     await this._loadStampTexture(noteData);
