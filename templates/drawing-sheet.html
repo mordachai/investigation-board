@@ -177,7 +177,9 @@
     {{!-- NOTE TAB --}}
     <div class="ib-tab-panel active" data-panel="note">
 
-      {{!-- Media type toggle --}}
+      {{!-- Media type toggle — sensitive: switching modes clears the opposite
+            file path, and users without FILES_BROWSE can't set a new one --}}
+      {{#if canViewSensitive}}
       <div class="form-group ib-media-type-toggle">
         <label>Media Type:</label>
         <div class="ib-media-radios">
@@ -191,6 +193,7 @@
           </label>
         </div>
       </div>
+      {{/if}}
 
       {{!-- AUDIO fields --}}
       <div class="ib-audio-fields" {{#if (eq mediaMode "video")}}style="display:none"{{/if}}>

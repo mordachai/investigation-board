@@ -740,8 +740,14 @@ export class CustomDrawingSheet extends DrawingConfig {
             updates[`flags.${MODULE_ID}.text`] = data.text || '';
           }
 
-          // Save image for photo and handout notes
-          if (noteType === 'photo' || noteType === 'handout') {
+          // Save image for photo and handout notes.
+          // The image field is hidden from users without FILES_BROWSE
+          // (canViewSensitive) — data.image is undefined then, and writing the
+          // placeholder would wipe an image set by the GM.
+          if (
+            (noteType === 'photo' || noteType === 'handout') &&
+            data.image !== undefined
+          ) {
             updates[`flags.${MODULE_ID}.image`] =
               data.image ||
               (noteType === 'handout'
@@ -753,14 +759,23 @@ export class CustomDrawingSheet extends DrawingConfig {
             const prevMode =
               this.document.flags[MODULE_ID]?.mediaMode ??
               (!!this.document.flags[MODULE_ID]?.videoPath ? 'video' : 'audio');
-            const newMode = data.mediaMode || 'audio';
+            // Radio is hidden without FILES_BROWSE — fall back to the stored
+            // mode so a player save doesn't silently flip the note to audio
+            const newMode = data.mediaMode || prevMode;
             const modeChanged = prevMode !== newMode;
 
             updates[`flags.${MODULE_ID}.mediaMode`] = newMode;
 
             if (newMode === 'video') {
-              updates[`flags.${MODULE_ID}.videoPath`] = data.videoPath || '';
-              updates[`flags.${MODULE_ID}.audioPath`] = '';
+              // videoPath field is hidden without FILES_BROWSE — only write it
+              // when present in the form, so player saves don't wipe GM paths.
+              if (data.videoPath !== undefined) {
+                updates[`flags.${MODULE_ID}.videoPath`] = data.videoPath;
+              }
+              // Clear the opposite path only on an actual mode switch
+              if (modeChanged) {
+                updates[`flags.${MODULE_ID}.audioPath`] = '';
+              }
               updates[`flags.${MODULE_ID}.videoFormat`] =
                 data.videoFormat || 'crt';
               updates[`flags.${MODULE_ID}.videoEffects`] = {
@@ -804,8 +819,13 @@ export class CustomDrawingSheet extends DrawingConfig {
                 updates['shape.height'] = Math.round(w * 0.571);
               }
             } else {
-              updates[`flags.${MODULE_ID}.audioPath`] = data.audioPath || '';
-              updates[`flags.${MODULE_ID}.videoPath`] = '';
+              // audioPath field is hidden without FILES_BROWSE — same guard
+              if (data.audioPath !== undefined) {
+                updates[`flags.${MODULE_ID}.audioPath`] = data.audioPath;
+              }
+              if (modeChanged) {
+                updates[`flags.${MODULE_ID}.videoPath`] = '';
+              }
               updates[`flags.${MODULE_ID}.audioEffectEnabled`] =
                 !!data.audioEffectEnabled;
               if (modeChanged) {
