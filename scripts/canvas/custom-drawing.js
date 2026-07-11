@@ -1,7 +1,7 @@
 import { MODULE_ID, SOCKET_NAME, VIDEO_EXTENSIONS, DOC_BACKGROUNDS } from "../config.js";
 import { InvestigationBoardState } from "../state.js";
 import { collaborativeUpdate, collaborativeDelete, socket, activeGlobalSounds, activeVideoBroadcasts } from "../utils/socket-handler.js";
-import { truncateText, resolvePinImage, getAvailablePinFiles, resolveStampImage, getAvailableStampFiles } from "../utils/helpers.js";
+import { truncateText, resolvePinImage, getAvailablePinFiles, pickPinFileForDrawing, resolveStampImage, getAvailableStampFiles } from "../utils/helpers.js";
 import { NotePreviewer } from "../apps/note-previewer.js";
 import { VideoPlayer } from "../apps/video-player.js";
 import { drawAllConnectionLines, beginConnectionFrom, resetPinConnectionState } from "./connection-manager.js";
@@ -940,9 +940,10 @@ export class CustomDrawing extends Drawing {
    *
    * The global "pinColor" setting controls visibility:
    *   "none"   → destroy any existing sprite and bail out.
-   *   "random" → pick a random image from the pin folder on first render,
-   *              persist the choice to the note's flags so every client
-   *              shows the same pin.
+   *   "random" → deterministically pick an image from the pin folder based
+   *              on the drawing ID (same result on every client); the GM
+   *              client persists the choice to the note's flags so it stays
+   *              stable even if the folder contents later change.
    *
    * The per-note flag `noteData.pinColor` stores the bare filename
    * (e.g. "redPin.webp").  resolvePinImage() prepends the configured
@@ -971,9 +972,16 @@ export class CustomDrawing extends Drawing {
 
     let pinFilename = noteData.pinColor;
     if (!pinFilename) {
+      // Deterministic "random": hash the drawing ID into the sorted file list
+      // so every client resolves the same pin without waiting on a flag write.
       const files = await getAvailablePinFiles();
-      pinFilename = files[Math.floor(Math.random() * files.length)];
-      await collaborativeUpdate(this.document.id, { [`flags.${MODULE_ID}.pinColor`]: pinFilename });
+      pinFilename = pickPinFileForDrawing(this.document.id, files);
+      if (!pinFilename) return;
+      // Persist from the GM client only — avoids N clients racing to write
+      // different values through the socket on first render.
+      if (game.user.isGM) {
+        await collaborativeUpdate(this.document.id, { [`flags.${MODULE_ID}.pinColor`]: pinFilename });
+      }
     }
 
     const pinImage = resolvePinImage(pinFilename);

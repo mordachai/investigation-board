@@ -48,15 +48,34 @@ export async function getAvailablePinFiles() {
     const result = await FilePicker.browse("data", folder);
     _pinFilesCache = result.files
       .filter(f => /\.(webp|png)$/i.test(f))
-      .map(f => f.split("/").pop());
+      .map(f => f.split("/").pop())
+      .sort();
     _pinFolderCache = folder;
   } catch {
     // No FILES_BROWSE permission or folder doesn't exist — use built-in list
-    _pinFilesCache = [...PIN_COLORS];
+    _pinFilesCache = [...PIN_COLORS].sort();
     _pinFolderCache = folder;
   }
 
   return _pinFilesCache;
+}
+
+/**
+ * Deterministically pick a pin file for a drawing so every client resolves
+ * the same "random" pin without needing a flag write to land first.
+ * Hashes the drawing ID into an index over the sorted file list.
+ *
+ * @param {string} drawingId
+ * @param {string[]} files  Sorted list of bare filenames
+ * @returns {string|undefined}
+ */
+export function pickPinFileForDrawing(drawingId, files) {
+  if (!files?.length) return undefined;
+  let hash = 0;
+  for (let i = 0; i < drawingId.length; i++) {
+    hash = (hash * 31 + drawingId.charCodeAt(i)) >>> 0;
+  }
+  return files[hash % files.length];
 }
 
 // ---------------------------------------------------------------------------
