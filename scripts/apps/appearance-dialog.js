@@ -1,18 +1,11 @@
-import { MODULE_ID, STICKY_TINTS, INK_COLORS, DEFAULT_PIN_FOLDER, DEFAULT_STAMP_FOLDER } from "../config.js";
+import { MODULE_ID, STICKY_TINTS, INK_COLORS, DEFAULT_PIN_FOLDER, DEFAULT_STAMP_FOLDER, DEFAULT_STAMP_TINT, FONTS } from "../config.js";
 import { invalidatePinFilesCache } from "../utils/helpers.js";
 
 const { ApplicationV2, HandlebarsApplicationMixin } = foundry.applications.api;
 
-const FONT_CHOICES = {
-  "Rock Salt":            "Rock Salt",
-  "Caveat":               "Caveat",
-  "Courier New":          "Courier New",
-  "Times New Roman":      "Times New Roman",
-  "Signika":              "Signika",
-  "Arial":                "Arial",
-  "Typewriter Condensed": "Typewriter Condensed",
-  "IB Special Elite":     "IB Special Elite"
-};
+// Font select options are name → name (identity label); sourced from the module's
+// single FONTS list (config.js) so it can't drift from the other font-consuming code.
+const FONT_CHOICES = Object.fromEntries(FONTS.map(f => [f.name, f.name]));
 
 const PIN_COLOR_CHOICES = {
   random: "Random",
@@ -47,7 +40,7 @@ export class AppearanceDialog extends HandlebarsApplicationMixin(ApplicationV2) 
     const currentPinColor    = game.settings.get(MODULE_ID, "pinColor");
     const currentPinFolder   = game.settings.get(MODULE_ID, "pinImagesFolder") || DEFAULT_PIN_FOLDER;
     const currentStampFolder = game.settings.get(MODULE_ID, "stampImagesFolder") || DEFAULT_STAMP_FOLDER;
-    const currentStampTint   = game.settings.get(MODULE_ID, "stampTint") || "#cc0000";
+    const currentStampTint   = game.settings.get(MODULE_ID, "stampTint") || DEFAULT_STAMP_TINT;
 
     return {
       // Current values

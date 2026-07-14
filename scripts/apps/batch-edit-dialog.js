@@ -200,7 +200,10 @@ export class BatchEditDialog extends HandlebarsApplicationMixin(ApplicationV2) {
     let pinCount = 0;
     let connCount = 0;
 
-    // First pass — target notes: pin colour + outgoing connection colour
+    // First pass — target notes: pin colour + outgoing connection colour.
+    // Updates target independent notes, so fire them concurrently rather than
+    // serializing one DB/socket round trip at a time.
+    const firstPassUpdates = [];
     for (const note of targets) {
       const update = {};
       const flags = note.document.flags[MODULE_ID];
@@ -219,11 +222,13 @@ export class BatchEditDialog extends HandlebarsApplicationMixin(ApplicationV2) {
         }
       }
 
-      if (Object.keys(update).length) await collaborativeUpdate(note.document.id, update);
+      if (Object.keys(update).length) firstPassUpdates.push(collaborativeUpdate(note.document.id, update));
     }
+    await Promise.all(firstPassUpdates);
 
     // Second pass — notes outside the target set that have connections pointing INTO a target
     if (this.#connColor !== null) {
+      const secondPassUpdates = [];
       for (const note of this._allNotes()) {
         if (targetIds.has(note.document.id)) continue;
         const conns = note.document.flags[MODULE_ID]?.connections ?? [];
@@ -232,9 +237,10 @@ export class BatchEditDialog extends HandlebarsApplicationMixin(ApplicationV2) {
         const updated = conns.map(c =>
           targetIds.has(c.targetId) ? { ...c, color: this.#connColor } : c
         );
-        await collaborativeUpdate(note.document.id, { [`flags.${MODULE_ID}.connections`]: updated });
+        secondPassUpdates.push(collaborativeUpdate(note.document.id, { [`flags.${MODULE_ID}.connections`]: updated }));
         connCount += changed.length;
       }
+      await Promise.all(secondPassUpdates);
     }
 
     drawAllConnectionLines();

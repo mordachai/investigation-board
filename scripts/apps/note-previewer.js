@@ -84,7 +84,7 @@ export class NotePreviewer extends HandlebarsApplicationMixin(ApplicationV2) {
       framePath: framePath,
       backgroundPath: backgroundPath,
       fontClass: fontClass,
-      previewFontSize: (noteData?.fontSize || 15) * 2.5 * fontBoost,
+      previewFontSize: (noteData?.fontSize || game.settings.get(MODULE_ID, "baseFontSize")) * 2.5 * fontBoost,
       showSeparateText: showSeparateText,
       tint: noteData?.tint || "#ffffff",
       textColor: noteData?.textColor || "#000000",
@@ -170,7 +170,7 @@ export class NotePreviewer extends HandlebarsApplicationMixin(ApplicationV2) {
 
         // If currently active, stop it
         if (this.globalSoundActive) {
-          socket.emit(SOCKET_NAME, { action: "stopAudio", audioPath: audioPath });
+          socket.emit(SOCKET_NAME, { action: "stopAudio", audioPath: audioPath, senderId: game.user.id });
           const localGlobal = activeGlobalSounds.get(audioPath);
           if (localGlobal) {
             localGlobal.stop();
@@ -204,7 +204,8 @@ export class NotePreviewer extends HandlebarsApplicationMixin(ApplicationV2) {
             audioPath: audioPath,
             drawingId: this.document.id,
             applyEffect: audioEffectEnabled,
-            offset: offset
+            offset: offset,
+            senderId: game.user.id
         });
         
         const sound = await game.audio.play(audioPath, { 
@@ -225,18 +226,17 @@ export class NotePreviewer extends HandlebarsApplicationMixin(ApplicationV2) {
           playGlobalBtn.classList.add("active");
           cassette.classList.add("playing");
 
-          const checkEnd = setInterval(() => {
-            if (!sound.playing) {
-              this.globalSoundActive = false;
-              icon.className = "fas fa-broadcast-tower";
-              span.innerText = "Play for All";
-              playGlobalBtn.classList.remove("active");
-              const current = activeGlobalSounds.get(audioPath);
-              if (current === sound) activeGlobalSounds.delete(audioPath);
-              if (localAudio?.paused) cassette.classList.remove("playing");
-              clearInterval(checkEnd);
-            }
-          }, 1000);
+          const onEnd = () => {
+            this.globalSoundActive = false;
+            icon.className = "fas fa-broadcast-tower";
+            span.innerText = "Play for All";
+            playGlobalBtn.classList.remove("active");
+            const current = activeGlobalSounds.get(audioPath);
+            if (current === sound) activeGlobalSounds.delete(audioPath);
+            if (localAudio?.paused) cassette.classList.remove("playing");
+          };
+          sound.addEventListener("end", onEnd, { once: true });
+          sound.addEventListener("stop", onEnd, { once: true });
         }
       });
     }

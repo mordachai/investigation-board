@@ -1,4 +1,4 @@
-import { MODULE_ID, CASSETTE_IMAGES, VIDEO_IMAGES, DOC_BACKGROUNDS } from "../config.js";
+import { MODULE_ID, CASSETTE_IMAGES, VIDEO_IMAGES, DOC_BACKGROUNDS, FONTS } from "../config.js";
 import { InvestigationBoardState } from "../state.js";
 import { getActorDisplayName, getEffectiveScale } from "./helpers.js";
 import { collaborativeCreate, collaborativeCreateMany } from "./socket-handler.js";
@@ -75,6 +75,80 @@ export function getRandomVideoImage() {
   return `modules/investigation-board/assets/${name}`;
 }
 
+/**
+ * Single source of truth for a note type's default width/height. Sticky/photo/index/
+ * handout widths come from settings (with a hardcoded fallback); media/pin/document
+ * have no configurable width setting and are always fixed-size.
+ * @param {string} noteType
+ * @returns {{width: number, height: number}}
+ */
+export function getNoteDimensions(noteType) {
+  const stickyW  = game.settings.get(MODULE_ID, "stickyNoteWidth") || 200;
+  const photoW   = game.settings.get(MODULE_ID, "photoNoteWidth") || 225;
+  const indexW   = game.settings.get(MODULE_ID, "indexNoteWidth") || 600;
+  const handoutW = game.settings.get(MODULE_ID, "handoutNoteWidth") || 400;
+  const handoutH = game.settings.get(MODULE_ID, "handoutNoteHeight") || 400;
+
+  switch (noteType) {
+    case "photo":    return { width: photoW,   height: Math.round(photoW / (225 / 290)) };
+    case "index":    return { width: indexW,   height: Math.round(indexW / (600 / 400)) };
+    case "handout":  return { width: handoutW, height: handoutH };
+    case "media":    return { width: 400,      height: Math.round(400 * 0.74) };
+    case "pin":      return { width: 40,       height: 40 };
+    case "document": return { width: 595,      height: 842 };
+    default:         return { width: stickyW,  height: stickyW }; // sticky
+  }
+}
+
+/**
+ * Assembles the Drawing creation payload skeleton shared by every "create a note"
+ * helper: author, shape, stroke (always invisible), lock state, and flag wrapping.
+ * Callers supply the parts that actually vary between note types/sources.
+ * @param {object} opts
+ * @param {number} opts.x
+ * @param {number} opts.y
+ * @param {number} opts.width
+ * @param {number} opts.height
+ * @param {string} opts.fillColor
+ * @param {number} opts.fillAlpha
+ * @param {object} opts.flags - Contents of flags[MODULE_ID] (type, text, etc.)
+ */
+function buildNoteCreateData({ x, y, width, height, fillColor, fillAlpha, flags }) {
+  return {
+    type: "r",
+    author: game.user.id,
+    x, y,
+    shape: { width, height },
+    fillColor,
+    fillAlpha,
+    strokeColor: "#000000",
+    strokeWidth: 0,
+    strokeAlpha: 0,
+    locked: false,
+    flags: {
+      [MODULE_ID]: flags,
+      core: { sheetClass: "investigation-board.CustomDrawingSheet" }
+    },
+  };
+}
+
+/**
+ * After a note is created while Investigation Board mode is active, Foundry's default
+ * interactivity settles a beat after render — force it interactive once that settles.
+ * @param {Array} created - Result of collaborativeCreate() (array of created docs, or empty)
+ */
+function postCreateFixup(created) {
+  if (InvestigationBoardState.isActive && created?.[0]) {
+    setTimeout(() => {
+      const newDrawing = canvas.drawings.get(created[0].id);
+      if (newDrawing) {
+        newDrawing.eventMode = 'auto';
+        newDrawing.interactiveChildren = true;
+      }
+    }, 250);
+  }
+}
+
 export async function createNote(noteType, { x = null, y = null } = {}) {
   const scene = canvas.scene;
   if (!scene) {
@@ -84,32 +158,8 @@ export async function createNote(noteType, { x = null, y = null } = {}) {
 
   const sceneScale = getEffectiveScale();
 
-  // Retrieve width settings (or use defaults)
-  const stickyW = game.settings.get(MODULE_ID, "stickyNoteWidth") || 200;
-  const photoW = game.settings.get(MODULE_ID, "photoNoteWidth") || 225;
-  const indexW = game.settings.get(MODULE_ID, "indexNoteWidth") || 600;
-  const handoutW = game.settings.get(MODULE_ID, "handoutNoteWidth") || 400;
-  const handoutH = game.settings.get(MODULE_ID, "handoutNoteHeight") || 400;
-  const mediaW = 400;
-  const pinW = 40;
-  const docW = 595;
-  const docH = 842;
-
-  const width = noteType === "photo" ? photoW
-                : noteType === "index" ? indexW
-                : noteType === "handout" ? handoutW
-                : noteType === "media" ? mediaW
-                : noteType === "pin" ? pinW
-                : noteType === "document" ? docW
-                : stickyW;
   // Media notes start as audio (cassette) by default; height updates if user sets a videoPath
-  const height = noteType === "photo" ? Math.round(photoW / (225 / 290))
-                 : noteType === "index" ? Math.round(indexW / (600 / 400))
-                 : noteType === "handout" ? handoutH
-                 : noteType === "media" ? Math.round(mediaW * 0.74)
-                 : noteType === "pin" ? pinW
-                 : noteType === "document" ? docH
-                 : stickyW;
+  const { width, height } = getNoteDimensions(noteType);
 
   // Final coordinates
   let finalX = x;
@@ -170,43 +220,21 @@ export async function createNote(noteType, { x = null, y = null } = {}) {
     // Pin starts as Auto (audio mode). Switches to "none" when user toggles to video.
   }
 
-  const created = await collaborativeCreate({
-    type: "r",
-    author: game.user.id,
+  const created = await collaborativeCreate(buildNoteCreateData({
     x: finalX,
     y: finalY,
-    shape: { width, height },
+    width, height,
     fillColor: "#000000",
     fillAlpha: (noteType === "handout" || noteType === "media" || noteType === "pin") ? 0.001 : 1,
-    strokeColor: "#000000",
-    strokeWidth: 0,
-    strokeAlpha: 0,
-    locked: false,
     flags: {
-      [MODULE_ID]: {
-        type: noteType,
-        text: defaultText,
-        linkedObject: "",
-        ...extraFlags
-      },
-      core: {
-        sheetClass: "investigation-board.CustomDrawingSheet"
-      }
+      type: noteType,
+      text: defaultText,
+      linkedObject: "",
+      ...extraFlags
     },
-    ownership: { default: 3 },
-  }, { skipAutoOpen: noteType === "pin" });
+  }), { skipAutoOpen: noteType === "pin" });
 
-  // If in Investigation Board mode, ensure the new drawing is interactive
-  if (InvestigationBoardState.isActive && created && created[0]) {
-    // Wait for rendering to complete
-    setTimeout(() => {
-      const newDrawing = canvas.drawings.get(created[0].id);
-      if (newDrawing) {
-        newDrawing.eventMode = 'auto';
-        newDrawing.interactiveChildren = true;
-      }
-    }, 250);
-  }
+  postCreateFixup(created);
 
   // Switch back to select tool so user can immediately manipulate the note
   if (InvestigationBoardState.isActive && ui.controls) {
@@ -243,47 +271,27 @@ export async function createPhotoNoteFromActor(actor, isUnknown = false) {
     ...(isUnknown ? { unknown: true } : {})
   };
 
-  const photoW = game.settings.get(MODULE_ID, "photoNoteWidth") || 225;
-  const height = Math.round(photoW / (225 / 290));
+  const { width: photoW, height } = getNoteDimensions("photo");
   const sceneScale = getEffectiveScale();
 
   const viewCenter = canvas.stage.pivot;
   const x = viewCenter.x - (photoW * sceneScale) / 2;
   const y = viewCenter.y - (height * sceneScale) / 2;
 
-  const created = await collaborativeCreate({
-    type: "r",
-    author: game.user.id,
+  const created = await collaborativeCreate(buildNoteCreateData({
     x, y,
-    shape: { width: photoW, height },
+    width: photoW, height,
     fillColor: "#ffffff",
     fillAlpha: 1,
-    strokeColor: "#000000",
-    strokeWidth: 0,
-    strokeAlpha: 0,
-    locked: false,
     flags: {
-      [MODULE_ID]: {
-        type: "photo",
-        text: displayName,
-        linkedObject: `@UUID[${actor.uuid}]{${displayName}}`,
-        ...extraFlags
-      },
-      core: { sheetClass: "investigation-board.CustomDrawingSheet" }
+      type: "photo",
+      text: displayName,
+      linkedObject: `@UUID[${actor.uuid}]{${displayName}}`,
+      ...extraFlags
     },
-    ownership: { default: 3 }
-  }, { skipAutoOpen: true });
+  }), { skipAutoOpen: true });
 
-  // Handle interactivity in Investigation Board mode
-  if (InvestigationBoardState.isActive && created?.[0]) {
-    setTimeout(() => {
-      const newDrawing = canvas.drawings.get(created[0].id);
-      if (newDrawing) {
-        newDrawing.eventMode = 'auto';
-        newDrawing.interactiveChildren = true;
-      }
-    }, 250);
-  }
+  postCreateFixup(created);
 }
 
 /**
@@ -297,8 +305,7 @@ export async function createPhotoNoteFromScene(targetScene) {
     return;
   }
 
-  const photoW = game.settings.get(MODULE_ID, "photoNoteWidth") || 225;
-  const height = Math.round(photoW / (225 / 290));
+  const { width: photoW, height } = getNoteDimensions("photo");
   const sceneScale = getEffectiveScale();
 
   const viewCenter = canvas.stage.pivot;
@@ -308,43 +315,25 @@ export async function createPhotoNoteFromScene(targetScene) {
   const displayName = targetScene.navName || targetScene.name || "Unknown Location";
   const imagePath = targetScene.background?.src || "modules/investigation-board/assets/placeholder.webp";
 
-  const extraFlags = { 
+  const extraFlags = {
     image: imagePath,
     textColor: game.settings.get(MODULE_ID, "defaultInkColor") || "#000000"
   };
 
-  const created = await collaborativeCreate({
-    type: "r",
-    author: game.user.id,
+  const created = await collaborativeCreate(buildNoteCreateData({
     x, y,
-    shape: { width: photoW, height },
+    width: photoW, height,
     fillColor: "#ffffff",
     fillAlpha: 1,
-    strokeColor: "#000000",
-    strokeWidth: 0,
-    strokeAlpha: 0,
-    locked: false,
     flags: {
-      [MODULE_ID]: {
-        type: "photo",
-        text: displayName,
-        linkedObject: `@UUID[${targetScene.uuid}]{${displayName}}`,
-        ...extraFlags
-      },
-      core: { sheetClass: "investigation-board.CustomDrawingSheet" }
+      type: "photo",
+      text: displayName,
+      linkedObject: `@UUID[${targetScene.uuid}]{${displayName}}`,
+      ...extraFlags
     },
-    ownership: { default: 3 }
-  }, { skipAutoOpen: true });
+  }), { skipAutoOpen: true });
 
-  if (InvestigationBoardState.isActive && created?.[0]) {
-    setTimeout(() => {
-      const newDrawing = canvas.drawings.get(created[0].id);
-      if (newDrawing) {
-        newDrawing.eventMode = 'auto';
-        newDrawing.interactiveChildren = true;
-      }
-    }, 250);
-  }
+  postCreateFixup(created);
 }
 
 /**
@@ -358,8 +347,7 @@ export async function createHandoutNoteFromPage(page) {
     return;
   }
 
-  const handoutW = game.settings.get(MODULE_ID, "handoutNoteWidth") || 400;
-  const handoutH = game.settings.get(MODULE_ID, "handoutNoteHeight") || 400;
+  const { width: handoutW, height: handoutH } = getNoteDimensions("handout");
   const sceneScale = getEffectiveScale();
 
   const viewCenter = canvas.stage.pivot;
@@ -394,38 +382,20 @@ export async function createHandoutNoteFromPage(page) {
     console.error("Investigation Board: Failed to get image dimensions for handout", err);
   }
 
-  const created = await collaborativeCreate({
-    type: "r",
-    author: game.user.id,
+  const created = await collaborativeCreate(buildNoteCreateData({
     x, y,
-    shape: { width: finalWidth, height: finalHeight },
+    width: finalWidth, height: finalHeight,
     fillColor: "#000000",
-    fillAlpha: 0,
-    strokeColor: "#000000",
-    strokeWidth: 0,
-    strokeAlpha: 0,
-    locked: false,
+    fillAlpha: 0.001,
     flags: {
-      [MODULE_ID]: {
-        type: "handout",
-        text: "",
-        linkedObject: `@UUID[${page.uuid}]{${page.name}}`,
-        image: imagePath
-      },
-      core: { sheetClass: "investigation-board.CustomDrawingSheet" }
+      type: "handout",
+      text: "",
+      linkedObject: `@UUID[${page.uuid}]{${page.name}}`,
+      image: imagePath
     },
-    ownership: { default: 3 }
-  }, { skipAutoOpen: true });
+  }), { skipAutoOpen: true });
 
-  if (InvestigationBoardState.isActive && created?.[0]) {
-    setTimeout(() => {
-      const newDrawing = canvas.drawings.get(created[0].id);
-      if (newDrawing) {
-        newDrawing.eventMode = 'auto';
-        newDrawing.interactiveChildren = true;
-      }
-    }, 250);
-  }
+  postCreateFixup(created);
 }
 
 /**
@@ -439,47 +409,28 @@ export async function createMediaNoteFromSound(sound) {
     return;
   }
 
-  const mediaW = 400;
-  const height = Math.round(mediaW * 0.74);
+  const { width: mediaW, height } = getNoteDimensions("media");
   const sceneScale = getEffectiveScale();
 
   const viewCenter = canvas.stage.pivot;
   const x = viewCenter.x - (mediaW * sceneScale) / 2;
   const y = viewCenter.y - (height * sceneScale) / 2;
 
-  const created = await collaborativeCreate({
-    type: "r",
-    author: game.user.id,
+  const created = await collaborativeCreate(buildNoteCreateData({
     x, y,
-    shape: { width: mediaW, height },
+    width: mediaW, height,
     fillColor: "#000000",
     fillAlpha: 0.001,
-    strokeColor: "#000000",
-    strokeWidth: 0,
-    strokeAlpha: 0,
-    locked: false,
     flags: {
-      [MODULE_ID]: {
-        type: "media",
-        text: sound.name,
-        image: getRandomCassetteImage(),
-        audioPath: sound.path,
-        linkedObject: `@UUID[${sound.uuid}]{${sound.name}}`
-      },
-      core: { sheetClass: "investigation-board.CustomDrawingSheet" }
+      type: "media",
+      text: sound.name,
+      image: getRandomCassetteImage(),
+      audioPath: sound.path,
+      linkedObject: `@UUID[${sound.uuid}]{${sound.name}}`
     },
-    ownership: { default: 3 }
-  }, { skipAutoOpen: true });
+  }), { skipAutoOpen: true });
 
-  if (InvestigationBoardState.isActive && created?.[0]) {
-    setTimeout(() => {
-      const newDrawing = canvas.drawings.get(created[0].id);
-      if (newDrawing) {
-        newDrawing.eventMode = 'auto';
-        newDrawing.interactiveChildren = true;
-      }
-    }, 250);
-  }
+  postCreateFixup(created);
 }
 
 /**
@@ -493,8 +444,7 @@ export async function createPhotoNoteFromItem(item) {
     return;
   }
 
-  const photoW = game.settings.get(MODULE_ID, "photoNoteWidth") || 225;
-  const height = Math.round(photoW / (225 / 290));
+  const { width: photoW, height } = getNoteDimensions("photo");
   const sceneScale = getEffectiveScale();
 
   const viewCenter = canvas.stage.pivot;
@@ -504,43 +454,25 @@ export async function createPhotoNoteFromItem(item) {
   const displayName = item.name || "Unknown Item";
   const imagePath = item.img || "modules/investigation-board/assets/placeholder.webp";
 
-  const extraFlags = { 
+  const extraFlags = {
     image: imagePath,
     textColor: game.settings.get(MODULE_ID, "defaultInkColor") || "#000000"
   };
 
-  const created = await collaborativeCreate({
-    type: "r",
-    author: game.user.id,
+  const created = await collaborativeCreate(buildNoteCreateData({
     x, y,
-    shape: { width: photoW, height },
+    width: photoW, height,
     fillColor: "#ffffff",
     fillAlpha: 1,
-    strokeColor: "#000000",
-    strokeWidth: 0,
-    strokeAlpha: 0,
-    locked: false,
     flags: {
-      [MODULE_ID]: {
-        type: "photo",
-        text: displayName,
-        linkedObject: `@UUID[${item.uuid}]{${displayName}}`,
-        ...extraFlags
-      },
-      core: { sheetClass: "investigation-board.CustomDrawingSheet" }
+      type: "photo",
+      text: displayName,
+      linkedObject: `@UUID[${item.uuid}]{${displayName}}`,
+      ...extraFlags
     },
-    ownership: { default: 3 }
-  }, { skipAutoOpen: true });
+  }), { skipAutoOpen: true });
 
-  if (InvestigationBoardState.isActive && created?.[0]) {
-    setTimeout(() => {
-      const newDrawing = canvas.drawings.get(created[0].id);
-      if (newDrawing) {
-        newDrawing.eventMode = 'auto';
-        newDrawing.interactiveChildren = true;
-      }
-    }, 250);
-  }
+  postCreateFixup(created);
 }
 
 /**
@@ -606,10 +538,8 @@ export async function importFolderAsNotes(folder) {
   if (!result || !result.confirmed) return;
   const applyLoFi = result.applyLoFi;
 
-  const photoW = game.settings.get(MODULE_ID, "photoNoteWidth") || 225;
-  const photoH = Math.round(photoW / (225 / 290));
-  const mediaW = 400;
-  const mediaH = Math.round(mediaW * 0.74);
+  const { width: photoW, height: photoH } = getNoteDimensions("photo");
+  const { width: mediaW, height: mediaH } = getNoteDimensions("media");
   const sceneScale = getEffectiveScale();
 
   const viewCenter = canvas.stage.pivot;
@@ -620,9 +550,6 @@ export async function importFolderAsNotes(folder) {
   const spacing = 40;
 
   const createDataArray = [];
-  
-  // No pre-fetch needed — getRandomCassetteImage() is now synchronous
-  const cassetteImages = [];
 
   for (let i = 0; i < documents.length; i++) {
     const doc = documents[i];
@@ -640,7 +567,6 @@ export async function importFolderAsNotes(folder) {
     const y = startY + row * (height + spacing);
 
     let noteData = null;
-    const defaultTint = game.settings.get(MODULE_ID, "defaultNoteColor") || "#ffffff";
     const defaultInk = game.settings.get(MODULE_ID, "defaultInkColor") || "#000000";
 
     if (type === "Actor") {
@@ -689,23 +615,12 @@ export async function importFolderAsNotes(folder) {
     }
 
     if (noteData) {
-      createDataArray.push({
-        type: "r",
-        author: game.user.id,
-        x, y,
-        shape: { width, height },
+      createDataArray.push(buildNoteCreateData({
+        x, y, width, height,
         fillColor: type === "Playlist" ? "#000000" : "#ffffff",
-        fillAlpha: type === "Playlist" ? 0 : 1,
-        strokeColor: "#000000",
-        strokeWidth: 0,
-        strokeAlpha: 0,
-        locked: false,
-        flags: {
-          [MODULE_ID]: noteData,
-          core: { sheetClass: "investigation-board.CustomDrawingSheet" }
-        },
-        ownership: { default: 3 }
-      });
+        fillAlpha: type === "Playlist" ? 0.001 : 1,
+        flags: noteData,
+      }));
     }
   }
 
@@ -761,8 +676,7 @@ export async function importPlaylistAsNotes(playlist) {
   if (!result || !result.confirmed) return;
   const applyLoFi = result.applyLoFi;
 
-  const mediaW = 400;
-  const mediaH = Math.round(mediaW * 0.74);
+  const { width: mediaW, height: mediaH } = getNoteDimensions("media");
   const sceneScale = getEffectiveScale();
 
   const viewCenter = canvas.stage.pivot;
@@ -783,33 +697,21 @@ export async function importPlaylistAsNotes(playlist) {
     const x = startX + col * (mediaW + spacing);
     const y = startY + row * (mediaH + spacing);
 
-    const noteData = {
-      type: "media",
-      text: doc.name,
-      image: getRandomCassetteImage(),
-      audioPath: doc.path,
-      linkedObject: `@UUID[${doc.uuid}]{${doc.name}}`,
-      audioEffectEnabled: applyLoFi,
-      textColor: defaultInk
-    };
-
-    createDataArray.push({
-      type: "r",
-      author: game.user.id,
+    createDataArray.push(buildNoteCreateData({
       x, y,
-      shape: { width: mediaW, height: mediaH },
+      width: mediaW, height: mediaH,
       fillColor: "#000000",
-      fillAlpha: 0,
-      strokeColor: "#000000",
-      strokeWidth: 0,
-      strokeAlpha: 0,
-      locked: false,
+      fillAlpha: 0.001,
       flags: {
-        [MODULE_ID]: noteData,
-        core: { sheetClass: "investigation-board.CustomDrawingSheet" }
+        type: "media",
+        text: doc.name,
+        image: getRandomCassetteImage(),
+        audioPath: doc.path,
+        linkedObject: `@UUID[${doc.uuid}]{${doc.name}}`,
+        audioEffectEnabled: applyLoFi,
+        textColor: defaultInk
       },
-      ownership: { default: 3 }
-    });
+    }));
   }
 
   if (createDataArray.length > 0) {
@@ -832,8 +734,7 @@ export async function createHandoutNoteFromImage(imagePath, { x: dropX = null, y
     return;
   }
 
-  const handoutW = game.settings.get(MODULE_ID, "handoutNoteWidth") || 400;
-  const handoutH = game.settings.get(MODULE_ID, "handoutNoteHeight") || 400;
+  const { width: handoutW, height: handoutH } = getNoteDimensions("handout");
   const sceneScale = getEffectiveScale();
 
   // Attempt to get natural dimensions for better initial sizing
@@ -873,38 +774,20 @@ export async function createHandoutNoteFromImage(imagePath, { x: dropX = null, y
     y = viewCenter.y - (finalHeight * sceneScale) / 2;
   }
 
-  const created = await collaborativeCreate({
-    type: "r",
-    author: game.user.id,
+  const created = await collaborativeCreate(buildNoteCreateData({
     x, y,
-    shape: { width: finalWidth, height: finalHeight },
+    width: finalWidth, height: finalHeight,
     fillColor: "#000000",
-    fillAlpha: 0,
-    strokeColor: "#000000",
-    strokeWidth: 0,
-    strokeAlpha: 0,
-    locked: false,
+    fillAlpha: 0.001,
     flags: {
-      [MODULE_ID]: {
-        type: "handout",
-        text: "",
-        linkedObject: "",
-        image: imagePath
-      },
-      core: { sheetClass: "investigation-board.CustomDrawingSheet" }
+      type: "handout",
+      text: "",
+      linkedObject: "",
+      image: imagePath
     },
-    ownership: { default: 3 }
-  }, { skipAutoOpen: true });
+  }), { skipAutoOpen: true });
 
-  if (InvestigationBoardState.isActive && created?.[0]) {
-    setTimeout(() => {
-      const newDrawing = canvas.drawings.get(created[0].id);
-      if (newDrawing) {
-        newDrawing.eventMode = 'auto';
-        newDrawing.interactiveChildren = true;
-      }
-    }, 250);
-  }
+  postCreateFixup(created);
 }
 
 /**
@@ -920,51 +803,54 @@ export async function createTextIndexFromPage(page) {
   const body = stripHtml(page.text?.content || "");
   const text = page.name ? `${page.name}\n\n${body}` : body;
 
-  const indexW = game.settings.get(MODULE_ID, "indexNoteWidth") || 600;
-  const indexH = Math.round(indexW / (600 / 400));
+  const { width: indexW, height: indexH } = getNoteDimensions("index");
   const sceneScale = getEffectiveScale();
   const viewCenter = canvas.stage.pivot;
 
-  const created = await collaborativeCreate({
-    type: "r",
-    author: game.user.id,
+  const created = await collaborativeCreate(buildNoteCreateData({
     x: viewCenter.x - (indexW * sceneScale) / 2,
     y: viewCenter.y - (indexH * sceneScale) / 2,
-    shape: { width: indexW, height: indexH },
+    width: indexW, height: indexH,
     fillColor: "#ffffff",
     fillAlpha: 1,
-    strokeColor: "#000000",
-    strokeWidth: 0,
-    strokeAlpha: 0,
-    locked: false,
     flags: {
-      [MODULE_ID]: {
-        type: "index",
-        text,
-        fontSize: 9,
-        tint: game.settings.get(MODULE_ID, "defaultNoteColor") || "#ffffff",
-        textColor: game.settings.get(MODULE_ID, "defaultInkColor") || "#000000",
-        linkedObject: `@UUID[${page.uuid}]{${page.name}}`,
-      },
-      core: { sheetClass: "investigation-board.CustomDrawingSheet" }
+      type: "index",
+      text,
+      fontSize: 9,
+      tint: game.settings.get(MODULE_ID, "defaultNoteColor") || "#ffffff",
+      textColor: game.settings.get(MODULE_ID, "defaultInkColor") || "#000000",
+      linkedObject: `@UUID[${page.uuid}]{${page.name}}`,
     },
-    ownership: { default: 3 },
-  });
+  }));
 
-  if (InvestigationBoardState.isActive && created?.[0]) {
-    setTimeout(() => {
-      const d = canvas.drawings.get(created[0].id);
-      if (d) { d.eventMode = 'auto'; d.interactiveChildren = true; }
-    }, 250);
-  }
+  postCreateFixup(created);
 }
+
+// Rock Salt is the font the char-budget below was actually measured against
+// (see splitHtmlIntoDocPages docstring) — every other font's width factor is
+// expressed relative to it.
+const DOC_PAGE_CALIBRATION_FONT = "Rock Salt";
 
 /**
  * Splits sanitized PIXI.HTMLText markup into page-sized chunks.
  *
- * Uses a character-count heuristic calibrated against actual rendering:
- * ~2200 characters (including HTML tags) fills one A4 doc note at the default
- * 14 pt body font (Rock Salt). This scales with font size but not font family.
+ * Uses a character-count heuristic. Two distinct bugs were found and fixed here —
+ * don't re-introduce either by "recalibrating" against symptoms of the other:
+ *
+ * 1. PIXI.HTMLText silently clamps its rendered texture to maxWidth/maxHeight
+ *    (default 2024px, in resolution-scaled pixels) and drops content beyond that
+ *    with no error — on a high-DPI display this could corrupt/cut a page's text
+ *    (mid-sentence) regardless of char budget. Fixed on `docBodyText` directly
+ *    (maxWidth/maxHeight raised in `_doUpdateSprites`), not here.
+ * 2. The char budget itself: the old "~2200 chars/page" figure was measured
+ *    against continuous prose and badly overestimates real multi-paragraph
+ *    journal content — each `<p>` (including header-derived ones; see
+ *    sanitizeForPixiHtml) gets paragraph spacing the raw-character-count model
+ *    doesn't account for, so paragraph-dense text runs out of room much earlier.
+ *    BASE_CHARS below is calibrated against a real 11-paragraph/1650-char
+ *    Rock-Salt-14pt sample, confirmed (after fixing bug 1) to cleanly fit exactly
+ *    6 paragraphs / 899 raw chars on a titled first page — no more, no less.
+ *
  * Paragraphs too long for a single page are split at sentence then word boundaries.
  *
  * @param {string} sanitizedHtml - Output of sanitizeForPixiHtml()
@@ -973,9 +859,10 @@ export async function createTextIndexFromPage(page) {
  * @param {number} opts.docW      - Note width in world units (595)
  * @param {number} opts.docH      - Note height in world units (842)
  * @param {number} opts.fontSize  - Body font size in pt (default 14)
+ * @param {string} [opts.font]    - Body font family (defaults to the calibration font)
  * @returns {string[]}
  */
-function splitHtmlIntoDocPages(sanitizedHtml, { titleStr, docW, docH, fontSize }) {
+function splitHtmlIntoDocPages(sanitizedHtml, { titleStr, docW, docH, fontSize, font }) {
   const MARGIN = Math.round(docW * 0.105);
   const titleFontSize = Math.round((docW / 595) * 28);
   const bodyFontSize = Math.round((docW / 595) * Math.max(8, fontSize || 14));
@@ -985,9 +872,15 @@ function splitHtmlIntoDocPages(sanitizedHtml, { titleStr, docW, docH, fontSize }
   const firstPageBodyH = docH - MARGIN - (titleStr ? titleAreaHeight + 20 : 0) - MARGIN;
   const otherPageBodyH = docH - MARGIN * 2;
 
-  // Calibrated at 16 pt — scale inversely with font size
-  const BASE_CHARS = 2500;
-  const scale = 16 / bodyFontSize;
+  // Calibrated at 16 pt against Rock Salt (widthFactor 0.72) — scale inversely with
+  // font size, and inversely with font width relative to the calibration font so a
+  // narrower font (e.g. Arial, 0.55) gets proportionally more characters per page.
+  const BASE_CHARS = 1000; // → 1000 chars/page at 16pt Rock Salt (800 on a titled first page);
+                           // → 1143 chars/page at 14pt Rock Salt (914 on a titled first page)
+  const calibrationFactor = FONTS.find(f => f.name === DOC_PAGE_CALIBRATION_FONT)?.widthFactor ?? 0.72;
+  const fontFactor = FONTS.find(f => f.name === font)?.widthFactor ?? calibrationFactor;
+  const widthAdjust = calibrationFactor / fontFactor;
+  const scale = (16 / bodyFontSize) * widthAdjust;
   const charsPerPage   = Math.round(BASE_CHARS * scale);
   // First page: title adds visual weight at the top — use 80% to leave breathing room
   // at the bottom rather than the bare height ratio (~85.5%).
@@ -1099,48 +992,36 @@ export async function createDocNoteFromPage(page, background = "parchment") {
   const body = sanitizeForPixiHtml(page.text?.content || "");
   const sceneScale = getEffectiveScale();
   const viewCenter = canvas.stage.pivot;
-  const docW = 595, docH = 842;
+  const { width: docW, height: docH } = getNoteDimensions("document");
   const fontSize = 14;
   const titleStr = page.name || "";
   const textColor = game.settings.get(MODULE_ID, "defaultInkColor") || "#000000";
+  // Notes created here don't set a per-note font override, so they render with
+  // whatever the global default is — the pagination budget needs to match that.
+  const font = game.settings.get(MODULE_ID, "font");
 
-  const pageTexts = splitHtmlIntoDocPages(body, { titleStr, docW, docH, fontSize });
+  const pageTexts = splitHtmlIntoDocPages(body, { titleStr, docW, docH, fontSize, font });
 
   if (pageTexts.length <= 1) {
     // Single page — original behaviour, opens edit dialog
-    const created = await collaborativeCreate({
-      type: "r",
-      author: game.user.id,
+    const created = await collaborativeCreate(buildNoteCreateData({
       x: viewCenter.x - (docW * sceneScale) / 2,
       y: viewCenter.y - (docH * sceneScale) / 2,
-      shape: { width: docW, height: docH },
+      width: docW, height: docH,
       fillColor: "#000000",
       fillAlpha: 1,
-      strokeColor: "#000000",
-      strokeWidth: 0,
-      strokeAlpha: 0,
-      locked: false,
       flags: {
-        [MODULE_ID]: {
-          type: "document",
-          title: titleStr,
-          text: body,
-          docBackground: background,
-          textColor,
-          fontSize,
-          linkedObject: `@UUID[${page.uuid}]{${page.name}}`,
-        },
-        core: { sheetClass: "investigation-board.CustomDrawingSheet" }
+        type: "document",
+        title: titleStr,
+        text: body,
+        docBackground: background,
+        textColor,
+        fontSize,
+        linkedObject: `@UUID[${page.uuid}]{${page.name}}`,
       },
-      ownership: { default: 3 },
-    }, { skipAutoOpen: false });
+    }), { skipAutoOpen: false });
 
-    if (InvestigationBoardState.isActive && created?.[0]) {
-      setTimeout(() => {
-        const d = canvas.drawings.get(created[0].id);
-        if (d) { d.eventMode = 'auto'; d.interactiveChildren = true; }
-      }, 250);
-    }
+    postCreateFixup(created);
     return;
   }
 
@@ -1150,31 +1031,21 @@ export async function createDocNoteFromPage(page, background = "parchment") {
   const startX = viewCenter.x - (totalWidth * sceneScale) / 2;
   const startY = viewCenter.y - (docH * sceneScale) / 2;
 
-  const createDataArray = pageTexts.map((pageText, idx) => ({
-    type: "r",
-    author: game.user.id,
+  const createDataArray = pageTexts.map((pageText, idx) => buildNoteCreateData({
     x: startX + idx * (docW + spacing),
     y: startY,
-    shape: { width: docW, height: docH },
+    width: docW, height: docH,
     fillColor: "#000000",
     fillAlpha: 1,
-    strokeColor: "#000000",
-    strokeWidth: 0,
-    strokeAlpha: 0,
-    locked: false,
     flags: {
-      [MODULE_ID]: {
-        type: "document",
-        title: idx === 0 ? titleStr : "",
-        text: pageText,
-        docBackground: background,
-        textColor,
-        fontSize,
-        linkedObject: `@UUID[${page.uuid}]{${page.name}}`,
-      },
-      core: { sheetClass: "investigation-board.CustomDrawingSheet" }
+      type: "document",
+      title: idx === 0 ? titleStr : "",
+      text: pageText,
+      docBackground: background,
+      textColor,
+      fontSize,
+      linkedObject: `@UUID[${page.uuid}]{${page.name}}`,
     },
-    ownership: { default: 3 },
   }));
 
   await collaborativeCreateMany(createDataArray, { skipAutoOpen: true });

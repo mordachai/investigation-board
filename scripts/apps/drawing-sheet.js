@@ -4,6 +4,8 @@ import {
   INK_COLORS,
   VIDEO_FORMATS,
   DOC_BACKGROUNDS,
+  EFFECT_DEFAULTS,
+  DEFAULT_CONNECTION_LINE_WIDTH,
 } from '../config.js';
 import { getAvailablePinFiles } from '../utils/helpers.js';
 import { collaborativeUpdate } from '../utils/socket-handler.js';
@@ -25,6 +27,13 @@ import {
 const DrawingConfig = foundry.applications.sheets.DrawingConfig;
 const FilePicker = foundry.applications.apps.FilePicker.implementation;
 const TextEditor = foundry.applications.ux.TextEditor.implementation;
+
+// parseFloat/parseInt return NaN (never null/undefined) on bad input, so `?? fallback`
+// never triggers. Use this instead wherever a numeric form field feeds flags/styles.
+function num(v, fallback, parser = parseFloat) {
+  const n = parser(v);
+  return Number.isFinite(n) ? n : fallback;
+}
 
 export class CustomDrawingSheet extends DrawingConfig {
   constructor(...args) {
@@ -53,16 +62,6 @@ export class CustomDrawingSheet extends DrawingConfig {
     },
   };
 
-  static get defaultOptions() {
-    return foundry.utils.mergeObject(super.defaultOptions, {
-      classes: ['custom-drawing-sheet'],
-      template: 'modules/investigation-board/templates/drawing-sheet.html',
-      width: 400,
-      height: 'auto',
-      title: 'Note Configuration',
-    });
-  }
-
   // ApplicationV2 data preparation method
   async _prepareContext(options) {
     const context = await super._prepareContext(options);
@@ -74,7 +73,6 @@ export class CustomDrawingSheet extends DrawingConfig {
     context.image = customData.image;
     context.audioPath = customData.audioPath;
     context.linkedObject = customData.linkedObject;
-    context.noteTypes = customData.noteTypes;
     context.connections = customData.connections;
     context.font = customData.font;
     context.fontSize = customData.fontSize;
@@ -155,7 +153,7 @@ export class CustomDrawingSheet extends DrawingConfig {
         targetLabel: targetLabel,
         displayNumber: index + 1,
         color: conn.color || '#FF0000',
-        width: conn.width || 3,
+        width: conn.width || DEFAULT_CONNECTION_LINE_WIDTH,
         index: index,
       };
     });
@@ -175,7 +173,7 @@ export class CustomDrawingSheet extends DrawingConfig {
     const data = {
       document: this.document,
       noteType: noteType,
-      text: ibFlags.text || 'Default Text',
+      text: ibFlags.text ?? '',
       audioPath: ibFlags.audioPath || '',
       audioEffectEnabled: ibFlags.audioEffectEnabled !== false,
       linkedObject: ibFlags.linkedObject || '',
@@ -191,12 +189,6 @@ export class CustomDrawingSheet extends DrawingConfig {
       stickyTints: STICKY_TINTS,
       inkColors: INK_COLORS,
       connections: formattedConnections,
-      noteTypes: {
-        sticky: 'Sticky Note',
-        photo: 'Photo Note',
-        index: 'Index Card',
-        handout: 'Handout',
-      },
       // Video fields
       videoPath: ibFlags.videoPath || '',
       videoFormat: ibFlags.videoFormat || 'crt',
@@ -207,17 +199,17 @@ export class CustomDrawingSheet extends DrawingConfig {
           mechanicalSound: true,
           trackingGlitch: false,
           filmGrain: false,
-          filmGrainIntensity: 0.15,
-          glitchIntervalMin: 2,
-          glitchIntervalMax: 4,
+          filmGrainIntensity: EFFECT_DEFAULTS.filmGrainIntensity,
+          glitchIntervalMin: EFFECT_DEFAULTS.glitchIntervalMin,
+          glitchIntervalMax: EFFECT_DEFAULTS.glitchIntervalMax,
           timestampEnabled: false,
           recordingStartISO: new Date().toISOString().slice(0, 19),
           recordingStartCenti: 0,
           timestampDateFormat: 'us',
           timestampX: 0.6,
           timestampY: -0.75,
-          timestampFontSize: 30,
-          timestampColor: '#008425',
+          timestampFontSize: EFFECT_DEFAULTS.timestampFontSize,
+          timestampColor: EFFECT_DEFAULTS.timestampColor,
         };
         // For new notes (no saved effects yet) apply the format's defaults
         const formatKey = ibFlags.videoFormat || 'crt';
@@ -244,21 +236,6 @@ export class CustomDrawingSheet extends DrawingConfig {
    */
   _prepareSubmitData(event, form, formData) {
     return {};
-  }
-
-  // ApplicationV2 form submission handler (not used, kept for compatibility)
-  async _processFormData(event, form, formData) {
-    return formData;
-  }
-
-  async _processSubmitData(event, form, submitData) {
-    // Not used in v13 - form handling done in _onRender
-    return;
-  }
-
-  async _updateObject(event, formData) {
-    // V1 fallback - not used in v13, form handling done in _onRender
-    return;
   }
 
   // ApplicationV2 lifecycle method
@@ -498,30 +475,18 @@ export class CustomDrawingSheet extends DrawingConfig {
           previewAudioBtn.innerHTML = '<i class="fas fa-stop"></i>';
           previewAudioBtn.title = 'Stop Preview';
 
-          // Reset button when sound ends
+          // Reset the button when the sound actually ends/stops, via Foundry's Sound
+          // events instead of polling sound.playing on a timer.
           const sound = this.previewSound;
-          setTimeout(() => {
-            if (this.previewSound === sound && !sound.playing) {
+          const onEnd = () => {
+            if (this.previewSound === sound) {
               previewAudioBtn.innerHTML = '<i class="fas fa-play"></i>';
               previewAudioBtn.title = 'Preview Audio';
+              this.previewSound = null;
             }
-          }, 100); // Small delay to let it start
-
-          // Monitor for end
-          const checkEnd = setInterval(() => {
-            if (
-              !this.previewSound ||
-              this.previewSound !== sound ||
-              !sound.playing
-            ) {
-              if (this.previewSound === sound) {
-                previewAudioBtn.innerHTML = '<i class="fas fa-play"></i>';
-                previewAudioBtn.title = 'Preview Audio';
-                this.previewSound = null;
-              }
-              clearInterval(checkEnd);
-            }
-          }, 500);
+          };
+          sound.addEventListener('end', onEnd, { once: true });
+          sound.addEventListener('stop', onEnd, { once: true });
         }
       });
     }
@@ -783,33 +748,35 @@ export class CustomDrawingSheet extends DrawingConfig {
                 mechanicalSound: !!data['videoEffects.mechanicalSound'],
                 trackingGlitch: !!data['videoEffects.trackingGlitch'],
                 filmGrain: !!data['videoEffects.filmGrain'],
-                filmGrainIntensity:
-                  parseFloat(data['videoEffects.filmGrainIntensity']) || 0.15,
+                filmGrainIntensity: num(
+                  data['videoEffects.filmGrainIntensity'],
+                  EFFECT_DEFAULTS.filmGrainIntensity,
+                ),
                 glitchIntervalMin: Math.max(
                   1,
-                  parseInt(data['videoEffects.glitchIntervalMin']) || 8,
+                  num(data['videoEffects.glitchIntervalMin'], EFFECT_DEFAULTS.glitchIntervalMin, parseInt),
                 ),
                 glitchIntervalMax: Math.max(
                   1,
-                  parseInt(data['videoEffects.glitchIntervalMax']) || 20,
+                  num(data['videoEffects.glitchIntervalMax'], EFFECT_DEFAULTS.glitchIntervalMax, parseInt),
                 ),
                 timestampEnabled: !!data['videoEffects.timestampEnabled'],
                 recordingStartISO: data['videoEffects.recordingStartISO'] || '',
                 recordingStartCenti: Math.min(
                   99,
-                  Math.max(
-                    0,
-                    parseInt(data['videoEffects.recordingStartCenti']) || 0,
-                  ),
+                  Math.max(0, num(data['videoEffects.recordingStartCenti'], 0, parseInt)),
                 ),
                 timestampDateFormat:
                   data['videoEffects.timestampDateFormat'] || 'us',
-                timestampX: parseFloat(data['videoEffects.timestampX']) || 0,
-                timestampY: parseFloat(data['videoEffects.timestampY']) ?? -1,
-                timestampFontSize:
-                  parseInt(data['videoEffects.timestampFontSize']) || 13,
+                timestampX: num(data['videoEffects.timestampX'], 0),
+                timestampY: num(data['videoEffects.timestampY'], -1),
+                timestampFontSize: num(
+                  data['videoEffects.timestampFontSize'],
+                  EFFECT_DEFAULTS.timestampFontSize,
+                  parseInt,
+                ),
                 timestampColor:
-                  data['videoEffects.timestampColor'] || '#00e040',
+                  data['videoEffects.timestampColor'] || EFFECT_DEFAULTS.timestampColor,
               };
               // Only swap canvas sprite on mode change — the radio change handler
               // already handles immediate updates, but this covers Save-without-toggle.
@@ -870,16 +837,22 @@ export class CustomDrawingSheet extends DrawingConfig {
             updates[`flags.${MODULE_ID}.pinColor`] = data.pinColor;
           }
 
-          // Process connection color changes
-          const connections = this.document.flags[MODULE_ID]?.connections || [];
-          connections.forEach((conn, index) => {
-            const colorKey = `connection-color-${index}`;
-            if (data[colorKey]) {
-              conn.color = data[colorKey];
+          // Process connection color changes. Re-read the live document at submit time
+          // (not the array captured when the dialog opened) and only write the array
+          // back if a color input actually changed — otherwise another user's connection
+          // added/removed while this dialog was open gets clobbered by a stale copy.
+          const liveConnections = this.document.flags[MODULE_ID]?.connections || [];
+          let connectionsChanged = false;
+          const connections = liveConnections.map((conn, index) => {
+            const newColor = data[`connection-color-${index}`];
+            if (newColor && newColor !== conn.color) {
+              connectionsChanged = true;
+              return { ...conn, color: newColor };
             }
+            return conn;
           });
 
-          if (connections.length > 0) {
+          if (connectionsChanged) {
             updates[`flags.${MODULE_ID}.connections`] = connections;
           }
 
@@ -912,20 +885,20 @@ export class CustomDrawingSheet extends DrawingConfig {
       mechanicalSound: g('mechanicalSound')?.checked ?? false,
       trackingGlitch: g('trackingGlitch')?.checked ?? false,
       filmGrain: g('filmGrain')?.checked ?? false,
-      filmGrainIntensity: parseFloat(g('filmGrainIntensity')?.value) || 0.15,
-      glitchIntervalMin: parseInt(g('glitchIntervalMin')?.value) || 8,
-      glitchIntervalMax: parseInt(g('glitchIntervalMax')?.value) || 20,
+      filmGrainIntensity: num(g('filmGrainIntensity')?.value, EFFECT_DEFAULTS.filmGrainIntensity),
+      glitchIntervalMin: num(g('glitchIntervalMin')?.value, EFFECT_DEFAULTS.glitchIntervalMin, parseInt),
+      glitchIntervalMax: num(g('glitchIntervalMax')?.value, EFFECT_DEFAULTS.glitchIntervalMax, parseInt),
       timestampEnabled: g('timestampEnabled')?.checked ?? false,
       recordingStartISO: g('recordingStartISO')?.value ?? '',
-      recordingStartCenti: parseInt(g('recordingStartCenti')?.value) || 0,
+      recordingStartCenti: num(g('recordingStartCenti')?.value, 0, parseInt),
       timestampDateFormat:
         this.element.querySelector(
           "[name='videoEffects.timestampDateFormat']:checked",
         )?.value ?? 'us',
-      timestampX: parseFloat(g('timestampX')?.value) ?? 0,
-      timestampY: parseFloat(g('timestampY')?.value) ?? -1,
-      timestampFontSize: parseInt(g('timestampFontSize')?.value) || 13,
-      timestampColor: g('timestampColor')?.value ?? '#00e040',
+      timestampX: num(g('timestampX')?.value, 0),
+      timestampY: num(g('timestampY')?.value, -1),
+      timestampFontSize: num(g('timestampFontSize')?.value, EFFECT_DEFAULTS.timestampFontSize, parseInt),
+      timestampColor: g('timestampColor')?.value || EFFECT_DEFAULTS.timestampColor,
     };
   }
 
@@ -940,8 +913,4 @@ export class CustomDrawingSheet extends DrawingConfig {
     return super._onClose?.(options);
   }
 
-  // V1 fallback - not used in v13, event binding done in _onRender
-  activateListeners(html) {
-    super.activateListeners(html);
-  }
 }

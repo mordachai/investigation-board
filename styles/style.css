@@ -190,65 +190,6 @@ body.investigation-board-mode .drawing:not([data-investigation-note='true']) {
   pointer-events: none;
 }
 
-/* ========================= */
-/* Investigation Board HUD   */
-/* ========================= */
-
-.investigation-board-hud {
-  background: rgba(0, 0, 0, 0.9);
-  border: 2px solid #ffd700;
-  border-radius: 5px;
-  padding: 10px;
-  box-shadow: 0 0 15px rgba(0, 0, 0, 0.7);
-  min-width: 200px;
-}
-
-.investigation-board-hud .hud-header {
-  text-align: center;
-  color: #ffd700;
-  font-weight: bold;
-  margin-bottom: 8px;
-  text-transform: uppercase;
-  font-size: 12px;
-}
-
-.investigation-board-hud .hud-body {
-  margin-bottom: 8px;
-}
-
-.investigation-board-hud textarea {
-  width: 100%;
-  background: rgba(255, 255, 255, 0.95);
-  border: 1px solid #ccc;
-  padding: 5px;
-  font-family: inherit;
-  font-size: 12px;
-  resize: vertical;
-  box-sizing: border-box;
-}
-
-.investigation-board-hud .hud-controls {
-  display: flex;
-  gap: 5px;
-  justify-content: space-around;
-  margin-top: 10px;
-}
-
-.investigation-board-hud .control-icon {
-  background: transparent;
-  border: 1px solid #ffd700;
-  color: #ffd700;
-  padding: 5px 10px;
-  cursor: pointer;
-  transition: all 0.2s;
-  flex: 1;
-  text-align: center;
-}
-
-.investigation-board-hud .control-icon:hover {
-  background: #ffd700;
-  color: #000;
-}
 
 /* ========================= */
 /* Connections Section       */
@@ -655,12 +596,6 @@ body.investigation-board-mode .drawing:not([data-investigation-note='true']) {
 
 .ib-context-menu-item.ib-active i {
   color: #ff6400;
-}
-
-.ib-context-menu-separator {
-  height: 1px;
-  background: #4b4a44;
-  margin: 4px 0;
 }
 
 .ib-has-submenu {
@@ -1109,7 +1044,6 @@ body.investigation-board-mode .drawing:not([data-investigation-note='true']) {
 .theme-dark .ib-note-config-form label,
 .theme-dark .ib-note-config-form .form-group label,
 .theme-dark .color-mosaic-group label,
-.theme-dark .investigation-board-hud label,
 .theme-dark .size-input-group label,
 .theme-dark .font-select-group label,
 .theme-dark .font-size-group label,

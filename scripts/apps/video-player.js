@@ -17,7 +17,6 @@ export class VideoPlayer extends HandlebarsApplicationMixin(ApplicationV2) {
     this._broadcastActive = false;
     this._lastSyncedTime = 0;
     this._seekThrottleTimer = null;
-    this._syncInterval = null;
 
     // Effect loop handles
     this._grainRaf = null;
@@ -115,7 +114,6 @@ export class VideoPlayer extends HandlebarsApplicationMixin(ApplicationV2) {
 
       video.addEventListener('pause', () => {
         if (!this._broadcastActive) return;
-        clearInterval(this._syncInterval);
         this._emitVideoEvent('pauseVideo', video.currentTime);
       });
 
@@ -129,7 +127,6 @@ export class VideoPlayer extends HandlebarsApplicationMixin(ApplicationV2) {
 
       video.addEventListener('ended', () => {
         if (!this._broadcastActive) return;
-        clearInterval(this._syncInterval);
         this._emitVideoEvent('pauseVideo', video.currentTime);
         this._stopBroadcast();
       });
@@ -177,6 +174,7 @@ export class VideoPlayer extends HandlebarsApplicationMixin(ApplicationV2) {
     socket.emit(SOCKET_NAME, {
       action: 'openVideoPlayer',
       drawingId: this.document.id,
+      senderId: game.user.id,
     });
 
     if (video && !video.paused) {
@@ -186,7 +184,6 @@ export class VideoPlayer extends HandlebarsApplicationMixin(ApplicationV2) {
 
   _stopBroadcast() {
     if (!socket) return;
-    clearInterval(this._syncInterval);
     activeVideoBroadcasts.delete(this.document.id);
     this._broadcastActive = false;
     this._updateBroadcastButton(false);
@@ -194,6 +191,7 @@ export class VideoPlayer extends HandlebarsApplicationMixin(ApplicationV2) {
     socket.emit(SOCKET_NAME, {
       action: 'stopVideoBroadcast',
       drawingId: this.document.id,
+      senderId: game.user.id,
     });
   }
 
@@ -214,6 +212,7 @@ export class VideoPlayer extends HandlebarsApplicationMixin(ApplicationV2) {
       action,
       drawingId: this.document.id,
       currentTime,
+      senderId: game.user.id,
     });
   }
 
@@ -550,7 +549,6 @@ export class VideoPlayer extends HandlebarsApplicationMixin(ApplicationV2) {
 
   async _onClose(options) {
     clearTimeout(this._seekThrottleTimer);
-    clearInterval(this._syncInterval);
     this._stopGrainLoop();
     this._stopTimestampLoop();
     this._stopGlitchInterval();

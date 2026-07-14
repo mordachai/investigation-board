@@ -1,11 +1,10 @@
-import { MODULE_ID, SOCKET_NAME } from "./config.js";
+import { MODULE_ID, SOCKET_NAME, MODULE_FONTS } from "./config.js";
 import { InvestigationBoardState } from "./state.js";
 import { registerSettings } from "./settings.js";
 import { CustomDrawing } from "./canvas/custom-drawing.js";
 import { CustomDrawingSheet } from "./apps/drawing-sheet.js";
 import {
-  drawAllConnectionLines,
-  updatePins,
+  requestGlobalRedraw,
   cleanupConnectionLines,
   resetPinConnectionState,
   clearConnectionNumbers,
@@ -256,8 +255,7 @@ Hooks.on("dropCanvasData", (canvas, data) => {
 Hooks.once("init", () => {
   // Kick off font downloads immediately — the earlier they start, the less
   // likely canvasReady fires before they arrive.
-  const moduleFonts = ["Rock Salt", "Caveat", "Typewriter Condensed", "IB Special Elite"];
-  moduleFonts.forEach(f => document.fonts.load(`1em "${f}"`).catch(() => {}));
+  MODULE_FONTS.forEach(f => document.fonts.load(`1em "${f}"`).catch(() => {}));
 
   registerSettings();
   CONFIG.Drawing.objectClass = CustomDrawing;
@@ -291,8 +289,7 @@ Hooks.once("ready", async () => {
   // Force-load module fonts so PIXI.Text can use them before the canvas renders.
   // CSS @font-face fonts load asynchronously — without this, PIXI falls back to
   // a system font if it tries to render text before the font download completes.
-  const moduleFonts = ["Rock Salt", "Caveat", "Typewriter Condensed", "IB Special Elite"];
-  await Promise.all(moduleFonts.map(f => document.fonts.load(`16px "${f}"`).catch(() => {})));
+  await Promise.all(MODULE_FONTS.map(f => document.fonts.load(`16px "${f}"`).catch(() => {})));
 
   initSocket();
 
@@ -332,7 +329,8 @@ Hooks.once("ready", async () => {
       return;
     }
 
-    const items = (e.clipboardData || e.originalEvent.clipboardData).items;
+    if (!e.clipboardData) return;
+    const items = e.clipboardData.items;
     for (let i = 0; i < items.length; i++) {
       const item = items[i];
       if (item.type.indexOf("image") !== -1) {
@@ -433,14 +431,6 @@ Hooks.once("ready", async () => {
  * @returns {Promise<string|null>}
  */
 async function _uploadImageHandout(file, prefix = "handout") {
-  const folderPath = "assets/ib-handouts";
-
-  try { await FilePicker.browse("data", "assets"); }
-  catch { await FilePicker.createDirectory("data", "assets"); }
-
-  try { await FilePicker.browse("data", folderPath); }
-  catch { await FilePicker.createDirectory("data", folderPath); }
-
   const timestamp = Date.now();
   const uniqueId = foundry.utils.randomID();
   let ext = "png";
@@ -451,7 +441,10 @@ async function _uploadImageHandout(file, prefix = "handout") {
   }
   const newFileName = `${prefix}_handout_${timestamp}_${uniqueId}.${ext}`;
   const renamedFile = new File([file], newFileName, { type: file.type });
-  const response = await FilePicker.upload("data", folderPath, renamedFile, { fileName: newFileName });
+  // uploadPersistent stores under modules/investigation-board/storage/ib-handouts via
+  // whatever storage source/bucket is actually active (Forge, S3, local) instead of a
+  // hardcoded "data" source write to the world-root assets/ folder.
+  const response = await FilePicker.uploadPersistent(MODULE_ID, "ib-handouts", renamedFile, {}, { notify: false });
   return response.path || null;
 }
 
@@ -509,7 +502,7 @@ Hooks.on("createDrawing", (drawing, options, userId) => {
   if (InvestigationBoardState.isActive) {
     // Wait for the drawing to be fully rendered on canvas
     setTimeout(() => {
-      updatePins();
+      requestGlobalRedraw();
       refreshDrawingsInteractivity();
     }, 300);
   }
@@ -604,8 +597,7 @@ Hooks.on("updateDrawing", async (drawing, changes, options, userId) => {
   // Redraw connection lines when position, shape, or connections change
   // Also refresh pins when hidden state changes (pins live in pinsContainer, outside the placeable hierarchy)
   if (changes.x !== undefined || changes.y !== undefined || flagsChanged || shapeChanged || changes.hidden !== undefined) {
-    updatePins();
-    drawAllConnectionLines();
+    requestGlobalRedraw();
   }
 });
 
@@ -627,10 +619,9 @@ Hooks.on("deleteDrawing", (drawing, options, userId) => {
   // Defer until after the canvas layer finishes removing the placeable from its
   // collection. That way updatePins() rebuilds the list without the deleted note,
   // even if the immediate destroy above couldn't run (placeable already gone).
-  setTimeout(() => {
-    updatePins();
-    drawAllConnectionLines();
-  }, 0);
+  // requestGlobalRedraw() also coalesces bulk deletes (many deleteDrawing hooks firing
+  // in the same frame) into a single redraw pass.
+  setTimeout(() => requestGlobalRedraw(), 0);
 });
 
 /**
@@ -911,8 +902,7 @@ Hooks.on("canvasReady", async () => {
 
   // Draw all connection lines and pins after a short delay to ensure all drawings are loaded
   setTimeout(() => {
-    updatePins();
-    drawAllConnectionLines();
+    requestGlobalRedraw();
   }, 100);
 
   // After all CSS fonts are confirmed loaded, refresh IB notes so PIXI.Text

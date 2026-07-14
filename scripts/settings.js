@@ -1,4 +1,4 @@
-import { MODULE_ID, DEFAULT_PIN_FOLDER, DEFAULT_STAMP_FOLDER } from "./config.js";
+import { MODULE_ID, DEFAULT_PIN_FOLDER, DEFAULT_STAMP_FOLDER, DEFAULT_CONNECTION_LINE_WIDTH, DEFAULT_STAMP_TINT } from "./config.js";
 import { invalidatePinFilesCache, invalidateStampFilesCache } from "./utils/helpers.js";
 import { NoteDefaultsDialog } from "./apps/note-defaults-dialog.js";
 import { AppearanceDialog } from "./apps/appearance-dialog.js";
@@ -128,7 +128,7 @@ export const registerSettings = function() {
     scope: "world",
     config: false,
     type: String,
-    default: "#990000",
+    default: DEFAULT_STAMP_TINT,
     onChange: () => refreshAllDrawings()
   });
 
@@ -150,7 +150,7 @@ export const registerSettings = function() {
     scope: "world",
     config: false,
     type: Number,
-    default: 7,
+    default: DEFAULT_CONNECTION_LINE_WIDTH,
     onChange: () => refreshAllDrawings()
   });
 
@@ -276,27 +276,6 @@ export const registerSettings = function() {
     config: false,
     type: String,
     default: "Audio Recording"
-  });
-
-  // -------------------------------------------------------------------------
-  // Hidden — internal
-  // -------------------------------------------------------------------------
-  game.settings.register(MODULE_ID, "baseCharacterLimits", {
-    name: "Base Character Limits",
-    hint: "The base character limits for each font and note type.",
-    scope: "world",
-    config: false,
-    type: Object,
-    default: {
-      "Rock Salt":             { sticky: 90,  photo: 20, index: 210  },
-      "Caveat":                { sticky: 150, photo: 25, index: 400  },
-      "Courier New":           { sticky: 250, photo: 30, index: 580  },
-      "Times New Roman":       { sticky: 200, photo: 30, index: 800  },
-      "Signika":               { sticky: 200, photo: 30, index: 650  },
-      "Arial":                 { sticky: 200, photo: 30, index: 650  },
-      "Typewriter Condensed":  { sticky: 320, photo: 48, index: 1000 },
-      "IB Special Elite":      { sticky: 130, photo: 18, index: 320  }
-    }
   });
 
   // -------------------------------------------------------------------------

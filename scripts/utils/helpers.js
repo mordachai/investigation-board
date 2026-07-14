@@ -1,18 +1,76 @@
-import { MODULE_ID, BASE_FONT_SIZE, DEFAULT_PIN_FOLDER, PIN_COLORS, DEFAULT_STAMP_FOLDER, STAMP_IMAGES } from "../config.js";
+import { MODULE_ID, DEFAULT_PIN_FOLDER, PIN_COLORS, DEFAULT_STAMP_FOLDER, STAMP_IMAGES, FONTS } from "../config.js";
+
+// ---------------------------------------------------------------------------
+// Folder-backed image sources (pins, stamps) — a GM-configurable world setting
+// points at a folder; bare filenames stored in flags are resolved against it at
+// render time so the whole set can be swapped without touching note data.
+// ---------------------------------------------------------------------------
+
+/**
+ * Builds the {resolve, getAvailableFiles, invalidateCache} trio for a folder-backed
+ * image source. Both the pin and stamp image pickers are the same shape: a world
+ * setting holds the folder path, results are cached per-folder, and a built-in
+ * fallback list is used when the folder can't be browsed (e.g. no FILES_BROWSE).
+ * @param {string} settingKey    World setting name holding the folder path
+ * @param {string} defaultFolder Folder path used when the setting is unset
+ * @param {string[]} fallbackList Built-in filenames to use if browsing fails
+ */
+function makeFolderImageSource(settingKey, defaultFolder, fallbackList) {
+  let filesCache = null;
+  let folderCache = null;
+
+  function currentFolder() {
+    return game.settings.get(MODULE_ID, settingKey) || defaultFolder;
+  }
+
+  return {
+    invalidateCache() {
+      filesCache = null;
+      folderCache = null;
+    },
+    /** Full URL for a bare filename, e.g. "redPin.webp" → ".../pins/redPin.webp" */
+    resolve(filename) {
+      return `${currentFolder()}/${filename}`;
+    },
+    /**
+     * Scans the configured folder and returns the list of available filenames
+     * (.webp / .png), cached per-folder until invalidateCache() is called.
+     * @returns {Promise<string[]>}
+     */
+    async getAvailableFiles() {
+      const FilePicker = foundry.applications.apps.FilePicker.implementation;
+      const folder = currentFolder();
+
+      if (folderCache === folder && filesCache !== null) {
+        return filesCache;
+      }
+
+      try {
+        const result = await FilePicker.browse("data", folder);
+        filesCache = result.files
+          .filter(f => /\.(webp|png)$/i.test(f))
+          .map(f => f.split("/").pop())
+          .sort();
+      } catch {
+        // No FILES_BROWSE permission or folder doesn't exist — use built-in list
+        filesCache = [...fallbackList].sort();
+      }
+      folderCache = folder;
+
+      return filesCache;
+    },
+  };
+}
 
 // ---------------------------------------------------------------------------
 // Pin image helpers
 // ---------------------------------------------------------------------------
 
-let _pinFilesCache = null;
-let _pinFolderCache = null;
+const pinImageSource = makeFolderImageSource("pinImagesFolder", DEFAULT_PIN_FOLDER, PIN_COLORS);
 
-/**
- * Bust the cached pin file list. Call this when pinImagesFolder setting changes.
- */
+/** Bust the cached pin file list. Call this when pinImagesFolder setting changes. */
 export function invalidatePinFilesCache() {
-  _pinFilesCache = null;
-  _pinFolderCache = null;
+  pinImageSource.invalidateCache();
 }
 
 /**
@@ -22,8 +80,7 @@ export function invalidatePinFilesCache() {
  * @returns {string}         e.g. "modules/investigation-board/assets/pins/redPin.webp"
  */
 export function resolvePinImage(filename) {
-  const folder = game.settings.get(MODULE_ID, "pinImagesFolder") || DEFAULT_PIN_FOLDER;
-  return `${folder}/${filename}`;
+  return pinImageSource.resolve(filename);
 }
 
 /**
@@ -37,27 +94,7 @@ export function resolvePinImage(filename) {
  * @returns {Promise<string[]>}  Array of bare filenames, e.g. ["redPin.webp", ...]
  */
 export async function getAvailablePinFiles() {
-  const FilePicker = foundry.applications.apps.FilePicker.implementation;
-  const folder = game.settings.get(MODULE_ID, "pinImagesFolder") || DEFAULT_PIN_FOLDER;
-
-  if (_pinFolderCache === folder && _pinFilesCache !== null) {
-    return _pinFilesCache;
-  }
-
-  try {
-    const result = await FilePicker.browse("data", folder);
-    _pinFilesCache = result.files
-      .filter(f => /\.(webp|png)$/i.test(f))
-      .map(f => f.split("/").pop())
-      .sort();
-    _pinFolderCache = folder;
-  } catch {
-    // No FILES_BROWSE permission or folder doesn't exist — use built-in list
-    _pinFilesCache = [...PIN_COLORS].sort();
-    _pinFolderCache = folder;
-  }
-
-  return _pinFilesCache;
+  return pinImageSource.getAvailableFiles();
 }
 
 /**
@@ -82,58 +119,18 @@ export function pickPinFileForDrawing(drawingId, files) {
 // Stamp image helpers
 // ---------------------------------------------------------------------------
 
-let _stampFilesCache = null;
-let _stampFolderCache = null;
+const stampImageSource = makeFolderImageSource("stampImagesFolder", DEFAULT_STAMP_FOLDER, STAMP_IMAGES);
 
 export function invalidateStampFilesCache() {
-  _stampFilesCache = null;
-  _stampFolderCache = null;
+  stampImageSource.invalidateCache();
 }
 
 export function resolveStampImage(filename) {
-  const folder = game.settings.get(MODULE_ID, "stampImagesFolder") || DEFAULT_STAMP_FOLDER;
-  return `${folder}/${filename}`;
+  return stampImageSource.resolve(filename);
 }
 
 export async function getAvailableStampFiles() {
-  const FilePicker = foundry.applications.apps.FilePicker.implementation;
-  const folder = game.settings.get(MODULE_ID, "stampImagesFolder") || DEFAULT_STAMP_FOLDER;
-
-  if (_stampFolderCache === folder && _stampFilesCache !== null) {
-    return _stampFilesCache;
-  }
-
-  try {
-    const result = await FilePicker.browse("data", folder);
-    _stampFilesCache = result.files
-      .filter(f => /\.(webp|png)$/i.test(f))
-      .map(f => f.split("/").pop());
-    _stampFolderCache = folder;
-  } catch {
-    _stampFilesCache = [...STAMP_IMAGES];
-    _stampFolderCache = folder;
-  }
-
-  return _stampFilesCache;
-}
-
-export function getBaseCharacterLimits() {
-  return game.settings.get(MODULE_ID, "baseCharacterLimits") || {
-    sticky: 60,
-    photo: 15,
-    index: 200,
-  };
-}
-
-export function getDynamicCharacterLimits(font, noteType, currentFontSize) {
-  const baseLimits = getBaseCharacterLimits();
-  const scaleFactor = BASE_FONT_SIZE / currentFontSize;
-  const fontLimits = baseLimits[font] || baseLimits["Arial"] || { sticky: 200, photo: 30, index: 650 };
-  return {
-    sticky: Math.round(fontLimits.sticky * scaleFactor),
-    photo: Math.round(fontLimits.photo * scaleFactor),
-    index: Math.round(fontLimits.index * scaleFactor),
-  };
+  return stampImageSource.getAvailableFiles();
 }
 
 /**
@@ -174,19 +171,11 @@ export function getEffectiveScale() {
 }
 
 /**
- * Average character width as a fraction of fontSize, per font family.
- * Used to estimate how many characters fit on a single wrapped line.
+ * Average character width as a fraction of fontSize, per font family, derived from
+ * the module's single FONTS list (config.js). Used to estimate how many characters
+ * fit on a single wrapped line.
  */
-const FONT_WIDTH_FACTORS = {
-  "Rock Salt":            0.72,
-  "Caveat":               0.50,
-  "Courier New":          0.60,
-  "Times New Roman":      0.55,
-  "Signika":              0.55,
-  "Arial":                0.55,
-  "Typewriter Condensed": 0.45,
-  "IB Special Elite":     0.68,
-};
+const FONT_WIDTH_FACTORS = Object.fromEntries(FONTS.map(f => [f.name, f.widthFactor]));
 
 /**
  * Compute how many characters fit inside a note given its rendered dimensions.

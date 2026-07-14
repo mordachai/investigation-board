@@ -1,13 +1,34 @@
-import { MODULE_ID, SOCKET_NAME, VIDEO_EXTENSIONS, DOC_BACKGROUNDS } from "../config.js";
+import { MODULE_ID, SOCKET_NAME, VIDEO_EXTENSIONS, DOC_BACKGROUNDS, DEFAULT_STAMP_TINT, FONTS } from "../config.js";
 import { InvestigationBoardState } from "../state.js";
 import { collaborativeUpdate, collaborativeDelete, socket, activeGlobalSounds, activeVideoBroadcasts } from "../utils/socket-handler.js";
 import { truncateText, resolvePinImage, getAvailablePinFiles, pickPinFileForDrawing, resolveStampImage, getAvailableStampFiles } from "../utils/helpers.js";
 import { NotePreviewer } from "../apps/note-previewer.js";
 import { VideoPlayer } from "../apps/video-player.js";
-import { drawAllConnectionLines, beginConnectionFrom, resetPinConnectionState } from "./connection-manager.js";
+import { drawAllConnectionLines, beginConnectionFrom, resetPinConnectionState, updateIncomingConnections } from "./connection-manager.js";
 
 // v13 namespaced imports
 const Drawing = foundry.canvas.placeables.Drawing;
+
+// A broken/missing texture path fails the same way on every _updateSprites() call
+// (every refresh, every ticker frame during connection animation, etc). Log it once
+// per path instead of spamming the console.
+const _loggedTextureFailures = new Set();
+function warnTextureLoadFailedOnce(label, path, err) {
+  if (_loggedTextureFailures.has(path)) return;
+  _loggedTextureFailures.add(path);
+  console.error(`Investigation Board: Failed to load ${label}: ${path}`, err);
+}
+
+// PIXI.BlurFilter is a GPU-backed object — avoid allocating a fresh one on every
+// _doUpdateSprites() call (every refresh, every ticker frame during connection
+// animation). Cache one per sprite, keyed by blur radius, and reuse it.
+function applyCachedBlurFilter(sprite, radius) {
+  if (sprite._ibBlurFilter?._ibBlurRadius === radius) return;
+  const filter = new PIXI.BlurFilter(radius);
+  filter._ibBlurRadius = radius;
+  sprite._ibBlurFilter = filter;
+  sprite.filters = [filter];
+}
 
 export class CustomDrawing extends Drawing {
   constructor(...args) {
@@ -471,15 +492,10 @@ export class CustomDrawing extends Drawing {
             modal: true
           });
           if (!confirmed) return;
-          await collaborativeUpdate(noteId, { [`flags.${MODULE_ID}.connections`]: [] });
-          const otherNotes = canvas.drawings.placeables.filter(d => {
-            if (d.document.id === noteId) return false;
-            return d.document.flags[MODULE_ID]?.connections?.some(c => c.targetId === noteId);
-          });
-          for (const other of otherNotes) {
-            const updated = other.document.flags[MODULE_ID].connections.filter(c => c.targetId !== noteId);
-            await collaborativeUpdate(other.document.id, { [`flags.${MODULE_ID}.connections`]: updated });
-          }
+          await Promise.all([
+            collaborativeUpdate(noteId, { [`flags.${MODULE_ID}.connections`]: [] }),
+            updateIncomingConnections(noteId, () => null)
+          ]);
           drawAllConnectionLines();
           ui.notifications.info("All related connections removed.");
         };
@@ -606,7 +622,7 @@ export class CustomDrawing extends Drawing {
               if (globalBtn?.classList.contains('active')) { globalBtn.click(); menu.remove(); return; }
             }
             if (socket) {
-              socket.emit(SOCKET_NAME, { action: "stopAudio", audioPath: noteData.audioPath });
+              socket.emit(SOCKET_NAME, { action: "stopAudio", audioPath: noteData.audioPath, senderId: game.user.id });
               const sound = activeGlobalSounds.get(noteData.audioPath);
               if (sound) { sound.stop(); activeGlobalSounds.delete(noteData.audioPath); }
             }
@@ -647,7 +663,7 @@ export class CustomDrawing extends Drawing {
             const playerAppId = `video-player-${this.document.id}`;
             const playerApp = foundry.applications.instances.get(playerAppId);
             if (playerApp) playerApp._stopBroadcast();
-            else if (socket) socket.emit(SOCKET_NAME, { action: "stopVideoBroadcast", drawingId: this.document.id });
+            else if (socket) socket.emit(SOCKET_NAME, { action: "stopVideoBroadcast", drawingId: this.document.id, senderId: game.user.id });
             menu.remove();
           };
         } else {
@@ -694,27 +710,13 @@ export class CustomDrawing extends Drawing {
 
       if (confirm) {
         const noteId = this.document.id;
-        
-        // 1. Clear outgoing connections (from this note to others)
-        await collaborativeUpdate(noteId, {
-          [`flags.${MODULE_ID}.connections`]: []
-        });
 
-        // 2. Clear incoming connections (from other notes to this one)
-        const otherNotesWithConnections = canvas.drawings.placeables.filter(d => {
-          if (d.document.id === noteId) return false;
-          const conns = d.document.flags[MODULE_ID]?.connections;
-          return conns && conns.some(c => c.targetId === noteId);
-        });
-
-        for (let otherNote of otherNotesWithConnections) {
-          const currentConns = otherNote.document.flags[MODULE_ID].connections;
-          const updatedConns = currentConns.filter(c => c.targetId !== noteId);
-          
-          await collaborativeUpdate(otherNote.document.id, {
-            [`flags.${MODULE_ID}.connections`]: updatedConns
-          });
-        }
+        await Promise.all([
+          // Clear outgoing connections (from this note to others)
+          collaborativeUpdate(noteId, { [`flags.${MODULE_ID}.connections`]: [] }),
+          // Clear incoming connections (from other notes to this one)
+          updateIncomingConnections(noteId, () => null)
+        ]);
 
         drawAllConnectionLines();
         ui.notifications.info("All related connections removed.");
@@ -792,15 +794,6 @@ export class CustomDrawing extends Drawing {
 
     const STAMPABLE_TYPES = ["photo", "document", "index", "handout"];
     if (STAMPABLE_TYPES.includes(noteData.type)) {
-      const STAMP_LABELS = {
-        'classified.webp': 'Classified',
-        'deceased.webp':   'Deceased',
-        'evidence.webp':   'Evidence',
-        'missing.webp':    'Missing',
-        'redacted.webp':   'Redacted',
-        'x-mark.webp':     'X Mark',
-      };
-
       const stampItem = document.createElement('div');
       stampItem.classList.add('ib-context-menu-item', 'ib-has-submenu');
       stampItem.innerHTML = '<i class="fas fa-stamp"></i><span style="flex:1">Stamp</span><i class="fas fa-caret-right"></i>';
@@ -812,8 +805,7 @@ export class CustomDrawing extends Drawing {
       // Populate stamp options asynchronously — fast enough before hover fires
       getAvailableStampFiles().then(files => {
         files.forEach(filename => {
-          const label = STAMP_LABELS[filename]
-            ?? filename.replace(/\.(webp|png)$/i, '').replace(/-/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
+          const label = filename.replace(/\.(webp|png)$/i, '').replace(/-/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
           const item = document.createElement('div');
           item.classList.add('ib-context-menu-item');
           item.innerHTML = `<i class="fas fa-stamp"></i> ${label}`;
@@ -830,7 +822,7 @@ export class CustomDrawing extends Drawing {
         });
 
         const sep = document.createElement('div');
-        sep.classList.add('ib-context-menu-separator');
+        sep.classList.add('ib-context-separator');
         submenu.appendChild(sep);
 
         const removeStampItem = document.createElement('div');
@@ -894,10 +886,7 @@ export class CustomDrawing extends Drawing {
     }
 
     await this._updateSprites();
-    import("./connection-manager.js").then(m => {
-      m.updatePins();
-      m.drawAllConnectionLines();
-    });
+    import("./connection-manager.js").then(m => m.requestGlobalRedraw());
     return this;
   }
 
@@ -909,10 +898,7 @@ export class CustomDrawing extends Drawing {
 
     this.element?.setAttribute("data-investigation-note", "true");
     await this._updateSprites();
-    import("./connection-manager.js").then(m => {
-      m.updatePins();
-      m.drawAllConnectionLines();
-    });
+    import("./connection-manager.js").then(m => m.requestGlobalRedraw());
     return this;
   }
 
@@ -991,7 +977,7 @@ export class CustomDrawing extends Drawing {
         this.pinSprite.texture = texture;
       }
     } catch (err) {
-      console.error(`Investigation Board: Failed to load pin texture: ${pinImage}`, err);
+      warnTextureLoadFailedOnce("pin texture", pinImage, err);
     }
   }
 
@@ -1027,7 +1013,7 @@ export class CustomDrawing extends Drawing {
         this.stampSprite.texture = texture;
         this.stampSprite._ibStampKey = stamp.key;
       } catch (err) {
-        console.error(`Investigation Board: Failed to load stamp: ${stampPath}`, err);
+        warnTextureLoadFailedOnce("stamp", stampPath, err);
         return;
       }
     }
@@ -1048,8 +1034,8 @@ export class CustomDrawing extends Drawing {
     this.stampSprite.rotation = rot;
     this.stampSprite.alpha = 0.85;
     try {
-      this.stampSprite.tint = game.settings.get(MODULE_ID, "stampTint") || "#cc0000";
-    } catch(e) { this.stampSprite.tint = 0xcc0000; }
+      this.stampSprite.tint = game.settings.get(MODULE_ID, "stampTint") || DEFAULT_STAMP_TINT;
+    } catch(e) { this.stampSprite.tint = 0x990000; }
 
     // Clamp center using the actual rotated bounding box so the stamp never
     // escapes the note edges regardless of tilt or aspect ratio.
@@ -1135,7 +1121,7 @@ export class CustomDrawing extends Drawing {
             try { this.bgShadow.tint = 0x000000; } catch(e) {}
             this.bgShadow.alpha = 0.4;
             this.bgShadow.position.set(6, 6); // Offset shadow
-            this.bgShadow.filters = [new PIXI.BlurFilter(2)];
+            applyCachedBlurFilter(this.bgShadow, 2);
           }
 
           if (this.photoImageSprite && this.photoImageSprite.parent) {
@@ -1151,7 +1137,7 @@ export class CustomDrawing extends Drawing {
           }
         }
       } catch (err) {
-        console.error(`Failed to load media image: ${imagePath}`, err);
+        warnTextureLoadFailedOnce("media image", imagePath, err);
       }
 
       // --- Pin Sprite (managed by updatePins, just load texture here) ---
@@ -1237,7 +1223,7 @@ export class CustomDrawing extends Drawing {
             try { this.bgShadow.tint = 0x000000; } catch(e) {}
             this.bgShadow.alpha = 0.35;
             this.bgShadow.position.set(8, 8);
-            this.bgShadow.filters = [new PIXI.BlurFilter(4)];
+            applyCachedBlurFilter(this.bgShadow, 4);
           }
           if (this.bgSprite && !this.bgSprite.destroyed) {
             this.bgSprite.texture = texture;
@@ -1247,7 +1233,7 @@ export class CustomDrawing extends Drawing {
           }
         }
       } catch(err) {
-        console.error(`Investigation Board: Failed to load document background: ${bgImage}`, err);
+        warnTextureLoadFailedOnce("document background", bgImage, err);
       }
 
       // Pin sprite
@@ -1308,17 +1294,61 @@ export class CustomDrawing extends Drawing {
           p:      tagFont,
         },
       });
+      // Embed the actual font file into the SVG this style will generate. Without
+      // this, the rasterized SVG has no @font-face of its own — it renders in total
+      // isolation from the page (confirmed: opening the data-URI directly in a new
+      // tab shows the same broken result as on the note) and silently falls back to
+      // a generic font, which needs a different amount of vertical space than what
+      // was measured using the real font a moment earlier — the mismatch gets clipped
+      // with no error. loadFont() caches by URL internally, so this is cheap after
+      // the first call for a given font. Non-custom (system/web-safe) fonts don't
+      // need this — the browser already has them regardless of embedding.
+      const fontDef = FONTS.find(f => f.name === font);
+      if (fontDef?.file) {
+        await bodyStyle.loadFont(`modules/${MODULE_ID}/assets/fonts/${fontDef.file}`);
+      }
       if (!this.docBodyText || this.docBodyText.destroyed) {
         this.docBodyText = new PIXI.HTMLText(bodyStr, bodyStyle);
         this.docBodyText.anchor.set(0, 0);
         this.shape.addChild(this.docBodyText);
+        // @pixi/text-html's internal SVG root (`_svgRoot`) is never given an explicit
+        // width/height before its very first measurement pass — only the foreignObject
+        // inside it gets one (hardcoded 10000x10000 at construction). An un-sized <svg>
+        // gets the browser's default intrinsic viewport (300x150 CSS px), which clips
+        // the foreignObject's content on that first pass regardless of its own declared
+        // size, especially at higher devicePixelRatio (150 * resolution can be well
+        // under a real multi-paragraph body's rendered height). Pre-size it directly so
+        // the first-ever measurement isn't relying on that browser default. This reaches
+        // into a private (underscore) field because there's no public API for it —
+        // fragile against a library version bump, but there's no other hook available.
+        if (this.docBodyText._svgRoot) {
+          this.docBodyText._svgRoot.setAttribute('width', '4000');
+          this.docBodyText._svgRoot.setAttribute('height', '8000');
+        }
       } else {
         this.docBodyText.style = bodyStyle;
         this.docBodyText.text = bodyStr;
       }
+      // PIXI.HTMLText hard-clamps its rendered texture to maxWidth/maxHeight
+      // (default 2024px each, in resolution-scaled texture pixels) and silently drops
+      // content beyond that — no error, just a console warning. A 14pt multi-paragraph
+      // body easily exceeds 2024px of actual texture height on a high-DPI display
+      // (resolution > ~2.4x), long before it exceeds the note's logical 842-unit height.
+      this.docBodyText.maxWidth = 8000;
+      this.docBodyText.maxHeight = 8000;
       this.docBodyText.anchor.set(0, 0);
       this.docBodyText.visible = true;
       this.docBodyText.position.set(MARGIN, MARGIN + (titleStr ? titleAreaHeight + 20 : 0));
+
+      // PIXI.HTMLText's texture regeneration is async (rasterizes via a data-URI
+      // <img>) and its own _render() loop fires it without awaiting it — a stale-
+      // update guard means a later updateText() call can abandon an in-flight one,
+      // so on a batch creation (multiple document notes at once) which frame's
+      // image load actually "wins" is a race, producing inconsistent partial
+      // content across runs. Force it to complete here, synchronously from this
+      // async function's perspective, so the sprite is fully correct before this
+      // method returns instead of depending on the render loop settling right.
+      await this.docBodyText.updateText(false);
 
       await this._loadStampTexture(noteData);
       return; // Early exit for document notes
@@ -1414,7 +1444,7 @@ export class CustomDrawing extends Drawing {
           this.photoImageSprite.renderable = !hiddenForPlayer;
         }
       } catch (err) {
-        console.error(`Failed to load handout image: ${imagePath}`, err);
+        warnTextureLoadFailedOnce("handout image", imagePath, err);
         if (this.photoImageSprite) {
           this.photoImageSprite.texture = PIXI.Texture.EMPTY;
         }
@@ -1474,7 +1504,7 @@ export class CustomDrawing extends Drawing {
           try { this.bgShadow.tint = 0x000000; } catch(e) {}
           this.bgShadow.alpha = 0.4;
           this.bgShadow.position.set(6, 6);
-          this.bgShadow.filters = [new PIXI.BlurFilter(3)];
+          applyCachedBlurFilter(this.bgShadow, 3);
         }
 
         if (this.bgSprite && !this.bgSprite.destroyed) {
@@ -1496,7 +1526,7 @@ export class CustomDrawing extends Drawing {
         }
       }
     } catch (err) {
-      console.error(`Failed to load background texture: ${bgImage}`, err);
+      warnTextureLoadFailedOnce("background texture", bgImage, err);
       if (this.bgSprite) {
         this.bgSprite.texture = PIXI.Texture.EMPTY;
       }
@@ -1562,7 +1592,7 @@ export class CustomDrawing extends Drawing {
           this.photoImageSprite.visible = true;
         }
       } catch (err) {
-        console.error(`Failed to load foreground texture: ${fgImage}`, err);
+        warnTextureLoadFailedOnce("foreground texture", fgImage, err);
         if (this.photoImageSprite) {
           this.photoImageSprite.texture = PIXI.Texture.EMPTY;
         }
@@ -1617,31 +1647,38 @@ export class CustomDrawing extends Drawing {
     await this._loadStampTexture(noteData);
   }
 
-  _getPinPosition() {
+  /**
+   * Center point of this note's pin, in world coordinates. Single source of truth for
+   * pin placement — consumed by connection-line drawing, updatePins(), and pin-drag.
+   * @param {number} [x] - Override for this.document.x (used for live drag previews
+   *   before the position is committed to the document).
+   * @param {number} [y] - Override for this.document.y.
+   */
+  _getPinPosition(x = this.document.x, y = this.document.y) {
     const noteData = this.document.flags[MODULE_ID];
-    if (!noteData) return { x: this.document.x, y: this.document.y };
+    if (!noteData) return { x, y };
 
     const noteWidth = this.document.shape.width || 200;
     const noteHeight = this.document.shape.height || 200;
 
     if (noteData.type === "pin") {
       return {
-        x: this.document.x + noteWidth / 2,
-        y: this.document.y + noteHeight / 2
+        x: x + noteWidth / 2,
+        y: y + noteHeight / 2
       };
     }
 
     if (noteData.type === "handout") {
       return {
-        x: this.document.x + noteWidth / 2,
-        y: this.document.y + noteHeight * 0.05 + 20
+        x: x + noteWidth / 2,
+        y: y + noteHeight * 0.05 + 20
       };
     }
 
     // sticky, photo, index, media — pin is centered horizontally, near the top
     return {
-      x: this.document.x + noteWidth / 2,
-      y: this.document.y + 23
+      x: x + noteWidth / 2,
+      y: y + 23
     };
   }
 
@@ -1662,35 +1699,32 @@ export class CustomDrawing extends Drawing {
     const savedLink  = existing.linkedObject || "";
     const pinId      = this.document.id;
 
-    // Collect notes with incoming connections pointing at this pin, before deleting it
-    const incomingNotes = canvas.drawings.placeables.filter(d => {
-      if (d.document.id === pinId) return false;
-      return d.document.flags[MODULE_ID]?.connections?.some(c => c.targetId === pinId);
-    });
-
-    // Delete the pin (bypass the bulk-deletion guard)
-    await collaborativeDelete(pinId);
-
-    // Create the replacement note at the same position.
+    // Create the replacement note FIRST — if this fails (or the requesting user lacks
+    // DRAWING_CREATE and the socket round-trip comes back empty), abort before the
+    // pin and its connections are touched.
     // createNote() handles all dimensions, fill, defaults, and opens the edit sheet.
     const { createNote } = await import("../utils/creation-utils.js");
     const newDoc = await createNote(targetType, { x: savedX, y: savedY });
 
-    if (newDoc?.id) {
-      // Restore outgoing connections and linked object on the new note
-      const updates = {};
-      if (savedLink)         updates[`flags.${MODULE_ID}.linkedObject`] = savedLink;
-      if (savedConns.length) updates[`flags.${MODULE_ID}.connections`]  = savedConns;
-      if (Object.keys(updates).length) await collaborativeUpdate(newDoc.id, updates);
-
-      // Re-point incoming connections from the old pin ID to the new note ID
-      for (const other of incomingNotes) {
-        const conns = other.document.flags[MODULE_ID].connections.map(c =>
-          c.targetId === pinId ? { ...c, targetId: newDoc.id } : c
-        );
-        await collaborativeUpdate(other.document.id, { [`flags.${MODULE_ID}.connections`]: conns });
-      }
+    if (!newDoc?.id) {
+      ui.notifications.error("Investigation Board: Could not create replacement note — conversion aborted.");
+      return;
     }
+
+    // Restore outgoing connections and linked object on the new note, and re-point
+    // incoming connections from the old pin ID to the new note ID. These target
+    // different documents, so run them concurrently.
+    const updates = {};
+    if (savedLink)         updates[`flags.${MODULE_ID}.linkedObject`] = savedLink;
+    if (savedConns.length) updates[`flags.${MODULE_ID}.connections`]  = savedConns;
+
+    await Promise.all([
+      Object.keys(updates).length ? collaborativeUpdate(newDoc.id, updates) : null,
+      updateIncomingConnections(pinId, c => ({ ...c, targetId: newDoc.id }))
+    ]);
+
+    // Delete the pin last — replacement note and all remaps are confirmed to exist now.
+    await collaborativeDelete(pinId);
   }
 }
 

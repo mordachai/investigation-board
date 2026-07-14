@@ -5,6 +5,25 @@ export let socket = null;
 export let activeGlobalSounds = new Map();  // audioPath → Sound (audio broadcast)
 export let activeVideoBroadcasts = new Map(); // drawingId → { gmUserId } (video broadcast)
 
+// requestId → { resolve, timeout } — pending collaborativeCreate/CreateMany calls
+// waiting on the GM's "drawingCreated" echo (players without DRAWING_CREATE).
+const pendingCreateRequests = new Map();
+const CREATE_REQUEST_TIMEOUT_MS = 10000;
+
+/** Whitelisted fields a socket "updateDrawing" request may modify. Everything else is stripped. */
+const SOCKET_UPDATE_ALLOWED_KEYS = new Set(["x", "y", "rotation", "shape", "fillAlpha"]);
+const SOCKET_UPDATE_ALLOWED_PREFIXES = ["shape.", `flags.${MODULE_ID}.`];
+
+function sanitizeSocketUpdateData(updateData) {
+  const clean = {};
+  for (const [key, value] of Object.entries(updateData || {})) {
+    if (SOCKET_UPDATE_ALLOWED_KEYS.has(key) || SOCKET_UPDATE_ALLOWED_PREFIXES.some(p => key.startsWith(p))) {
+      clean[key] = value;
+    }
+  }
+  return clean;
+}
+
 /**
  * Updates a drawing document, using socket communication if the user doesn't have permission.
  * This enables collaborative editing where any user can modify any investigation board note.
@@ -76,19 +95,33 @@ export async function collaborativeCreate(createData, options = {}, sceneId = nu
     return await scene.createEmbeddedDocuments("Drawing", [createData], createOptions);
   }
 
-  // Otherwise, request creation via socket
-  if (socket) {
-    socket.emit(SOCKET_NAME, {
-      action: "createDrawing",
-      sceneId: scene.id,
-      createData: createData,
-      options: createOptions,
-      requestingUser: game.user.id
-    });
-  } else {
+  // Otherwise, request creation via socket and wait for the GM's echo so the caller
+  // still gets back the created document(s) (needed for connect/convert flows).
+  if (!socket) {
     console.error("Investigation Board: Socket not available for collaborative creation");
+    return [];
   }
-  return [];
+
+  const requestId = foundry.utils.randomID();
+  const result = new Promise(resolve => {
+    const timeout = setTimeout(() => {
+      pendingCreateRequests.delete(requestId);
+      console.warn("Investigation Board: Timed out waiting for GM to create note via socket");
+      resolve([]);
+    }, CREATE_REQUEST_TIMEOUT_MS);
+    pendingCreateRequests.set(requestId, { resolve, timeout });
+  });
+
+  socket.emit(SOCKET_NAME, {
+    action: "createDrawing",
+    sceneId: scene.id,
+    createData: createData,
+    options: createOptions,
+    requestingUser: game.user.id,
+    requestId
+  });
+
+  return result;
 }
 
 /**
@@ -110,19 +143,32 @@ export async function collaborativeCreateMany(createDataArray, options = {}, sce
     return await scene.createEmbeddedDocuments("Drawing", createDataArray, createOptions);
   }
 
-  // Otherwise, request creation via socket
-  if (socket) {
-    socket.emit(SOCKET_NAME, {
-      action: "createManyDrawings",
-      sceneId: scene.id,
-      createDataArray: createDataArray,
-      options: createOptions,
-      requestingUser: game.user.id
-    });
-  } else {
+  // Otherwise, request creation via socket and wait for the GM's echo.
+  if (!socket) {
     console.error("Investigation Board: Socket not available for collaborative creation");
+    return [];
   }
-  return [];
+
+  const requestId = foundry.utils.randomID();
+  const result = new Promise(resolve => {
+    const timeout = setTimeout(() => {
+      pendingCreateRequests.delete(requestId);
+      console.warn("Investigation Board: Timed out waiting for GM to create notes via socket");
+      resolve([]);
+    }, CREATE_REQUEST_TIMEOUT_MS);
+    pendingCreateRequests.set(requestId, { resolve, timeout });
+  });
+
+  socket.emit(SOCKET_NAME, {
+    action: "createManyDrawings",
+    sceneId: scene.id,
+    createDataArray: createDataArray,
+    options: createOptions,
+    requestingUser: game.user.id,
+    requestId
+  });
+
+  return result;
 }
 
 /**
@@ -153,11 +199,34 @@ export async function collaborativeDelete(drawingId, sceneId = null) {
 }
 
 /**
+ * Broadcast-type actions (playAudio, openVideoPlayer, etc.) have no verified sender in
+ * Foundry's socket model — any client can emit them. Every legitimate emitter is already
+ * gated behind a `game.user.isGM` UI check, so require the declared sender to actually be
+ * an active GM as a (spoofable, but bar-raising) sanity check.
+ */
+function isFromActiveGM(senderId) {
+  const user = senderId ? game.users.get(senderId) : null;
+  return !!(user?.isGM && user?.active);
+}
+
+/**
  * Handles incoming socket messages for collaborative updates and global audio.
  */
 export function handleSocketMessage(data) {
+  // ---- Echo of a create request this client is waiting on (any client can be a requester) ----
+  if (data.action === "drawingCreated") {
+    if (data.requestingUser !== game.user.id) return;
+    const pending = pendingCreateRequests.get(data.requestId);
+    if (!pending) return;
+    clearTimeout(pending.timeout);
+    pendingCreateRequests.delete(data.requestId);
+    pending.resolve((data.created || []).map(c => ({ id: c._id })));
+    return;
+  }
+
   // Global actions for all users
   if (data.action === "playAudio") {
+    if (!isFromActiveGM(data.senderId)) return;
     if (data.audioPath) {
       // Stop existing instance of this specific audio if already playing globally
       const existing = activeGlobalSounds.get(data.audioPath);
@@ -178,13 +247,15 @@ export function handleSocketMessage(data) {
             applyTapeEffectToSound(sound);
           }
 
-          // Clean up reference when sound ends
-          setTimeout(() => {
+          // Clean up reference when the sound actually ends/stops — a timer keyed off
+          // sound.duration leaks the Map entry for looping or re-triggered audio, whose
+          // real end never lines up with the one-shot timeout.
+          const cleanup = () => {
             const current = activeGlobalSounds.get(data.audioPath);
-            if (current === sound && !sound.playing) {
-              activeGlobalSounds.delete(data.audioPath);
-            }
-          }, (sound.duration * 1000) + 1000 || 5000);
+            if (current === sound) activeGlobalSounds.delete(data.audioPath);
+          };
+          sound.addEventListener("end", cleanup, { once: true });
+          sound.addEventListener("stop", cleanup, { once: true });
         }
 
         // Auto-open the NotePreviewer for this client so players see the cassette animation
@@ -210,6 +281,7 @@ export function handleSocketMessage(data) {
   }
 
   if (data.action === "stopAudio") {
+    if (!isFromActiveGM(data.senderId)) return;
     if (data.audioPath) {
       const sound = activeGlobalSounds.get(data.audioPath);
       if (sound) {
@@ -223,6 +295,7 @@ export function handleSocketMessage(data) {
   // ---- VIDEO BROADCAST — handled by all clients ----
 
   if (data.action === "openVideoPlayer") {
+    if (!isFromActiveGM(data.senderId)) return;
     // Open the VideoPlayer window for the given drawing on this client
     (async () => {
       const { VideoPlayer } = await import("../apps/video-player.js");
@@ -242,6 +315,7 @@ export function handleSocketMessage(data) {
   }
 
   if (data.action === "playVideo" || data.action === "pauseVideo" || data.action === "seekVideo") {
+    if (!isFromActiveGM(data.senderId)) return;
     // Find the open VideoPlayer for this drawing and sync it
     // GM's own player is the source of truth — skip self-sync
     if (activeVideoBroadcasts.get(data.drawingId)?.gmUserId === game.user.id) return;
@@ -255,6 +329,7 @@ export function handleSocketMessage(data) {
   }
 
   if (data.action === "stopVideoBroadcast") {
+    if (!isFromActiveGM(data.senderId)) return;
     activeVideoBroadcasts.delete(data.drawingId);
     const appId = `video-player-${data.drawingId}`;
     const app = foundry.applications.instances.get(appId);
@@ -270,18 +345,57 @@ export function handleSocketMessage(data) {
   if (data.action === "createDrawing") {
     const scene = game.scenes.get(data.sceneId);
     if (!scene) return;
-    
+
+    // Only allow IB-flagged creations — otherwise any client could make the GM
+    // create arbitrary drawings with arbitrary flags/ownership.
+    if (!data.createData?.flags?.[MODULE_ID]?.type) {
+      console.warn("Investigation Board: Rejected createDrawing socket request - missing IB flags");
+      if (data.requestId) {
+        socket.emit(SOCKET_NAME, { action: "drawingCreated", requestId: data.requestId, requestingUser: data.requestingUser, created: [] });
+      }
+      return;
+    }
+
     // Pass along the original requesting userId so we can filter the sheet opening
     const options = { ...data.options, ibRequestingUser: data.requestingUser };
-    scene.createEmbeddedDocuments("Drawing", [data.createData], options);
+    scene.createEmbeddedDocuments("Drawing", [{ ...data.createData, type: "r" }], options).then(created => {
+      if (data.requestId) {
+        socket.emit(SOCKET_NAME, {
+          action: "drawingCreated",
+          requestId: data.requestId,
+          requestingUser: data.requestingUser,
+          created: created.map(d => d.toObject())
+        });
+      }
+    });
   }
 
   if (data.action === "createManyDrawings") {
     const scene = game.scenes.get(data.sceneId);
     if (!scene) return;
-    
+
+    const sanitizedArray = (data.createDataArray || []).filter(cd => cd?.flags?.[MODULE_ID]?.type);
+    if (sanitizedArray.length !== (data.createDataArray || []).length) {
+      console.warn("Investigation Board: Dropped createManyDrawings entries missing IB flags");
+    }
+    if (sanitizedArray.length === 0) {
+      if (data.requestId) {
+        socket.emit(SOCKET_NAME, { action: "drawingCreated", requestId: data.requestId, requestingUser: data.requestingUser, created: [] });
+      }
+      return;
+    }
+
     const options = { ...data.options, ibRequestingUser: data.requestingUser };
-    scene.createEmbeddedDocuments("Drawing", data.createDataArray, options);
+    scene.createEmbeddedDocuments("Drawing", sanitizedArray.map(cd => ({ ...cd, type: "r" })), options).then(created => {
+      if (data.requestId) {
+        socket.emit(SOCKET_NAME, {
+          action: "drawingCreated",
+          requestId: data.requestId,
+          requestingUser: data.requestingUser,
+          created: created.map(d => d.toObject())
+        });
+      }
+    });
   }
 
   if (data.action === "updateDrawing") {
@@ -304,9 +418,11 @@ export function handleSocketMessage(data) {
       return;
     }
 
-    // Perform the update on behalf of the requesting user.
+    // Strip to a whitelist of fields a socket-originated update may touch — a player
+    // cannot use this path to flip `hidden`, `locked`, `ownership`, `author`, etc.
+    const updateData = sanitizeSocketUpdateData(data.updateData);
+
     // Also patch fillAlpha for legacy notes that have fillAlpha: 0, which fails Foundry v13 validation.
-    const updateData = data.updateData;
     if (drawing.fillAlpha === 0 && drawing.strokeWidth === 0 && !("fillAlpha" in updateData)) {
       updateData.fillAlpha = 0.001;
     }
@@ -318,6 +434,13 @@ export function handleSocketMessage(data) {
     if (!scene) return;
     const drawing = scene.drawings.get(data.drawingId);
     if (!drawing) return;
+
+    // Only allow deleting IB notes via this path — otherwise any client could make
+    // the GM delete arbitrary drawings on any scene (e.g. map annotations).
+    if (!drawing.flags?.[MODULE_ID]?.type) {
+      console.warn("Investigation Board: Rejected deleteDrawing socket request - not an IB note");
+      return;
+    }
 
     drawing.delete({ ibDelete: true });
   }

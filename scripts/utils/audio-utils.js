@@ -98,7 +98,6 @@ export function applyTapeEffectToElement(audioElement) {
     if (!context) return null;
 
     try {
-        audioElement._ibTapeEffectApplied = true;
         let source;
         if (audioSourceMap.has(audioElement)) {
             source = audioSourceMap.get(audioElement);
@@ -106,12 +105,15 @@ export function applyTapeEffectToElement(audioElement) {
             source = context.createMediaElementSource(audioElement);
             audioSourceMap.set(audioElement, source);
         }
-        
-        
+
         // Connect source through the music-channel gainNode so the music-volume slider works.
         // Fallback: music channel gainNode → context.destination
         const destination = game.audio.music?.gainNode ?? context.destination;
-        return applyTapeEffect(context, source, destination);
+        const result = applyTapeEffect(context, source, destination);
+        // Only mark as applied once the effect chain is actually wired up — otherwise a
+        // failure here (e.g. context not resumed yet) permanently blocks retry for this element.
+        audioElement._ibTapeEffectApplied = true;
+        return result;
     } catch (err) {
         console.warn("Investigation Board: Could not apply audio effect to element", err);
         return null;

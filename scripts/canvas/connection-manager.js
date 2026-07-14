@@ -1,4 +1,4 @@
-import { MODULE_ID } from "../config.js";
+import { MODULE_ID, DEFAULT_CONNECTION_LINE_WIDTH } from "../config.js";
 import { InvestigationBoardState } from "../state.js";
 import { collaborativeUpdate } from "../utils/socket-handler.js";
 import { getEffectiveScale } from "../utils/helpers.js";
@@ -76,13 +76,7 @@ function drawYarnLine(graphics, x1, y1, x2, y2, color, width, animated = false, 
 
     // Calculate points along the curve for dashed effect
     const steps = Math.min(100, Math.max(20, Math.floor(distance / (5 * sceneScale))));
-    const points = [];
-    for (let i = 0; i <= steps; i++) {
-      const t = i / steps;
-      const x = (1 - t) * (1 - t) * x1 + 2 * (1 - t) * t * controlPointX + t * t * x2;
-      const y = (1 - t) * (1 - t) * y1 + 2 * (1 - t) * t * controlPointY + t * t * y2;
-      points.push({ x, y });
-    }
+    const points = getQuadraticBezierPoints(x1, y1, controlPointX, controlPointY, x2, y2, steps);
 
     // Draw background solid line first (dimmed original)
     graphics.lineStyle(width, color, 0.3);
@@ -238,27 +232,16 @@ export function updatePins() {
     if (noteData && drawing.pinSprite) {
       drawing.zIndex = 0;
 
+      // Sprite size: the pin type IS the note (arbitrary size); every other type gets
+      // a fixed 40x40 pin icon. Position: _getPinPosition() is the single source of
+      // truth for the pin's center — offset by half the sprite size for its top-left.
       const noteWidth = drawing.document.shape.width || 200;
       const noteHeight = drawing.document.shape.height || 200;
-
-      let pinX, pinY, pinW, pinH;
-
-      if (noteData.type === "pin") {
-        pinX = drawing.document.x;
-        pinY = drawing.document.y;
-        pinW = noteWidth;
-        pinH = noteHeight;
-      } else {
-        pinW = 40;
-        pinH = 40;
-        if (noteData.type === "handout") {
-          pinX = drawing.document.x + noteWidth / 2 - 20;
-          pinY = drawing.document.y + noteHeight * 0.05;
-        } else {
-          pinX = drawing.document.x + noteWidth / 2 - 20;
-          pinY = drawing.document.y + 3;
-        }
-      }
+      const pinW = noteData.type === "pin" ? noteWidth : 40;
+      const pinH = noteData.type === "pin" ? noteHeight : 40;
+      const center = drawing._getPinPosition ? drawing._getPinPosition() : { x: drawing.document.x + pinW / 2, y: drawing.document.y + pinH / 2 };
+      const pinX = center.x - pinW / 2;
+      const pinY = center.y - pinH / 2;
 
       drawing.pinSprite.width = pinW;
       drawing.pinSprite.height = pinH;
@@ -266,24 +249,45 @@ export function updatePins() {
       drawing.pinSprite.y = pinY;
       drawing.pinSprite.eventMode = 'static';
       drawing.pinSprite.cursor = 'pointer';
-      drawing.pinSprite.removeAllListeners();
-      drawing.pinSprite.on('pointerdown', (event) => {
-        if (event.button === 2 && InvestigationBoardState.isActive && noteData?.type === "pin") {
-          // Right-click on a standalone pin: open the context menu.
-          // _showContextMenu synchronously cancels connection mode (resetPinConnectionState)
-          // before its first await, which removes the stage-level onCanvasRightClick listener
-          // before pointerup/rightclick can fire it. The Create-note menu never appears.
-          event.stopPropagation();
-          drawing._showContextMenu(event);
-          return;
-        }
-        onPinPointerDown(event, drawing);
-      });
+      // Register the pointerdown listener once per sprite lifetime instead of tearing
+      // down and re-adding it on every redraw (including every ticker frame during
+      // connection animation). The handler reads noteData fresh from the document on
+      // each call, so it stays correct even if the note's type changes later.
+      if (!drawing.pinSprite._ibPointerDownBound) {
+        drawing.pinSprite._ibPointerDownBound = true;
+        drawing.pinSprite.on('pointerdown', (event) => {
+          const liveNoteData = drawing.document.flags[MODULE_ID];
+          if (event.button === 2 && InvestigationBoardState.isActive && liveNoteData?.type === "pin") {
+            // Right-click on a standalone pin: open the context menu.
+            // _showContextMenu synchronously cancels connection mode (resetPinConnectionState)
+            // before its first await, which removes the stage-level onCanvasRightClick listener
+            // before pointerup/rightclick can fire it. The Create-note menu never appears.
+            event.stopPropagation();
+            drawing._showContextMenu(event);
+            return;
+          }
+          onPinPointerDown(event, drawing);
+        });
+      }
       drawing.pinSprite.visible = !drawing.document.hidden || game.user.isGM;
       drawing.pinSprite.alpha = (game.user.isGM && drawing.document.hidden) ? 0.4 : 1;
 
       pinsContainer.addChild(drawing.pinSprite);
     }
+  });
+}
+
+// Coalesces bursts of updatePins()+drawAllConnectionLines() calls (e.g. N notes each
+// calling draw()/refresh() during canvasReady or a bulk import) into a single pass on
+// the next animation frame, instead of running the full O(N) global redraw N times.
+let _globalRedrawScheduled = false;
+export function requestGlobalRedraw() {
+  if (_globalRedrawScheduled) return;
+  _globalRedrawScheduled = true;
+  requestAnimationFrame(() => {
+    _globalRedrawScheduled = false;
+    updatePins();
+    drawAllConnectionLines();
   });
 }
 
@@ -295,9 +299,13 @@ export function drawAllConnectionLines(animationOffset = 0) {
   if (!canvas || !canvas.ready || !canvas.drawings) return;
   const sceneScale = getEffectiveScale();
 
-  // Reposition pins if containers are missing or count mismatch (safety check)
-  const investigationNotes = canvas.drawings.placeables.filter(d => d.document.flags[MODULE_ID]);
-  if (!pinsContainer || pinsContainer.destroyed || pinsContainer.children.length !== investigationNotes.length) {
+  // Reposition pins if containers are missing or count mismatch (safety check).
+  // Only count notes that actually have a pinSprite — pinColor:"none" notes and
+  // video-media notes have none, so comparing against all IB notes caused a permanent
+  // mismatch that ran updatePins() (listener churn) on every redraw, including every
+  // ticker frame while an edit dialog is open.
+  const expectedPinCount = canvas.drawings.placeables.filter(d => d.document.flags[MODULE_ID] && d.pinSprite).length;
+  if (!pinsContainer || pinsContainer.destroyed || pinsContainer.children.length !== expectedPinCount) {
     updatePins();
   }
 
@@ -328,7 +336,7 @@ export function drawAllConnectionLines(animationOffset = 0) {
       const targetPin = targetDrawing._getPinPosition ? targetDrawing._getPinPosition() : { x: targetDrawing.document.x, y: targetDrawing.document.y };
 
       let lineColor = conn.color || "#FF0000";
-      const lineWidth = (conn.width || game.settings.get(MODULE_ID, "connectionLineWidth") || 6) * sceneScale;
+      const lineWidth = (conn.width || game.settings.get(MODULE_ID, "connectionLineWidth") || DEFAULT_CONNECTION_LINE_WIDTH) * sceneScale;
       const colorNum = toYarnColorNum(lineColor);
       drawYarnLine(
         connectionLinesContainer,
@@ -394,20 +402,10 @@ export function showConnectionNumbers(sourceDrawingId) {
     const noteData = targetDrawing.document.flags[MODULE_ID];
     if (!noteData) return;
 
-    const isPhoto = noteData.type === "photo";
-    const isIndex = noteData.type === "index";
-    let width, height;
-
-    if (isPhoto) {
-      width = game.settings.get(MODULE_ID, "photoNoteWidth") * sceneScale;
-      height = Math.round((width / sceneScale) / (225 / 290)) * sceneScale;
-    } else if (isIndex) {
-      width = (game.settings.get(MODULE_ID, "indexNoteWidth") || 600) * sceneScale;
-      height = Math.round((width / sceneScale) / (600 / 400)) * sceneScale;
-    } else {
-      width = game.settings.get(MODULE_ID, "stickyNoteWidth") * sceneScale;
-      height = width;
-    }
+    // shape.width/height are the authoritative world-space size for the actual
+    // rendered note (any type, any resize) — never multiply by sceneScale.
+    const width = targetDrawing.document.shape.width || 200;
+    const height = targetDrawing.document.shape.height || 200;
 
     const numberText = new PIXI.Text(String(index + 1), {
       fontFamily: "Arial",
@@ -458,7 +456,7 @@ function onMouseMovePreview(event) {
 
   const playerColor = game.user.color || "#FF0000";
   const sceneScale = getEffectiveScale();
-  const width = (game.settings.get(MODULE_ID, "connectionLineWidth") || 3) * sceneScale;
+  const width = (game.settings.get(MODULE_ID, "connectionLineWidth") || DEFAULT_CONNECTION_LINE_WIDTH) * sceneScale;
 
   drawYarnLine(connectionPreviewLine, firstPin.x, firstPin.y, worldPos.x, worldPos.y, playerColor, width, false, 0);
 }
@@ -489,18 +487,55 @@ export function clearConnectionPreview() {
   }
 }
 
+/**
+ * Finds all notes (other than targetId itself) whose connections array has an entry
+ * pointing at targetId. Connections are stored one-directionally in the source note,
+ * so "incoming" connections to a note can only be found by scanning every other note.
+ * @param {string} targetId
+ * @returns {CustomDrawing[]}
+ */
+function findNotesWithIncomingConnections(targetId) {
+  return canvas.drawings.placeables.filter(d => {
+    if (d.document.id === targetId) return false;
+    return d.document.flags[MODULE_ID]?.connections?.some(c => c.targetId === targetId);
+  });
+}
+
+/**
+ * Rewrites every connection pointing at targetId across all other notes, via mapFn.
+ * Return a replacement connection object to remap it (e.g. a new targetId), or a
+ * falsy value to drop it (e.g. for "remove all connections"). Fires all the resulting
+ * updates concurrently and resolves once they've all been requested.
+ * @param {string} targetId
+ * @param {(conn: object) => object|null|undefined} mapFn
+ */
+export async function updateIncomingConnections(targetId, mapFn) {
+  const notes = findNotesWithIncomingConnections(targetId);
+  await Promise.all(notes.map(note => {
+    const updated = note.document.flags[MODULE_ID].connections
+      .map(c => (c.targetId === targetId ? mapFn(c) : c))
+      .filter(Boolean);
+    return collaborativeUpdate(note.document.id, { [`flags.${MODULE_ID}.connections`]: updated });
+  }));
+}
+
 async function createConnection(sourceDrawing, targetDrawing) {
   const connections = sourceDrawing.document.flags[MODULE_ID]?.connections || [];
 
   const isDuplicate = connections.some(conn => conn.targetId === targetDrawing.document.id);
-  if (isDuplicate) {
+  // Connections are stored one-directionally in the source note only, so also check the
+  // target's own connections for the reverse edge — otherwise B→A can be created when
+  // A→B already exists, drawing two overlapping yarns.
+  const targetConnections = targetDrawing.document.flags[MODULE_ID]?.connections || [];
+  const isReverseDuplicate = targetConnections.some(conn => conn.targetId === sourceDrawing.document.id);
+  if (isDuplicate || isReverseDuplicate) {
     return;
   }
 
   // Convert Color object to a plain CSS string so Foundry's mergeObject doesn't mangle it.
   // Color extends Number, and mergeObject spreads enumerable own props → {}, losing the value.
   const playerColor = game.user.color?.css ?? "#FF0000";
-  const width = game.settings.get(MODULE_ID, "connectionLineWidth") || 6;
+  const width = game.settings.get(MODULE_ID, "connectionLineWidth") || DEFAULT_CONNECTION_LINE_WIDTH;
 
   connections.push({
     targetId: targetDrawing.document.id,
@@ -556,6 +591,9 @@ function onPinPointerDown(event, drawing) {
 
 function onPinDragMove(event) {
   if (!pinDragState) return;
+  // Locked notes may still be pin-clicked to start a connection (handled on pointerup
+  // when isDragging never flips true), just not repositioned by dragging the pin.
+  if (pinDragState.drawing.document.locked) return;
 
   const worldPos = event.getLocalPosition(canvas.stage);
   const dx = worldPos.x - pinDragState.startMouseX;
@@ -579,19 +617,16 @@ function onPinDragMove(event) {
       drawing.shape.position.set(newX + noteWidth / 2, newY + noteHeight / 2);
     }
 
-    // Move pin sprite visually (it lives in pinsContainer at world coords)
-    if (drawing.pinSprite && !drawing.pinSprite.destroyed) {
+    // Move pin sprite visually (it lives in pinsContainer at world coords).
+    // _getPinPosition(newX, newY) previews the center at the not-yet-committed drag
+    // position — same formula updatePins() uses once the position is saved.
+    if (drawing.pinSprite && !drawing.pinSprite.destroyed && drawing._getPinPosition) {
       const noteData = drawing.document.flags[MODULE_ID];
-      if (noteData?.type === "pin") {
-        drawing.pinSprite.x = newX;
-        drawing.pinSprite.y = newY;
-      } else if (noteData?.type === "handout") {
-        drawing.pinSprite.x = newX + noteWidth / 2 - 20;
-        drawing.pinSprite.y = newY + noteHeight * 0.05;
-      } else {
-        drawing.pinSprite.x = newX + noteWidth / 2 - 20;
-        drawing.pinSprite.y = newY + 3;
-      }
+      const pinW = noteData?.type === "pin" ? noteWidth : 40;
+      const pinH = noteData?.type === "pin" ? noteHeight : 40;
+      const center = drawing._getPinPosition(newX, newY);
+      drawing.pinSprite.x = center.x - pinW / 2;
+      drawing.pinSprite.y = center.y - pinH / 2;
     }
   }
 }
@@ -630,8 +665,9 @@ function _startConnectionMode(drawing) {
   pinConnectionHighlight = new PIXI.Graphics();
   pinConnectionHighlight.lineStyle(4 * sceneScale, 0x00ff00, 1);
 
-  const highlightW = (drawing.document.shape.width || 40) * sceneScale;
-  const highlightH = (drawing.document.shape.height || 40) * sceneScale;
+  // shape.width/height are already world-space — never multiply by sceneScale.
+  const highlightW = drawing.document.shape.width || 40;
+  const highlightH = drawing.document.shape.height || 40;
 
   pinConnectionHighlight.drawRect(
     drawing.document.x,
@@ -653,29 +689,6 @@ function _startConnectionMode(drawing) {
   canvas.stage.once('rightclick', onCanvasRightClick);
 }
 
-// Pin-Click Connection Function (kept for API compatibility)
-export function onPinClick(event, drawing) {
-  event.stopPropagation();
-
-  if (!InvestigationBoardState.isActive) return;
-
-  const noteData = drawing.document.flags[MODULE_ID];
-  if (!noteData) return;
-
-  if (!pinConnectionFirstNote) {
-    _startConnectionMode(drawing);
-    return;
-  }
-
-  if (drawing === pinConnectionFirstNote) {
-    ui.notifications.error("Cannot connect a note to itself.");
-    return;
-  }
-
-  createConnection(pinConnectionFirstNote, drawing);
-  resetPinConnectionState();
-}
-
 /**
  * Handle left click on canvas background while dragging yarn
  */
@@ -691,21 +704,23 @@ async function onCanvasClick(event) {
   // If connection was cancelled or already finished, do nothing
   if (!pinConnectionFirstNote) return;
 
-  // Prevent this from firing if we clicked another pin (onPinClick handles that and should stop propagation, 
-  // but just in case, we check if the target is a pin or investigation board note)
+  // Prevent this from firing if we clicked another pin (onPinPointerDown handles that
+  // and should stop propagation, but just in case, we check if the target is a pin or
+  // investigation board note)
   const target = event.target;
   if (target && (target.document?.flags?.[MODULE_ID] || target.parent?.document?.flags?.[MODULE_ID])) {
     return;
   }
 
   const worldPos = event.getLocalPosition(canvas.stage);
-  const sceneScale = getEffectiveScale();
-  
+
   // Create a new pin note at this location
-  // We need to center it on the mouse, so we subtract half its width
+  // We need to center it on the mouse, so we subtract half its width.
+  // pinW is a world-space size (matches the 40x40 shape createNote() gives a pin) —
+  // no sceneScale factor, per the module's shape-vs-sceneScale coordinate rule.
   const pinW = 40;
-  const pinX = worldPos.x - (pinW * sceneScale) / 2;
-  const pinY = worldPos.y - (pinW * sceneScale) / 2;
+  const pinX = worldPos.x - pinW / 2;
+  const pinY = worldPos.y - pinW / 2;
 
   import("../utils/creation-utils.js").then(async (m) => {
     const newNote = await m.createNote("pin", { x: pinX, y: pinY });
@@ -764,28 +779,9 @@ function onCanvasRightClick(event) {
       e.stopPropagation();
       menu.remove();
       
-      // Read dimensions from settings (same sources as createNote)
-      let noteWidth, noteHeight;
-      if (type.id === 'photo') {
-        noteWidth = game.settings.get(MODULE_ID, "photoNoteWidth") || 225;
-        noteHeight = Math.round(noteWidth / (225 / 290));
-      } else if (type.id === 'index') {
-        noteWidth = game.settings.get(MODULE_ID, "indexNoteWidth") || 600;
-        noteHeight = Math.round(noteWidth / (600 / 400));
-      } else if (type.id === 'handout') {
-        noteWidth = game.settings.get(MODULE_ID, "handoutNoteWidth") || 400;
-        noteHeight = game.settings.get(MODULE_ID, "handoutNoteHeight") || 400;
-      } else if (type.id === 'media') {
-        noteWidth = 400;
-        noteHeight = Math.round(400 * (296 / 400));
-      } else if (type.id === 'pin') {
-        noteWidth = 40;
-        noteHeight = 40;
-      } else {
-        // sticky
-        noteWidth = game.settings.get(MODULE_ID, "stickyNoteWidth") || 200;
-        noteHeight = noteWidth;
-      }
+      // Read dimensions from the same single source createNote() uses
+      const { getNoteDimensions } = await import("../utils/creation-utils.js");
+      const { width: noteWidth, height: noteHeight } = getNoteDimensions(type.id);
 
       // Place the new note clear of the source. shape.width/height are world-space
       // sizes (the raw stored values, not multiplied by sceneScale), so all distance
@@ -835,13 +831,15 @@ function onCanvasRightClick(event) {
 
   document.body.appendChild(menu);
 
-  const closeMenu = (e) => { 
-    if (!menu.contains(e.target)) { 
-      menu.remove(); 
-      document.removeEventListener('mousedown', closeMenu); 
-      // If menu closed without selecting, we should probably reset connection state
-      // but let's keep it dragging for now in case they just missed
-    } 
+  const closeMenu = (e) => {
+    if (!menu.contains(e.target)) {
+      menu.remove();
+      document.removeEventListener('mousedown', closeMenu);
+      // Dismissing without picking a type would otherwise leave connection mode stuck:
+      // the preview line keeps following the cursor but neither click nor right-click
+      // does anything until Escape or another pin is clicked.
+      resetPinConnectionState();
+    }
   };
   setTimeout(() => { document.addEventListener('mousedown', closeMenu); }, 100);
   
