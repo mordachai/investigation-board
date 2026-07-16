@@ -1,6 +1,12 @@
 # Node modules
 node_modules/
 
+# Compiled compendium packs (LevelDB) — generated from packs/_source via `npm run pack`.
+# Only the unpacked JSON source is tracked; the binary DB is a build artifact.
+packs/*/
+!packs/_source/
+!packs/_source/**
+
 # Build artifacts
 *.zip
 release-temp/

@@ -1,0 +1,269 @@
+{
+  "name": "Investigation Office",
+  "navigation": false,
+  "navOrder": 0,
+  "thumb": "worlds/icrpg/assets/scenes/MzpzDpX3eeAeq8hU-thumb.webp",
+  "width": 3840,
+  "height": 2600,
+  "padding": 0.1,
+  "initial": {
+    "x": 2833,
+    "y": 1667,
+    "scale": 0.338
+  },
+  "grid": {
+    "type": 0,
+    "size": 100,
+    "style": "solidLines",
+    "thickness": 1,
+    "color": "#000000",
+    "alpha": 0.2,
+    "distance": 1,
+    "units": "m"
+  },
+  "tokenVision": false,
+  "fog": {
+    "colors": {
+      "explored": null,
+      "unexplored": null
+    },
+    "mode": 0
+  },
+  "environment": {
+    "darknessLevel": 0,
+    "darknessLock": false,
+    "globalLight": {
+      "enabled": false,
+      "alpha": 0.5,
+      "bright": false,
+      "color": null,
+      "coloration": 1,
+      "luminosity": 0,
+      "saturation": 0,
+      "contrast": 0,
+      "shadows": 0,
+      "darkness": {
+        "min": 0,
+        "max": 1
+      }
+    },
+    "cycle": true,
+    "base": {
+      "hue": 0,
+      "intensity": 0,
+      "luminosity": 0,
+      "saturation": 0,
+      "shadows": 0
+    },
+    "dark": {
+      "hue": 0.7138888888888889,
+      "intensity": 0,
+      "luminosity": -0.25,
+      "saturation": 0,
+      "shadows": 0
+    }
+  },
+  "drawings": [],
+  "tokens": [],
+  "lights": [
+    {
+      "_id": "Q1dPkL4H0FUyN2Ay",
+      "x": 3556,
+      "y": 2099,
+      "elevation": 0,
+      "rotation": 0,
+      "walls": false,
+      "vision": false,
+      "config": {
+        "negative": false,
+        "priority": 0,
+        "alpha": 0.6,
+        "angle": 360,
+        "bright": 6,
+        "color": "#e4cb96",
+        "coloration": 1,
+        "dim": 12,
+        "attenuation": 0.8,
+        "luminosity": 0.6,
+        "saturation": 0,
+        "contrast": 0,
+        "shadows": 0,
+        "animation": {
+          "type": null,
+          "speed": 5,
+          "intensity": 5,
+          "reverse": false
+        },
+        "darkness": {
+          "min": 0,
+          "max": 1
+        }
+      },
+      "hidden": false,
+      "flags": {},
+      "levels": [],
+      "locked": false,
+      "_key": "!scenes.lights!6WHpDKPujHEKz43p.Q1dPkL4H0FUyN2Ay"
+    },
+    {
+      "_id": "O0UNYni7PS9ftLYY",
+      "x": 4050,
+      "y": 244,
+      "elevation": 0,
+      "rotation": 0,
+      "walls": false,
+      "vision": false,
+      "config": {
+        "negative": false,
+        "priority": 0,
+        "alpha": 0.6,
+        "angle": 360,
+        "bright": 10,
+        "color": "#d4e1f7",
+        "coloration": 1,
+        "dim": 22,
+        "attenuation": 0.85,
+        "luminosity": 0.6,
+        "saturation": 0,
+        "contrast": 0.3,
+        "shadows": 0,
+        "animation": {
+          "type": "torch",
+          "speed": 6,
+          "intensity": 6,
+          "reverse": false
+        },
+        "darkness": {
+          "min": 0,
+          "max": 1
+        }
+      },
+      "hidden": false,
+      "flags": {},
+      "levels": [],
+      "locked": false,
+      "_key": "!scenes.lights!6WHpDKPujHEKz43p.O0UNYni7PS9ftLYY"
+    },
+    {
+      "x": 1755,
+      "y": 344,
+      "elevation": 0,
+      "rotation": 0,
+      "walls": false,
+      "vision": false,
+      "config": {
+        "negative": false,
+        "priority": 0,
+        "alpha": 0.6,
+        "angle": 360,
+        "bright": 7.74,
+        "color": "#d4e1f7",
+        "coloration": 1,
+        "dim": 20,
+        "attenuation": 0.85,
+        "luminosity": 0.75,
+        "saturation": 0,
+        "contrast": 0.3,
+        "shadows": 0,
+        "animation": {
+          "type": null,
+          "speed": 6,
+          "intensity": 6,
+          "reverse": false
+        },
+        "darkness": {
+          "min": 0,
+          "max": 1
+        }
+      },
+      "hidden": false,
+      "flags": {},
+      "_id": "VwKd0BEsQBGKSI1m",
+      "levels": [],
+      "locked": false,
+      "_key": "!scenes.lights!6WHpDKPujHEKz43p.VwKd0BEsQBGKSI1m"
+    }
+  ],
+  "notes": [],
+  "sounds": [],
+  "regions": [],
+  "tiles": [],
+  "walls": [],
+  "playlist": null,
+  "playlistSound": null,
+  "journal": null,
+  "journalEntryPage": null,
+  "weather": "",
+  "folder": null,
+  "ownership": {
+    "default": 0,
+    "PM2ADe3BdM3Gb1wW": 3
+  },
+  "flags": {},
+  "_stats": {
+    "compendiumSource": null,
+    "duplicateSource": null,
+    "exportSource": null,
+    "coreVersion": "14.361",
+    "systemId": "icrpgme",
+    "systemVersion": "1.6.1",
+    "createdTime": 1775900439137,
+    "modifiedTime": 1775900439137,
+    "lastModifiedBy": "PM2ADe3BdM3Gb1wW"
+  },
+  "navName": "Office",
+  "_id": "6WHpDKPujHEKz43p",
+  "active": false,
+  "sort": 0,
+  "levels": [
+    {
+      "_id": "defaultLevel0000",
+      "name": "Investigation Office",
+      "background": {
+        "color": "#000000",
+        "src": "modules/investigation-board/assets/scenes/IB-Scene-02.webp",
+        "tint": "#ffffff",
+        "alphaThreshold": 0.75
+      },
+      "elevation": {
+        "bottom": 0,
+        "top": 20
+      },
+      "foreground": {
+        "src": null,
+        "tint": "#ffffff",
+        "alphaThreshold": 0.75
+      },
+      "fog": {
+        "src": null,
+        "tint": "#ffffff"
+      },
+      "textures": {
+        "anchorX": 0.5,
+        "anchorY": 0.5,
+        "offsetX": 0,
+        "offsetY": 0,
+        "fit": "fill",
+        "scaleX": 1,
+        "scaleY": 1,
+        "rotation": 0
+      },
+      "visibility": {
+        "levels": []
+      },
+      "sort": 0,
+      "flags": {},
+      "_key": "!scenes.levels!6WHpDKPujHEKz43p.defaultLevel0000"
+    }
+  ],
+  "shiftX": 0,
+  "shiftY": 0,
+  "initialLevel": "defaultLevel0000",
+  "transition": {
+    "type": null,
+    "duration": 1500,
+    "activeOnly": false
+  },
+  "_key": "!scenes!6WHpDKPujHEKz43p",
+  "templates": []
+}

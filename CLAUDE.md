@@ -21,9 +21,20 @@ Investigation Board is a Foundry VTT module (currently targeting **v14**, Build 
 
 ## Development Workflow
 
-No build step required. Edit JS/CSS and reload Foundry.
+No build step required for JS/CSS. Edit and reload Foundry.
 
 To test: refresh Foundry after code changes. Existing notes may need `canvas.drawings` refresh or select/deselect. Connection lines auto-update on note movement.
+
+### Compendium Pack Workflow (unpack/pack)
+
+The `ib-scenes` compendium (`packs/ib-scenes/`) is a LevelDB database — binary, unreadable, and noisy in git diffs. It is **not** tracked in git. Instead, `packs/_source/ib-scenes/*.json` (one readable JSON file per scene) is the tracked source of truth, following the same pattern as `D:\boilerplate-13\build\vagabond\src\packs.mjs`.
+
+- `npm run unpack` — decompiles `packs/ib-scenes/` (LevelDB) into `packs/_source/ib-scenes/*.json`. Run this after editing scene content in a running Foundry instance, before committing.
+- `npm run pack` — compiles `packs/_source/ib-scenes/*.json` back into `packs/ib-scenes/` (LevelDB) for Foundry to load. Run this after a fresh clone/pull, or after hand-editing the JSON source, before launching Foundry.
+- Both use `build/packs.mjs`, which reads `module.json`'s `packs` array and shells out to `npx fvtt package pack|unpack` (`@foundryvtt/foundryvtt-cli` devDependency).
+- `packs/ib-scenes/` (the compiled LevelDB) is gitignored via `packs/*/` with `!packs/_source/` re-included — see `.gitignore`.
+- LevelDB needs exclusive access to compile — close Foundry (or at least the world) before running `npm run pack`, or `fvtt package pack` will fail to open the DB.
+- The release workflow (`.github/workflows/release.yml`) runs `npm ci` + `npm run pack` before zipping, so CI always ships a freshly compiled pack built from the committed JSON source.
 
 ## Architecture
 

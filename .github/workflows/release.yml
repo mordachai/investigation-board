@@ -68,6 +68,17 @@ jobs:
             module.json > module.json.tmp
           mv module.json.tmp module.json
 
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Install build dependencies
+        run: npm ci
+
+      - name: Compile compendium packs
+        run: npm run pack
+
       - name: Create module.zip
         run: |
           # Create the zip with only essential module files

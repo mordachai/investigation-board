@@ -1,0 +1,13 @@
+{
+  "name": "investigation-board",
+  "version": "5.8.4",
+  "description": "Build tooling for the Investigation Board Foundry VTT module",
+  "scripts": {
+    "pack": "node build/packs.mjs pack",
+    "unpack": "node build/packs.mjs unpack"
+  },
+  "private": true,
+  "devDependencies": {
+    "@foundryvtt/foundryvtt-cli": "^3.0.3"
+  }
+}
