@@ -103,7 +103,7 @@
       "name": "Investigation Board",
       "background": {
         "color": "#000000",
-        "src": "modules/investigation-board/assets/board01.webp",
+        "src": "modules/investigation-board/assets/scenes/IB-Scene-01.webp",
         "tint": "#ffffff",
         "alphaThreshold": 0.75
       },
