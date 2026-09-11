@@ -20,6 +20,16 @@ export const STAMP_IMAGES = [
 ];
 export const SOCKET_NAME = `module.${MODULE_ID}`;
 
+export const NOTE_TYPE_LABELS = {
+  sticky: 'Sticky Note',
+  photo: 'Photo Note',
+  index: 'Index Card',
+  handout: 'Handout Note',
+  media: 'Media Note',
+  pin: 'Pin',
+  document: 'Document Note',
+};
+
 /**
  * Single source of truth for the module's font list. `widthFactor` is the average
  * character width as a fraction of font size (used to estimate text-wrap capacity).

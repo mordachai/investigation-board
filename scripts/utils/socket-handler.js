@@ -11,7 +11,7 @@ const pendingCreateRequests = new Map();
 const CREATE_REQUEST_TIMEOUT_MS = 10000;
 
 /** Whitelisted fields a socket "updateDrawing" request may modify. Everything else is stripped. */
-const SOCKET_UPDATE_ALLOWED_KEYS = new Set(["x", "y", "rotation", "shape", "fillAlpha"]);
+const SOCKET_UPDATE_ALLOWED_KEYS = new Set(["x", "y", "rotation", "shape", "fillAlpha", "name"]);
 const SOCKET_UPDATE_ALLOWED_PREFIXES = ["shape.", `flags.${MODULE_ID}.`];
 
 function sanitizeSocketUpdateData(updateData) {

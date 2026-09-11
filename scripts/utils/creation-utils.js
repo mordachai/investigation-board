@@ -1,4 +1,4 @@
-import { MODULE_ID, CASSETTE_IMAGES, VIDEO_IMAGES, DOC_BACKGROUNDS, FONTS } from "../config.js";
+import { MODULE_ID, CASSETTE_IMAGES, VIDEO_IMAGES, DOC_BACKGROUNDS, FONTS, NOTE_TYPE_LABELS } from "../config.js";
 import { InvestigationBoardState } from "../state.js";
 import { getActorDisplayName, getEffectiveScale } from "./helpers.js";
 import { collaborativeCreate, collaborativeCreateMany } from "./socket-handler.js";
@@ -114,8 +114,16 @@ export function getNoteDimensions(noteType) {
  * @param {object} opts.flags - Contents of flags[MODULE_ID] (type, text, etc.)
  */
 function buildNoteCreateData({ x, y, width, height, fillColor, fillAlpha, flags }) {
+  // Mirror text (or title, for document notes) into the top-level `name` field so the
+  // note is identifiable by content in Foundry's Drawings sidebar list instead of
+  // showing a raw ID. Handout/pin have no text field — fall back to the type label.
+  const name = (flags.type === "document" ? flags.title : flags.text)?.trim()
+    || NOTE_TYPE_LABELS[flags.type]
+    || "";
+
   return {
     type: "r",
+    name,
     author: game.user.id,
     x, y,
     shape: { width, height },

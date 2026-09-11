@@ -6,6 +6,7 @@ import {
   DOC_BACKGROUNDS,
   EFFECT_DEFAULTS,
   DEFAULT_CONNECTION_LINE_WIDTH,
+  NOTE_TYPE_LABELS,
 } from '../config.js';
 import { getAvailablePinFiles } from '../utils/helpers.js';
 import { collaborativeUpdate } from '../utils/socket-handler.js';
@@ -54,6 +55,30 @@ export class CustomDrawingSheet extends DrawingConfig {
     }
     // Fall back to default behavior
     return super._canRender(options);
+  }
+
+  /**
+   * Reads the currently-typed (not yet saved) text/title field values out of the DOM.
+   * Live-update controls (color swatches, image pickers, connection removal) trigger a
+   * collaborativeUpdate before the user hits Save, which fires the updateDrawing hook
+   * and causes Foundry's default document-update listener to re-render this sheet —
+   * _prepareContext then reads text/title fresh from the document and repopulates the
+   * form, silently discarding whatever the user had typed. Merging these captured
+   * values into the same live update keeps the document in sync with the form so the
+   * forced re-render doesn't wipe anything.
+   */
+  _captureUnsavedTextFields() {
+    const noteType = this.document.flags[MODULE_ID]?.type;
+    const updates = {};
+    if (noteType !== 'handout' && noteType !== 'pin') {
+      const textEl = this.element.querySelector("[name='text']");
+      if (textEl) updates[`flags.${MODULE_ID}.text`] = textEl.value;
+    }
+    if (noteType === 'document') {
+      const titleEl = this.element.querySelector("[name='title']");
+      if (titleEl) updates[`flags.${MODULE_ID}.title`] = titleEl.value;
+    }
+    return updates;
   }
 
   static PARTS = {
@@ -397,6 +422,7 @@ export class CustomDrawingSheet extends DrawingConfig {
 
             // Update immediately and re-render for enrichment
             await collaborativeUpdate(this.document.id, {
+              ...this._captureUnsavedTextFields(),
               [`flags.${MODULE_ID}.linkedObject`]: link,
             });
             this.render(true);
@@ -416,6 +442,7 @@ export class CustomDrawingSheet extends DrawingConfig {
       removeLinkBtn.addEventListener('click', async (ev) => {
         ev.preventDefault();
         await collaborativeUpdate(this.document.id, {
+          ...this._captureUnsavedTextFields(),
           [`flags.${MODULE_ID}.linkedObject`]: '',
         });
         this.render(true);
@@ -515,6 +542,7 @@ export class CustomDrawingSheet extends DrawingConfig {
         // doesn't snap the radio back to its previous state.
         const w = this.document.shape.width || 400;
         await collaborativeUpdate(this.document.id, {
+          ...this._captureUnsavedTextFields(),
           [`flags.${MODULE_ID}.mediaMode`]: radio.value,
           [`flags.${MODULE_ID}.image`]: isVideo
             ? getRandomVideoImage()
@@ -590,6 +618,7 @@ export class CustomDrawingSheet extends DrawingConfig {
 
                   // Update the drawing document dimensions AND image path (collaborative)
                   await collaborativeUpdate(this.document.id, {
+                    ...this._captureUnsavedTextFields(),
                     'shape.width': targetWidth,
                     'shape.height': targetHeight,
                     [`flags.${MODULE_ID}.image`]: path,
@@ -607,6 +636,7 @@ export class CustomDrawingSheet extends DrawingConfig {
             } else if (noteType === 'photo') {
               // Update photo note image immediately (no resize) - collaborative
               await collaborativeUpdate(this.document.id, {
+                ...this._captureUnsavedTextFields(),
                 [`flags.${MODULE_ID}.image`]: path,
               });
 
@@ -640,6 +670,7 @@ export class CustomDrawingSheet extends DrawingConfig {
 
           // Real-time update (collaborative)
           await collaborativeUpdate(this.document.id, {
+            ...this._captureUnsavedTextFields(),
             [`flags.${MODULE_ID}.${type}`]: color,
           });
 
@@ -676,6 +707,7 @@ export class CustomDrawingSheet extends DrawingConfig {
 
           // Use collaborative update to remove connections (works for all users)
           await collaborativeUpdate(this.document.id, {
+            ...this._captureUnsavedTextFields(),
             [`flags.${MODULE_ID}.connections`]: connections,
           });
 
@@ -806,6 +838,18 @@ export class CustomDrawingSheet extends DrawingConfig {
           if (noteType === 'document') {
             updates[`flags.${MODULE_ID}.title`] = data.title || '';
             updates[`flags.${MODULE_ID}.docBackground`] = data.docBackground || 'parchment';
+          }
+
+          // Mirror text (or title, for document notes) into the top-level `name` field
+          // so notes are identifiable by content in Foundry's Drawings sidebar list
+          // instead of showing raw IDs. Handout/pin have no text field, so fall back
+          // to the type label.
+          if (noteType === 'document') {
+            updates.name = (data.title || '').trim() || NOTE_TYPE_LABELS.document;
+          } else if (noteType === 'handout' || noteType === 'pin') {
+            updates.name = NOTE_TYPE_LABELS[noteType];
+          } else {
+            updates.name = (data.text || '').trim() || NOTE_TYPE_LABELS[noteType] || '';
           }
 
           if (data.linkedObject !== undefined) {
