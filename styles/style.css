@@ -195,27 +195,27 @@ body.investigation-board-mode .drawing:not([data-investigation-note='true']) {
 /* Connections Section       */
 /* ========================= */
 
-.connections-section {
+.ib-dialog .connections-section {
   display: flex;
   flex-direction: column;
   margin-top: 5px;
   border-top: 2px solid #ccc;
 }
 
-.connections-header {
+.ib-dialog .connections-header {
   font-weight: bold;
   display: block;
   margin-bottom: 12px;
   width: 100%;
 }
 
-.connections-list {
+.ib-dialog .connections-list {
   display: flex;
   flex-wrap: wrap;
   gap: 8px;
 }
 
-.connection-item {
+.ib-dialog .connection-item {
   display: flex;
   flex-direction: column;
   gap: 6px;
@@ -226,7 +226,7 @@ body.investigation-board-mode .drawing:not([data-investigation-note='true']) {
   min-width: 100px;
 }
 
-.connection-target {
+.ib-dialog .connection-target {
   font-size: 13px;
   font-weight: 500;
   overflow: hidden;
@@ -234,13 +234,13 @@ body.investigation-board-mode .drawing:not([data-investigation-note='true']) {
   white-space: nowrap;
 }
 
-.connection-controls {
+.ib-dialog .connection-controls {
   display: flex;
   gap: 6px;
   align-items: center;
 }
 
-.connection-item input[type='color'] {
+.ib-dialog .connection-item input[type='color'] {
   width: 40px;
   height: 30px;
   border: 1px solid #ccc;
@@ -249,7 +249,7 @@ body.investigation-board-mode .drawing:not([data-investigation-note='true']) {
   padding: 2px;
 }
 
-.remove-connection-btn {
+.ib-dialog .remove-connection-btn {
   background: #d32f2f;
   color: white;
   border: none;
@@ -259,11 +259,11 @@ body.investigation-board-mode .drawing:not([data-investigation-note='true']) {
   transition: background 0.2s;
 }
 
-.remove-connection-btn:hover {
+.ib-dialog .remove-connection-btn:hover {
   background: #b71c1c;
 }
 
-.remove-connection-btn i {
+.ib-dialog .remove-connection-btn i {
   font-size: 12px;
 }
 
@@ -272,31 +272,31 @@ body.investigation-board-mode .drawing:not([data-investigation-note='true']) {
 /* ========================= */
 
 /* File picker layout - keep input and button on same line */
-.file-picker {
+.ib-dialog .file-picker {
   display: flex;
   gap: 8px;
   align-items: center;
 }
 
-.file-picker input[type='text'] {
+.ib-dialog .file-picker input[type='text'] {
   flex: 1;
   min-width: 0; /* Allow input to shrink if needed */
 }
 
-.file-picker-button {
+.ib-dialog .file-picker-button {
   flex-shrink: 0; /* Prevent button from shrinking */
   white-space: nowrap;
 }
 
 /* Button group for save and cancel */
-.button-group {
+.ib-dialog .button-group {
   display: flex;
   gap: 10px;
   margin-top: 15px;
 }
 
-.save-button,
-.cancel-button {
+.ib-dialog .save-button,
+.ib-dialog .cancel-button {
   flex: 1;
   padding: 8px 16px;
   border: none;
@@ -306,26 +306,26 @@ body.investigation-board-mode .drawing:not([data-investigation-note='true']) {
   transition: background 0.2s;
 }
 
-.save-button {
+.ib-dialog .save-button {
   background: #3f51b5;
   color: white;
 }
 
-.save-button:hover {
+.ib-dialog .save-button:hover {
   background: #303f9f;
 }
 
-.cancel-button {
+.ib-dialog .cancel-button {
   background: #757575;
   color: white;
 }
 
-.cancel-button:hover {
+.ib-dialog .cancel-button:hover {
   background: #616161;
 }
 
-.save-button i,
-.cancel-button i {
+.ib-dialog .save-button i,
+.ib-dialog .cancel-button i {
   margin-right: 5px;
 }
 
@@ -409,7 +409,7 @@ body.investigation-board-mode .drawing:not([data-investigation-note='true']) {
 }
 
 /* Font Settings (for other note types) */
-.font-settings {
+.ib-dialog .font-settings {
   display: flex;
   gap: 15px;
   margin-top: 10px;
@@ -417,33 +417,33 @@ body.investigation-board-mode .drawing:not([data-investigation-note='true']) {
   padding: 0 10px;
 }
 
-.font-select-group,
-.font-size-group,
-.pin-select-inline-group {
+.ib-dialog .font-select-group,
+.ib-dialog .font-size-group,
+.ib-dialog .pin-select-inline-group {
   flex: 1;
   display: flex;
   flex-direction: column;
   gap: 5px;
 }
 
-.font-size-group {
+.ib-dialog .font-size-group {
   flex: 0.5;
 } /* narrower — just a number */
-.pin-select-inline-group {
+.ib-dialog .pin-select-inline-group {
   flex: 0.8;
 }
 
-.font-select-group label,
-.font-size-group label,
-.pin-select-inline-group label {
+.ib-dialog .font-select-group label,
+.ib-dialog .font-size-group label,
+.ib-dialog .pin-select-inline-group label {
   font-size: 12px;
   font-weight: 500;
   color: #333;
 }
 
-.font-select-group select,
-.font-size-group input[type='number'],
-.pin-select-inline-group select {
+.ib-dialog .font-select-group select,
+.ib-dialog .font-size-group input[type='number'],
+.ib-dialog .pin-select-inline-group select {
   width: 100%;
   padding: 6px 8px;
   border: 1px solid #ccc;
@@ -462,7 +462,7 @@ body.investigation-board-mode .drawing:not([data-investigation-note='true']) {
 }
 
 /* Color Mosaic Styles */
-.color-settings {
+.ib-dialog .color-settings {
   display: flex;
   flex-direction: row;
   justify-content: space-between;
@@ -473,7 +473,7 @@ body.investigation-board-mode .drawing:not([data-investigation-note='true']) {
   padding: 0 10px;
 }
 
-.color-mosaic-group {
+.ib-dialog .color-mosaic-group {
   display: flex;
   flex-direction: row;
   align-items: center;
@@ -481,20 +481,20 @@ body.investigation-board-mode .drawing:not([data-investigation-note='true']) {
   flex: 0 1 auto;
 }
 
-.color-mosaic-group label {
+.ib-dialog .color-mosaic-group label {
   font-size: 12px;
   font-weight: 500;
   white-space: nowrap;
   margin: 0;
 }
 
-.color-mosaic {
+.ib-dialog .color-mosaic {
   display: flex;
   gap: 3px;
   flex-wrap: nowrap;
 }
 
-.color-option {
+.ib-dialog .color-option {
   width: 24px;
   height: 24px;
   border-radius: 4px;
@@ -504,18 +504,18 @@ body.investigation-board-mode .drawing:not([data-investigation-note='true']) {
   position: relative;
 }
 
-.color-option:hover {
+.ib-dialog .color-option:hover {
   transform: scale(1.1);
   border-color: rgba(0, 0, 0, 0.5);
   z-index: 1;
 }
 
-.color-option.active {
+.ib-dialog .color-option.active {
   border: 2px solid #3f51b5;
   box-shadow: 0 0 5px rgba(63, 81, 181, 0.6);
 }
 
-.color-option.active::after {
+.ib-dialog .color-option.active::after {
   content: '\f00c';
   font-family: 'Font Awesome 6 Pro';
   font-weight: 900;
@@ -528,10 +528,10 @@ body.investigation-board-mode .drawing:not([data-investigation-note='true']) {
 }
 
 /* Light checkmark for dark ink colors */
-.color-option.active[data-color='#000000']::after,
-.color-option.active[data-color='#cc0000']::after,
-.color-option.active[data-color='#006600']::after,
-.color-option.active[data-color='#0000cc']::after {
+.ib-dialog .color-option.active[data-color='#000000']::after,
+.ib-dialog .color-option.active[data-color='#cc0000']::after,
+.ib-dialog .color-option.active[data-color='#006600']::after,
+.ib-dialog .color-option.active[data-color='#0000cc']::after {
   color: rgba(255, 255, 255, 0.8);
 }
 
@@ -649,14 +649,14 @@ body.investigation-board-mode .drawing:not([data-investigation-note='true']) {
   font-style: italic;
 }
 
-.linked-object-row {
+.ib-dialog .linked-object-row {
   display: flex;
   gap: 10px;
   align-items: center;
   margin-top: 5px;
 }
 
-.linked-object-display {
+.ib-dialog .linked-object-display {
   flex: 1;
   background: rgba(0, 0, 0, 0.05);
   padding: 8px;
@@ -667,13 +667,13 @@ body.investigation-board-mode .drawing:not([data-investigation-note='true']) {
   align-items: center;
 }
 
-.no-link {
+.ib-dialog .no-link {
   color: #777;
   font-size: 13px;
   font-style: italic;
 }
 
-.remove-link-btn {
+.ib-dialog .remove-link-btn {
   background: #d32f2f;
   color: white;
   border: none;
@@ -687,11 +687,11 @@ body.investigation-board-mode .drawing:not([data-investigation-note='true']) {
   transition: background 0.2s;
 }
 
-.remove-link-btn:hover {
+.ib-dialog .remove-link-btn:hover {
   background: #b71c1c;
 }
 
-.enriched-link a.content-link {
+.ib-dialog .enriched-link a.content-link {
   margin: 0;
   border: 1px solid #888;
   padding: 2px 5px;
@@ -1043,11 +1043,11 @@ body.investigation-board-mode .drawing:not([data-investigation-note='true']) {
 /* Fix for dark mode labels */
 .theme-dark .ib-note-config-form label,
 .theme-dark .ib-note-config-form .form-group label,
-.theme-dark .color-mosaic-group label,
+.theme-dark .ib-dialog .color-mosaic-group label,
 .theme-dark .size-input-group label,
-.theme-dark .font-select-group label,
-.theme-dark .font-size-group label,
-.theme-dark .pin-select-inline-group label {
+.theme-dark .ib-dialog .font-select-group label,
+.theme-dark .ib-dialog .font-size-group label,
+.theme-dark .ib-dialog .pin-select-inline-group label {
   color: #f0f0e0 !important;
 }
 
