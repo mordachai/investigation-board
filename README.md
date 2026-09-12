@@ -15,9 +15,17 @@ https://github.com/mordachai/investigation-board/releases/download/v4.10.1/modul
 
 # Investigation Board
 
-![Foundry v14](https://img.shields.io/badge/foundry-v14-blue?style=for-the-badge) ![Github All Releases](https://img.shields.io/github/downloads/mordachai/investigation-board/total.svg?style=for-the-badge) ![GitHub Release](https://img.shields.io/github/v/release/mordachai/investigation-board?display_name=tag&style=for-the-badge&label=Current%20version&cacheSeconds=60&v=5.8.0)
+![Foundry v14](https://img.shields.io/badge/foundry-v14-blue?style=for-the-badge) ![Github All Releases](https://img.shields.io/github/downloads/mordachai/investigation-board/total.svg?style=for-the-badge) ![GitHub Release](https://img.shields.io/github/v/release/mordachai/investigation-board?display_name=tag&style=for-the-badge&label=Current%20version&cacheSeconds=60&v=5.9.0)
 
 A Foundry VTT module that lets everyone create, edit, and move sticky and photo notes on the scene. A must-have for investigative games like City of Mist, Call of Cthulhu, and all your conspiracy adventures.
+
+## NEW FEATURE >> Sci-Fi Board Theme + Circuit Connections
+
+Running a cyberpunk, sci-fi horror, or hacking-heavy game? Switch the whole board to the new **Sci-Fi (Holo)** theme in Game Settings — holographic note backgrounds, terminal/hologram/dataslate doc styles, and matching pins and stamps.
+
+Pairs with a new **Circuit** connection line style: each note gets 4 anchor points (top/right/bottom/left) instead of a single pin, and connections route as glowing PCB-style traces with clean 90° bends instead of yarn. Drag from any anchor to any anchor on another note, and shift+click a line to grab and rewire either end.
+
+Also added two new fonts for the theme: Orbitron and Share Tech Mono.
 
 ## NEW FEATURE >> Batch Edit Connections
 
