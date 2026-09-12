@@ -23,7 +23,7 @@ A Foundry VTT module that lets everyone create, edit, and move sticky and photo 
 
 Running a cyberpunk, sci-fi horror, or hacking-heavy game? Switch the whole board to the new **Sci-Fi (Holo)** theme in Game Settings — holographic note backgrounds, terminal/hologram/dataslate doc styles, and matching pins and stamps.
 
-<img width="950" height="973" alt="image" src="https://github.com/user-attachments/assets/5d78e7f3-c9ca-4aba-8894-f42035a21a2c" />
+<img width="950" alt="image" src="https://github.com/user-attachments/assets/5d78e7f3-c9ca-4aba-8894-f42035a21a2c" />
 
 Pairs with a new **Circuit** connection line style: each note gets 4 anchor points (top/right/bottom/left) instead of a single pin, and connections route as glowing PCB-style traces with clean 90° bends instead of yarn. Drag from any anchor to any anchor on another note, and shift+click a line to grab and rewire either end.
 
