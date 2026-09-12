@@ -9,6 +9,9 @@ export let activeVideoBroadcasts = new Map(); // drawingId → { gmUserId } (vid
 // waiting on the GM's "drawingCreated" echo (players without DRAWING_CREATE).
 const pendingCreateRequests = new Map();
 const CREATE_REQUEST_TIMEOUT_MS = 10000;
+// Upper bound on concurrent pending create requests to prevent unbounded memory
+// growth from a flood of collaborativeCreate/CreateMany calls before timeouts fire.
+const MAX_PENDING_CREATE_REQUESTS = 50;
 
 /** Whitelisted fields a socket "updateDrawing" request may modify. Everything else is stripped. */
 const SOCKET_UPDATE_ALLOWED_KEYS = new Set(["x", "y", "rotation", "shape", "fillAlpha", "name"]);
@@ -102,6 +105,11 @@ export async function collaborativeCreate(createData, options = {}, sceneId = nu
     return [];
   }
 
+  if (pendingCreateRequests.size >= MAX_PENDING_CREATE_REQUESTS) {
+    console.warn("Investigation Board: Too many pending create requests, rejecting collaborative create");
+    return [];
+  }
+
   const requestId = foundry.utils.randomID();
   const result = new Promise(resolve => {
     const timeout = setTimeout(() => {
@@ -146,6 +154,11 @@ export async function collaborativeCreateMany(createDataArray, options = {}, sce
   // Otherwise, request creation via socket and wait for the GM's echo.
   if (!socket) {
     console.error("Investigation Board: Socket not available for collaborative creation");
+    return [];
+  }
+
+  if (pendingCreateRequests.size >= MAX_PENDING_CREATE_REQUESTS) {
+    console.warn("Investigation Board: Too many pending create requests, rejecting collaborative create");
     return [];
   }
 
