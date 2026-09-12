@@ -1,6 +1,6 @@
-import { MODULE_ID, CASSETTE_IMAGES, VIDEO_IMAGES, DOC_BACKGROUNDS, FONTS, NOTE_TYPE_LABELS } from "../config.js";
+import { MODULE_ID, FONTS, NOTE_TYPE_LABELS } from "../config.js";
 import { InvestigationBoardState } from "../state.js";
-import { getActorDisplayName, getEffectiveScale } from "./helpers.js";
+import { getActorDisplayName, getEffectiveScale, getActiveTheme } from "./helpers.js";
 import { collaborativeCreate, collaborativeCreateMany } from "./socket-handler.js";
 
 /**
@@ -63,16 +63,16 @@ function sanitizeForPixiHtml(html) {
   return s.trim();
 }
 
-/** Returns a random cassette sprite path for an audio media note. */
+/** Returns a random cassette sprite path for an audio media note, honoring the active board theme. */
 export function getRandomCassetteImage() {
-  const name = CASSETTE_IMAGES[Math.floor(Math.random() * CASSETTE_IMAGES.length)];
-  return `modules/investigation-board/assets/${name}`;
+  const images = getActiveTheme().cassetteImages;
+  return images[Math.floor(Math.random() * images.length)];
 }
 
-/** Returns a random VHS tape sprite path for a video media note. */
+/** Returns a random VHS tape sprite path for a video media note, honoring the active board theme. */
 export function getRandomVideoImage() {
-  const name = VIDEO_IMAGES[Math.floor(Math.random() * VIDEO_IMAGES.length)];
-  return `modules/investigation-board/assets/${name}`;
+  const images = getActiveTheme().videoImages;
+  return images[Math.floor(Math.random() * images.length)];
 }
 
 /**

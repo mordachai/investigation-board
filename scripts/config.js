@@ -54,6 +54,8 @@ export const FONTS = [
   { name: "Arial",                widthFactor: 0.55, custom: false },
   { name: "Typewriter Condensed", widthFactor: 0.45, custom: true, file: "typewcond_regular.otf" },
   { name: "IB Special Elite",     widthFactor: 0.68, custom: true, file: "SpecialElite-Regular.ttf" },
+  { name: "Orbitron",             widthFactor: 0.62, custom: true, file: "orbitron.ttf" },
+  { name: "Share Tech Mono",      widthFactor: 0.60, custom: true, file: "sharetechmono.ttf" },
 ];
 
 /** Bundled custom webfonts that need explicit document.fonts.load() force-loading. */
@@ -98,6 +100,100 @@ export const DOC_BACKGROUNDS = {
   whitepaper: {
     label: 'White Paper',
     path: 'modules/investigation-board/assets/doc_white.webp',
+  },
+};
+
+export const DEFAULT_BOARD_THEME = 'classic';
+export const DEFAULT_CONNECTION_LINE_STYLE = 'yarn';
+
+/**
+ * Board theme registry — single source of truth for every asset category that
+ * changes when the `boardTheme` world setting is switched. `docBackgrounds` keeps
+ * the same keys (parchment/oldpaper/whitepaper) across themes so a note's stored
+ * `docBackground` flag never needs migrating — only what each key resolves to
+ * changes. Pin/stamp images are NOT resolved through here: switching themes just
+ * writes `pinFolder`/`stampFolder` into the existing pinImagesFolder/stampImagesFolder
+ * world settings, so resolvePinImage()/resolveStampImage() (helpers.js) keep working
+ * unchanged — filenames inside each theme's pin/stamp folder must match the classic
+ * set 1:1 (redPin.webp, classified.webp, etc.). `defaultFont` is cascaded the same way
+ * into the world-scoped `font` setting (see settings.js) — a per-note `font` flag still
+ * overrides it, same as always.
+ */
+export const THEME_ASSETS = {
+  classic: {
+    label: 'Classic (Corkboard)',
+    noteBackgrounds: {
+      sticky: 'modules/investigation-board/assets/note_white.webp',
+      photo: 'modules/investigation-board/assets/photoFrame.webp',
+      index: 'modules/investigation-board/assets/note_index.webp',
+    },
+    docBackgrounds: DOC_BACKGROUNDS,
+    pinFolder: DEFAULT_PIN_FOLDER,
+    stampFolder: DEFAULT_STAMP_FOLDER,
+    cassetteImages: CASSETTE_IMAGES.map(f => `modules/investigation-board/assets/${f}`),
+    videoImages: VIDEO_IMAGES.map(f => `modules/investigation-board/assets/${f}`),
+    stickyTints: STICKY_TINTS,
+    inkColors: INK_COLORS,
+    defaultInk: '#000000',
+    defaultFont: 'Rock Salt',
+  },
+  scifi: {
+    label: 'Sci-Fi (Holo)',
+    noteBackgrounds: {
+      sticky: 'modules/investigation-board/assets/themes/scifi/note_holo.webp',
+      photo: 'modules/investigation-board/assets/themes/scifi/photo_frame.webp',
+      index: 'modules/investigation-board/assets/themes/scifi/note_index.webp',
+    },
+    docBackgrounds: {
+      parchment: {
+        label: 'Terminal',
+        path: 'modules/investigation-board/assets/themes/scifi/doc_terminal.webp',
+      },
+      oldpaper: {
+        label: 'Hologram',
+        path: 'modules/investigation-board/assets/themes/scifi/doc_hologram.webp',
+      },
+      whitepaper: {
+        label: 'Dataslate',
+        path: 'modules/investigation-board/assets/themes/scifi/doc_dataslate.webp',
+      },
+    },
+    pinFolder: 'modules/investigation-board/assets/themes/scifi/pins',
+    stampFolder: 'modules/investigation-board/assets/themes/scifi/stamps',
+    cassetteImages: [
+      'modules/investigation-board/assets/themes/scifi/cassette1.webp',
+      'modules/investigation-board/assets/themes/scifi/cassette2.webp',
+      'modules/investigation-board/assets/themes/scifi/cassette3.webp',
+    ],
+    videoImages: [
+      'modules/investigation-board/assets/themes/scifi/video1.webp',
+      'modules/investigation-board/assets/themes/scifi/video2.webp',
+      'modules/investigation-board/assets/themes/scifi/video3.webp',
+    ],
+    stickyTints: {
+      cyan: '#66fff2',
+      magenta: '#ff66e8',
+      amber: '#ffcc66',
+      green: '#66ff8f',
+      white: '#e8f6ff',
+      red: '#ff5c5c',
+      // Multiply-tints the (light) note_holo base down to a dark navy panel — matches
+      // the dark schematic/HUD look, same trick as every other tint here (see the
+      // note_holo.webp comment in gen-panels.sh: base must stay light for tint to read).
+      dark: '#2a3142',
+    },
+    // Index/document/photo-caption backgrounds are dark panels in this theme (unlike
+    // classic's always-light parchment/paper), so the default ink needs to be light
+    // too — a black default would be invisible. cyan/white/magenta/amber read clearly
+    // against the dark terminal/hologram/dataslate art.
+    inkColors: {
+      cyan: '#39e6ff',
+      white: '#eafcff',
+      magenta: '#ff4dee',
+      amber: '#ffcc66',
+    },
+    defaultInk: '#eafcff',
+    defaultFont: 'Orbitron',
   },
 };
 

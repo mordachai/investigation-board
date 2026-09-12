@@ -1,14 +1,11 @@
 import {
   MODULE_ID,
-  STICKY_TINTS,
-  INK_COLORS,
   VIDEO_FORMATS,
-  DOC_BACKGROUNDS,
   EFFECT_DEFAULTS,
   DEFAULT_CONNECTION_LINE_WIDTH,
   NOTE_TYPE_LABELS,
 } from '../config.js';
-import { getAvailablePinFiles } from '../utils/helpers.js';
+import { getAvailablePinFiles, getActiveTheme } from '../utils/helpers.js';
 import { collaborativeUpdate } from '../utils/socket-handler.js';
 import { applyTapeEffectToSound } from '../utils/audio-utils.js';
 import {
@@ -115,7 +112,7 @@ export class CustomDrawingSheet extends DrawingConfig {
     // Document fields
     context.title = customData.title;
     context.docBackground = customData.docBackground;
-    context.docBackgrounds = DOC_BACKGROUNDS;
+    context.docBackgrounds = getActiveTheme().docBackgrounds;
 
     // Enrich the linked object for display
     context.enrichedLinkedObject = context.linkedObject
@@ -210,9 +207,9 @@ export class CustomDrawingSheet extends DrawingConfig {
       font: ibFlags.font || game.settings.get(MODULE_ID, 'font'),
       fontSize: ibFlags.fontSize || defaultFontSize,
       tint: ibFlags.tint || '#ffffff',
-      textColor: ibFlags.textColor || '#000000',
-      stickyTints: STICKY_TINTS,
-      inkColors: INK_COLORS,
+      textColor: ibFlags.textColor || getActiveTheme().defaultInk,
+      stickyTints: getActiveTheme().stickyTints,
+      inkColors: getActiveTheme().inkColors,
       connections: formattedConnections,
       // Video fields
       videoPath: ibFlags.videoPath || '',

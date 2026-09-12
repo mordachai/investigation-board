@@ -1,4 +1,4 @@
-import { MODULE_ID, DEFAULT_PIN_FOLDER, DEFAULT_STAMP_FOLDER, DEFAULT_CONNECTION_LINE_WIDTH, DEFAULT_STAMP_TINT } from "./config.js";
+import { MODULE_ID, DEFAULT_PIN_FOLDER, DEFAULT_STAMP_FOLDER, DEFAULT_CONNECTION_LINE_WIDTH, DEFAULT_STAMP_TINT, DEFAULT_BOARD_THEME, DEFAULT_CONNECTION_LINE_STYLE, THEME_ASSETS } from "./config.js";
 import { invalidatePinFilesCache, invalidateStampFilesCache } from "./utils/helpers.js";
 import { NoteDefaultsDialog } from "./apps/note-defaults-dialog.js";
 import { AppearanceDialog } from "./apps/appearance-dialog.js";
@@ -63,6 +63,33 @@ export const registerSettings = function() {
   // -------------------------------------------------------------------------
   // Appearance — managed via the Appearance dialog
   // -------------------------------------------------------------------------
+  game.settings.register(MODULE_ID, "boardTheme", {
+    name: "Board Theme",
+    hint: "Swaps note backgrounds, doc backgrounds, media art, and the pin/stamp folders between visual theme packs.",
+    scope: "world",
+    config: false,
+    type: String,
+    default: DEFAULT_BOARD_THEME,
+    onChange: async (value) => {
+      const theme = THEME_ASSETS[value] || THEME_ASSETS[DEFAULT_BOARD_THEME];
+      // Cascade: point the existing pin/stamp folder settings at this theme's folder,
+      // set a sane default connection line style and font, and update this client's own
+      // default ink color (index/doc backgrounds are dark in some themes — a stale black
+      // default would be invisible). Each of these has its own onChange that invalidates
+      // caches / refreshes drawings. defaultInkColor is client-scoped, so that one line
+      // only ever touches the executing client's own local preference, never another
+      // player's; font/pinImagesFolder/stampImagesFolder/connectionLineStyle are world-
+      // scoped, same as boardTheme itself. A note's own font/textColor flag still
+      // overrides these global defaults, same as before theming existed.
+      await game.settings.set(MODULE_ID, "pinImagesFolder", theme.pinFolder);
+      await game.settings.set(MODULE_ID, "stampImagesFolder", theme.stampFolder);
+      await game.settings.set(MODULE_ID, "connectionLineStyle", value === "scifi" ? "circuit" : "yarn");
+      await game.settings.set(MODULE_ID, "defaultInkColor", theme.defaultInk);
+      if (theme.defaultFont) await game.settings.set(MODULE_ID, "font", theme.defaultFont);
+      refreshAllDrawings();
+    }
+  });
+
   game.settings.register(MODULE_ID, "font", {
     name: "Font",
     scope: "world",
@@ -151,6 +178,16 @@ export const registerSettings = function() {
     config: false,
     type: Number,
     default: DEFAULT_CONNECTION_LINE_WIDTH,
+    onChange: () => refreshAllDrawings()
+  });
+
+  game.settings.register(MODULE_ID, "connectionLineStyle", {
+    name: "Connection Line Style",
+    hint: "How connection lines between notes are rendered — sagging yarn or a glowing circuit-style routed line.",
+    scope: "world",
+    config: false,
+    type: String,
+    default: DEFAULT_CONNECTION_LINE_STYLE,
     onChange: () => refreshAllDrawings()
   });
 

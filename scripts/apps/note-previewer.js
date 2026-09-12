@@ -1,6 +1,7 @@
 import { MODULE_ID, SOCKET_NAME } from "../config.js";
 import { socket, activeGlobalSounds, collaborativeUpdate } from "../utils/socket-handler.js";
 import { applyTapeEffectToElement, applyTapeEffectToSound } from "../utils/audio-utils.js";
+import { getActiveTheme } from "../utils/helpers.js";
 
 // v13 namespaced imports
 const ApplicationV2 = foundry.applications.api.ApplicationV2;
@@ -54,10 +55,11 @@ export class NotePreviewer extends HandlebarsApplicationMixin(ApplicationV2) {
     let framePath = "";
     let backgroundPath = "";
     
+    const themeBackgrounds = getActiveTheme().noteBackgrounds;
     if (noteType === "photo") {
-      framePath = "modules/investigation-board/assets/photoFrame.webp";
+      framePath = themeBackgrounds.photo;
     } else if (noteType === "sticky" || noteType === "index") {
-      backgroundPath = noteType === "index" ? "modules/investigation-board/assets/note_index.webp" : "modules/investigation-board/assets/note_white.webp";
+      backgroundPath = noteType === "index" ? themeBackgrounds.index : themeBackgrounds.sticky;
     }
 
     // Determine if we should show a separate text container
@@ -87,7 +89,7 @@ export class NotePreviewer extends HandlebarsApplicationMixin(ApplicationV2) {
       previewFontSize: (noteData?.fontSize || game.settings.get(MODULE_ID, "baseFontSize")) * 2.5 * fontBoost,
       showSeparateText: showSeparateText,
       tint: noteData?.tint || "#ffffff",
-      textColor: noteData?.textColor || "#000000",
+      textColor: noteData?.textColor || getActiveTheme().defaultInk,
       isVideoDisplay: isVideoDisplay,
       mediaLabelFontSize: mediaLabelFontSize,
       isGM: game.user.isGM,

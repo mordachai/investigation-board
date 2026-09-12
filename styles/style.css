@@ -26,6 +26,20 @@
   font-style: normal;
 }
 
+@font-face {
+  font-family: 'Orbitron';
+  src: url('../assets/fonts/orbitron.ttf') format('truetype');
+  font-weight: 400;
+  font-style: normal;
+}
+
+@font-face {
+  font-family: 'Share Tech Mono';
+  src: url('../assets/fonts/sharetechmono.ttf') format('truetype');
+  font-weight: 400;
+  font-style: normal;
+}
+
 .custom-drawing-text {
   font-family: 'Rock Salt', Arial, sans-serif;
   color: #000000; /* Black text */
@@ -1488,6 +1502,15 @@ body.investigation-board-mode .drawing:not([data-investigation-note='true']) {
 
 .ib-defaults-footer button {
   min-width: 90px;
+}
+
+/* Both dialogs auto-size to content (position.height: "auto"); once the content
+   is taller than the viewport, cap it and let it scroll internally instead of
+   silently overflowing past the bottom of the window with no way to reach it. */
+.ib-appearance-app .window-content,
+.ib-note-defaults-app .window-content {
+  max-height: 80vh;
+  overflow-y: auto;
 }
 
 /* ============================================================

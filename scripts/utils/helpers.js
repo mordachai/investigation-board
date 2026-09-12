@@ -1,4 +1,21 @@
-import { MODULE_ID, DEFAULT_PIN_FOLDER, PIN_COLORS, DEFAULT_STAMP_FOLDER, STAMP_IMAGES, FONTS } from "../config.js";
+import { MODULE_ID, DEFAULT_PIN_FOLDER, PIN_COLORS, DEFAULT_STAMP_FOLDER, STAMP_IMAGES, FONTS, THEME_ASSETS, DEFAULT_BOARD_THEME } from "../config.js";
+
+// ---------------------------------------------------------------------------
+// Board theme
+// ---------------------------------------------------------------------------
+
+/**
+ * Returns the active theme's asset set (THEME_ASSETS entry keyed by the
+ * `boardTheme` world setting). Every visual-category consumer (note/doc
+ * backgrounds, media images, sticky tints) reads through here rather than
+ * importing the raw classic constants directly, so a theme switch changes
+ * everything at once.
+ * @returns {object}
+ */
+export function getActiveTheme() {
+  const key = game.settings.get(MODULE_ID, "boardTheme") || DEFAULT_BOARD_THEME;
+  return THEME_ASSETS[key] || THEME_ASSETS[DEFAULT_BOARD_THEME];
+}
 
 // ---------------------------------------------------------------------------
 // Folder-backed image sources (pins, stamps) — a GM-configurable world setting

@@ -9,7 +9,10 @@ import {
   resetPinConnectionState,
   clearConnectionNumbers,
   clearConnectionPreview,
-  isInConnectionMode
+  isInConnectionMode,
+  bindGlobalConnectionInteractions,
+  isInAnchorOrRewireDrag,
+  cancelAnchorOrRewireDrag
 } from "./canvas/connection-manager.js";
 import { initSocket, socket, collaborativeUpdate } from "./utils/socket-handler.js";
 import { SetupWarningDialog } from "./apps/setup-warning.js";
@@ -276,6 +279,10 @@ Hooks.once("init", () => {
     onDown: () => {
       if (isInConnectionMode()) {
         resetPinConnectionState();
+        return true; // consume the event
+      }
+      if (isInAnchorOrRewireDrag()) {
+        cancelAnchorOrRewireDrag();
         return true; // consume the event
       }
       return false; // let Foundry handle Escape normally
@@ -892,6 +899,10 @@ Hooks.on("canvasReady", async () => {
 
   // Clear connection numbers on canvas change
   clearConnectionNumbers();
+
+  // canvas.stage is a fresh object every scene load — rebind the shift+click-on-a-line
+  // (circuit-mode rewire) listener onto it each time.
+  bindGlobalConnectionInteractions();
 
   // Reapply Investigation Board mode if it was active before canvas recreation
   if (InvestigationBoardState.isActive) {

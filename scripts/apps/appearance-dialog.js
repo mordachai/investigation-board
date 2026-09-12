@@ -1,5 +1,5 @@
-import { MODULE_ID, STICKY_TINTS, INK_COLORS, DEFAULT_PIN_FOLDER, DEFAULT_STAMP_FOLDER, DEFAULT_STAMP_TINT, FONTS } from "../config.js";
-import { invalidatePinFilesCache } from "../utils/helpers.js";
+import { MODULE_ID, DEFAULT_PIN_FOLDER, DEFAULT_STAMP_FOLDER, DEFAULT_STAMP_TINT, DEFAULT_BOARD_THEME, FONTS, THEME_ASSETS } from "../config.js";
+import { invalidatePinFilesCache, getActiveTheme } from "../utils/helpers.js";
 
 const { ApplicationV2, HandlebarsApplicationMixin } = foundry.applications.api;
 
@@ -10,6 +10,15 @@ const FONT_CHOICES = Object.fromEntries(FONTS.map(f => [f.name, f.name]));
 const PIN_COLOR_CHOICES = {
   random: "Random",
   none:   "No Pins (disables yarn connections)"
+};
+
+const BOARD_THEME_CHOICES = Object.fromEntries(
+  Object.entries(THEME_ASSETS).map(([key, theme]) => [key, theme.label])
+);
+
+const CONNECTION_LINE_STYLE_CHOICES = {
+  yarn:    "Yarn (sagging string)",
+  circuit: "Circuit (glowing routed line)"
 };
 
 export class AppearanceDialog extends HandlebarsApplicationMixin(ApplicationV2) {
@@ -41,6 +50,8 @@ export class AppearanceDialog extends HandlebarsApplicationMixin(ApplicationV2) 
     const currentPinFolder   = game.settings.get(MODULE_ID, "pinImagesFolder") || DEFAULT_PIN_FOLDER;
     const currentStampFolder = game.settings.get(MODULE_ID, "stampImagesFolder") || DEFAULT_STAMP_FOLDER;
     const currentStampTint   = game.settings.get(MODULE_ID, "stampTint") || DEFAULT_STAMP_TINT;
+    const currentBoardTheme  = game.settings.get(MODULE_ID, "boardTheme");
+    const currentLineStyle   = game.settings.get(MODULE_ID, "connectionLineStyle");
 
     return {
       // Current values
@@ -53,19 +64,27 @@ export class AppearanceDialog extends HandlebarsApplicationMixin(ApplicationV2) 
       stampImagesFolder:  currentStampFolder,
       stampTint:          currentStampTint,
       connectionLineWidth: game.settings.get(MODULE_ID, "connectionLineWidth"),
+      boardTheme:          currentBoardTheme,
+      connectionLineStyle: currentLineStyle,
 
       // Choices for selects
       fontChoices: Object.entries(FONT_CHOICES).map(([value, label]) => ({
         value, label, selected: value === currentFont
       })),
-      noteColorChoices: Object.entries(STICKY_TINTS).map(([key, value]) => ({
+      noteColorChoices: Object.entries(getActiveTheme().stickyTints).map(([key, value]) => ({
         value, label: key.charAt(0).toUpperCase() + key.slice(1), selected: value === currentNoteColor
       })),
-      inkColorChoices: Object.entries(INK_COLORS).map(([key, value]) => ({
+      inkColorChoices: Object.entries(getActiveTheme().inkColors).map(([key, value]) => ({
         value, label: key.charAt(0).toUpperCase() + key.slice(1), selected: value === currentInkColor
       })),
       pinColorChoices: Object.entries(PIN_COLOR_CHOICES).map(([value, label]) => ({
         value, label, selected: value === currentPinColor
+      })),
+      boardThemeChoices: Object.entries(BOARD_THEME_CHOICES).map(([value, label]) => ({
+        value, label, selected: value === currentBoardTheme
+      })),
+      connectionLineStyleChoices: Object.entries(CONNECTION_LINE_STYLE_CHOICES).map(([value, label]) => ({
+        value, label, selected: value === currentLineStyle
       }))
     };
   }
@@ -81,6 +100,43 @@ export class AppearanceDialog extends HandlebarsApplicationMixin(ApplicationV2) 
 
     html.querySelector('[data-action="cancel"]')?.addEventListener("click", () => {
       this.close();
+    });
+
+    // Rebuilds a color <select>'s <option> list from a theme's color map (key → hex).
+    // Needed (not just setting .value) because the note-color/ink-color selects are
+    // rendered with the PREVIOUS theme's options — the new theme's hex almost certainly
+    // isn't one of them yet, so a plain .value assignment would silently no-op and
+    // Save would persist the stale color.
+    const rebuildColorSelect = (select, colorMap, selectedValue) => {
+      if (!select) return;
+      select.innerHTML = "";
+      for (const [key, value] of Object.entries(colorMap)) {
+        const opt = document.createElement("option");
+        opt.value = value;
+        opt.textContent = key.charAt(0).toUpperCase() + key.slice(1);
+        if (value === selectedValue) opt.selected = true;
+        select.appendChild(opt);
+      }
+    };
+
+    // Live preview: switching the Board Theme dropdown updates the folder/style/color
+    // inputs below it immediately (not yet saved), so the Save handler's form-read
+    // picks up the theme's values instead of stale ones and doesn't need a second
+    // guess at what changed.
+    html.querySelector('[name="boardTheme"]')?.addEventListener("change", (event) => {
+      const theme = THEME_ASSETS[event.target.value] || THEME_ASSETS[DEFAULT_BOARD_THEME];
+      const pinInput = html.querySelector('[name="pinImagesFolder"]');
+      const stampInput = html.querySelector('[name="stampImagesFolder"]');
+      const lineStyleSelect = html.querySelector('[name="connectionLineStyle"]');
+      const noteColorSelect = html.querySelector('[name="defaultNoteColor"]');
+      const inkColorSelect = html.querySelector('[name="defaultInkColor"]');
+      const fontSelect = html.querySelector('[name="font"]');
+      if (pinInput) pinInput.value = theme.pinFolder;
+      if (stampInput) stampInput.value = theme.stampFolder;
+      if (lineStyleSelect) lineStyleSelect.value = event.target.value === "scifi" ? "circuit" : "yarn";
+      if (fontSelect && theme.defaultFont) fontSelect.value = theme.defaultFont;
+      rebuildColorSelect(noteColorSelect, theme.stickyTints, theme.stickyTints.white ?? Object.values(theme.stickyTints)[0]);
+      rebuildColorSelect(inkColorSelect, theme.inkColors, theme.defaultInk);
     });
 
     html.querySelector('[data-action="browse-pins"]')?.addEventListener("click", () => {
@@ -114,8 +170,16 @@ export class AppearanceDialog extends HandlebarsApplicationMixin(ApplicationV2) 
       return isNaN(val) ? null : val;
     };
 
-    const strKeys = ["font", "defaultNoteColor", "defaultInkColor", "pinColor", "pinImagesFolder", "stampImagesFolder", "stampTint"];
+    // boardTheme is handled separately, and only written when it actually changed:
+    // its onChange cascades to overwrite pinImagesFolder/stampImagesFolder, which would
+    // silently stomp a GM's manually-set custom folder on every save otherwise.
+    const strKeys = ["font", "defaultNoteColor", "defaultInkColor", "pinColor", "pinImagesFolder", "stampImagesFolder", "stampTint", "connectionLineStyle"];
     const numKeys = ["baseFontSize", "connectionLineWidth"];
+
+    const newBoardTheme = getStr("boardTheme");
+    if (newBoardTheme !== null && newBoardTheme !== game.settings.get(MODULE_ID, "boardTheme")) {
+      await game.settings.set(MODULE_ID, "boardTheme", newBoardTheme);
+    }
 
     for (const key of strKeys) {
       const val = getStr(key);

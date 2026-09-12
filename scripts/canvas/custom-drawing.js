@@ -1,7 +1,7 @@
-import { MODULE_ID, SOCKET_NAME, VIDEO_EXTENSIONS, DOC_BACKGROUNDS, DEFAULT_STAMP_TINT, FONTS } from "../config.js";
+import { MODULE_ID, SOCKET_NAME, VIDEO_EXTENSIONS, DEFAULT_STAMP_TINT, FONTS } from "../config.js";
 import { InvestigationBoardState } from "../state.js";
 import { collaborativeUpdate, collaborativeDelete, socket, activeGlobalSounds, activeVideoBroadcasts } from "../utils/socket-handler.js";
-import { truncateText, resolvePinImage, getAvailablePinFiles, pickPinFileForDrawing, resolveStampImage, getAvailableStampFiles } from "../utils/helpers.js";
+import { truncateText, resolvePinImage, getAvailablePinFiles, pickPinFileForDrawing, resolveStampImage, getAvailableStampFiles, getActiveTheme } from "../utils/helpers.js";
 import { NotePreviewer } from "../apps/note-previewer.js";
 import { VideoPlayer } from "../apps/video-player.js";
 import { drawAllConnectionLines, beginConnectionFrom, resetPinConnectionState, updateIncomingConnections } from "./connection-manager.js";
@@ -1162,7 +1162,7 @@ export class CustomDrawing extends Drawing {
         const textStyle = new PIXI.TextStyle({
           fontFamily: font,
           fontSize,
-          fill: noteData.textColor || "#1a1a1a",
+          fill: noteData.textColor || getActiveTheme().defaultInk,
           wordWrap: true,
           wordWrapWidth: wrapWidth,
           align: "center",
@@ -1201,8 +1201,9 @@ export class CustomDrawing extends Drawing {
       if (this.photoMask) this.photoMask.visible = false;
 
       // Background + shadow
+      const docBackgrounds = getActiveTheme().docBackgrounds;
       const bgKey = noteData.docBackground || "parchment";
-      const bgImage = (DOC_BACKGROUNDS[bgKey] || DOC_BACKGROUNDS.parchment).path;
+      const bgImage = (docBackgrounds[bgKey] || docBackgrounds.parchment).path;
 
       if (!this.bgSprite) {
         this.bgSprite = new PIXI.Sprite();
@@ -1241,7 +1242,7 @@ export class CustomDrawing extends Drawing {
 
       // Text setup
       const font = noteData.font || game.settings.get(MODULE_ID, "font");
-      const textColor = noteData.textColor || "#000000";
+      const textColor = noteData.textColor || getActiveTheme().defaultInk;
       const titleFontSize = Math.round((docW / 595) * 28);
       const bodyFontSize = Math.round((docW / 595) * Math.max(8, noteData.fontSize || 14));
       const titleAreaHeight = titleFontSize * 3; // space reserved for the title zone
@@ -1477,10 +1478,11 @@ export class CustomDrawing extends Drawing {
           ? Math.round(width / (600 / 400))
           : width);
     
-    // Background Image: Always use modern mode assets
-    const bgImage = isPhoto ? "modules/investigation-board/assets/photoFrame.webp" 
-                  : isIndex ? "modules/investigation-board/assets/note_index.webp" 
-                  : "modules/investigation-board/assets/note_white.webp";
+    // Background Image: resolved from the active board theme (classic corkboard, sci-fi holo, ...)
+    const themeBackgrounds = getActiveTheme().noteBackgrounds;
+    const bgImage = isPhoto ? themeBackgrounds.photo
+                  : isIndex ? themeBackgrounds.index
+                  : themeBackgrounds.sticky;
     
     if (!this.bgSprite) {
       this.bgSprite = new PIXI.Sprite();
@@ -1623,7 +1625,7 @@ export class CustomDrawing extends Drawing {
     const textStyle = new PIXI.TextStyle({
       fontFamily: font,
       fontSize: fontSize,
-      fill: noteData.textColor || "#000000",
+      fill: noteData.textColor || getActiveTheme().defaultInk,
       wordWrap: true,
       wordWrapWidth: width - 2, // Uses document shape width — scaling adds more wrap space
       align: "center",
@@ -1680,6 +1682,33 @@ export class CustomDrawing extends Drawing {
       x: x + noteWidth / 2,
       y: y + 23
     };
+  }
+
+  /**
+   * Center point of one of the note's 4 edge-anchor points (circuit/sci-fi connection
+   * style only — classic/yarn mode always uses _getPinPosition() instead). Pure
+   * bounding-box edge-midpoint math, deliberately simpler than _getPinPosition()'s
+   * type-conditional offsets since these anchors are a new, consistent concept.
+   * "pin"-type notes are just a single dot with no meaningful sides, so they always
+   * resolve to their center regardless of which anchor was requested/stored — keeps
+   * them visually identical to _getPinPosition() in every render/hit-test path.
+   * @param {"top"|"right"|"bottom"|"left"} anchor
+   * @param {number} [x] - Override for this.document.x (drag preview).
+   * @param {number} [y] - Override for this.document.y.
+   */
+  _getAnchorPosition(anchor, x = this.document.x, y = this.document.y) {
+    const noteData = this.document.flags[MODULE_ID];
+    const w = this.document.shape.width || 40;
+    const h = this.document.shape.height || 40;
+    if (noteData?.type === "pin") {
+      return { x: x + w / 2, y: y + h / 2 };
+    }
+    switch (anchor) {
+      case "right":  return { x: x + w,     y: y + h / 2 };
+      case "bottom": return { x: x + w / 2, y: y + h     };
+      case "left":   return { x: x,         y: y + h / 2 };
+      default:       return { x: x + w / 2, y: y         }; // "top"
+    }
   }
 
   /**
