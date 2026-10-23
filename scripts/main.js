@@ -225,10 +225,37 @@ Hooks.on("renderSceneControls", (controls, html) => {
   }
 });
 
+// Creates a note at the drop point from a dragged sidebar document.
+async function _createNoteFromDrop(data) {
+  const doc = await fromUuid(data.uuid);
+  if (!doc) return;
+  const at = { x: data.x, y: data.y };
+
+  switch (doc.documentName) {
+    case "Actor": return createPhotoNoteFromActor(doc, false, at);
+    case "Item": return createPhotoNoteFromItem(doc, at);
+    case "Scene": return createPhotoNoteFromScene(doc, at);
+    case "JournalEntry": {
+      const page = doc.pages.contents.find(p => p.type === "image") ?? doc.pages.contents.find(p => p.type === "text");
+      if (!page) return ui.notifications.warn("Investigation Board: this journal has no image or text page.");
+      return _createNoteFromPage(page, at);
+    }
+    case "JournalEntryPage": return _createNoteFromPage(doc, at);
+  }
+}
+
+async function _createNoteFromPage(page, at) {
+  if (page.type === "image") return createHandoutNoteFromPage(page, at);
+  if (page.type === "text") return createTextIndexFromPage(page);
+  ui.notifications.warn("Investigation Board: only image and text pages can become notes.");
+}
+
 // Hook to handle dragging objects onto notes directly
 Hooks.on("dropCanvasData", (canvas, data) => {
-  if (!InvestigationBoardState.isActive) return true;
+  const drawingsToolActive = ui.controls?.control?.name === "drawings";
+  if (!InvestigationBoardState.isActive && !drawingsToolActive) return true;
   if (!data.uuid) return true;
+  console.debug("Investigation Board | drop", data.type, data.uuid);
 
   // Find if we dropped on a drawing
   const drawingsLayer = canvas.drawings;
@@ -239,6 +266,15 @@ Hooks.on("dropCanvasData", (canvas, data) => {
     const b = d.bounds;
     return (data.x >= b.x) && (data.x <= b.x + b.width) && (data.y >= b.y) && (data.y <= b.y + b.height);
   });
+
+  if (!result) {
+    // Dropped on empty canvas: create a note from the dragged document
+    _createNoteFromDrop(data).catch(err => {
+      console.error("Investigation Board: drop failed", err);
+      ui.notifications.warn("Investigation Board: could not create a note from that drop.");
+    });
+    return false;
+  }
 
   if (result) {
     (async () => {
@@ -256,6 +292,15 @@ Hooks.on("dropCanvasData", (canvas, data) => {
 });
 
 Hooks.once("init", () => {
+  // Core only lets users with TOKEN_CREATE drag Actors out of the sidebar. In Investigation
+  // Board mode, anyone who can create drawings may drag them to make a note.
+  const ActorDir = foundry.applications.sidebar.tabs.ActorDirectory;
+  const originalCanDragStart = ActorDir.prototype._canDragStart;
+  ActorDir.prototype._canDragStart = function (selector) {
+    if (InvestigationBoardState.isActive && game.permissions.DRAWING_CREATE.includes(game.user.role)) return true;
+    return originalCanDragStart.call(this, selector);
+  };
+
   // Kick off font downloads immediately — the earlier they start, the less
   // likely canvasReady fires before they arrive.
   MODULE_FONTS.forEach(f => document.fonts.load(`1em "${f}"`).catch(() => {}));

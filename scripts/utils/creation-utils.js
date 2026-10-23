@@ -257,7 +257,7 @@ export async function createNote(noteType, { x = null, y = null } = {}) {
  * @param {Actor} actor - The Actor document to use
  * @param {boolean} isUnknown - Whether to use "????" as the name
  */
-export async function createPhotoNoteFromActor(actor, isUnknown = false) {
+export async function createPhotoNoteFromActor(actor, isUnknown = false, { x: dropX = null, y: dropY = null } = {}) {
   const scene = canvas.scene;
   if (!scene) {
     ui.notifications.error("Cannot create note: No active scene.");
@@ -283,8 +283,8 @@ export async function createPhotoNoteFromActor(actor, isUnknown = false) {
   const sceneScale = getEffectiveScale();
 
   const viewCenter = canvas.stage.pivot;
-  const x = viewCenter.x - (photoW * sceneScale) / 2;
-  const y = viewCenter.y - (height * sceneScale) / 2;
+  const x = (dropX ?? viewCenter.x) - (photoW * sceneScale) / 2;
+  const y = (dropY ?? viewCenter.y) - (height * sceneScale) / 2;
 
   const created = await collaborativeCreate(buildNoteCreateData({
     x, y,
@@ -306,7 +306,7 @@ export async function createPhotoNoteFromActor(actor, isUnknown = false) {
  * Creates a Photo Note from a Scene document.
  * @param {Scene} targetScene - The Scene document to use
  */
-export async function createPhotoNoteFromScene(targetScene) {
+export async function createPhotoNoteFromScene(targetScene, { x: dropX = null, y: dropY = null } = {}) {
   const scene = canvas.scene;
   if (!scene) {
     ui.notifications.error("Cannot create note: No active scene.");
@@ -317,8 +317,8 @@ export async function createPhotoNoteFromScene(targetScene) {
   const sceneScale = getEffectiveScale();
 
   const viewCenter = canvas.stage.pivot;
-  const x = viewCenter.x - (photoW * sceneScale) / 2;
-  const y = viewCenter.y - (height * sceneScale) / 2;
+  const x = (dropX ?? viewCenter.x) - (photoW * sceneScale) / 2;
+  const y = (dropY ?? viewCenter.y) - (height * sceneScale) / 2;
 
   const displayName = targetScene.navName || targetScene.name || "Unknown Location";
   const imagePath = targetScene.background?.src || "modules/investigation-board/assets/placeholder.webp";
@@ -348,7 +348,7 @@ export async function createPhotoNoteFromScene(targetScene) {
  * Creates a Handout Note from a Journal Page.
  * @param {JournalEntryPage} page - The Journal Page document
  */
-export async function createHandoutNoteFromPage(page) {
+export async function createHandoutNoteFromPage(page, { x: dropX = null, y: dropY = null } = {}) {
   const scene = canvas.scene;
   if (!scene) {
     ui.notifications.error("Cannot create note: No active scene.");
@@ -359,8 +359,8 @@ export async function createHandoutNoteFromPage(page) {
   const sceneScale = getEffectiveScale();
 
   const viewCenter = canvas.stage.pivot;
-  const x = viewCenter.x - (handoutW * sceneScale) / 2;
-  const y = viewCenter.y - (handoutH * sceneScale) / 2;
+  const x = (dropX ?? viewCenter.x) - (handoutW * sceneScale) / 2;
+  const y = (dropY ?? viewCenter.y) - (handoutH * sceneScale) / 2;
 
   const imagePath = page.src || "modules/investigation-board/assets/newhandout.webp";
 
@@ -445,7 +445,7 @@ export async function createMediaNoteFromSound(sound) {
  * Creates a Photo Note from an Item document.
  * @param {Item} item - The Item document to use
  */
-export async function createPhotoNoteFromItem(item) {
+export async function createPhotoNoteFromItem(item, { x: dropX = null, y: dropY = null } = {}) {
   const scene = canvas.scene;
   if (!scene) {
     ui.notifications.error("Cannot create note: No active scene.");
@@ -456,8 +456,8 @@ export async function createPhotoNoteFromItem(item) {
   const sceneScale = getEffectiveScale();
 
   const viewCenter = canvas.stage.pivot;
-  const x = viewCenter.x - (photoW * sceneScale) / 2;
-  const y = viewCenter.y - (height * sceneScale) / 2;
+  const x = (dropX ?? viewCenter.x) - (photoW * sceneScale) / 2;
+  const y = (dropY ?? viewCenter.y) - (height * sceneScale) / 2;
 
   const displayName = item.name || "Unknown Item";
   const imagePath = item.img || "modules/investigation-board/assets/placeholder.webp";
