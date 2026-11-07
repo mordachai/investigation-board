@@ -21,9 +21,12 @@ A Foundry VTT module that lets everyone create, edit, and move sticky and photo 
 
 ## NEW FEATURE >> Move & Resize Pins
 
-<img width="950" alt="image" src="https://github.com/user-attachments/assets/ed42a1ce-6f49-4d36-9dd2-d73a72d1e48b" />
 
-Shift-drag moves a pin, Alt-drag resizes it, and "Reset Pin" is in the right-click menu.
+**SHIFT + LEFT MOUSE BUTTON DRAG** = Move pin  //  **ALT + LEFT MOUSE BUTTON DRAG** = Resize pin
+
+<img width="714" height="577" alt="image" src="https://github.com/user-attachments/assets/47031bf9-d147-48ae-90a8-263f1aa1d5f1" />
+
+"Reset Pin" is in the right-click menu.
 
 ## NEW FEATURE >> Sci-Fi Board Theme + Circuit Connections
 
