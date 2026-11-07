@@ -19,6 +19,12 @@ https://github.com/mordachai/investigation-board/releases/download/v4.10.1/modul
 
 A Foundry VTT module that lets everyone create, edit, and move sticky and photo notes on the scene. A must-have for investigative games like City of Mist, Call of Cthulhu, and all your conspiracy adventures.
 
+## NEW FEATURE >> Move & Resize Pins
+
+<img width="950" alt="image" src="https://github.com/user-attachments/assets/ed42a1ce-6f49-4d36-9dd2-d73a72d1e48b" />
+
+Shift-drag moves a pin, Alt-drag resizes it, and "Reset Pin" is in the right-click menu.
+
 ## NEW FEATURE >> Sci-Fi Board Theme + Circuit Connections
 
 Running a cyberpunk, sci-fi horror, or hacking-heavy game? Switch the whole board to the new **Sci-Fi (Holo)** theme in Game Settings — holographic note backgrounds, terminal/hologram/dataslate doc styles, and matching pins and stamps.
