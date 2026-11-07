@@ -44,6 +44,8 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: write
+    env:
+      FOUNDRY_TOKEN: ${{ secrets.FOUNDRY_PACKAGE_TOKEN }}
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -126,6 +128,20 @@ jobs:
           prerelease: false
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      # Skipped when the FOUNDRY_PACKAGE_TOKEN repo secret is not set.
+      - name: Publish to foundryvtt.com
+        if: env.FOUNDRY_TOKEN != ''
+        run: |
+          VERSION="v${{ steps.module-info.outputs.version }}"
+          REPO_URL="https://github.com/${{ github.repository }}"
+          jq --arg manifest "$REPO_URL/releases/download/$VERSION/module.json" \
+             --arg notes "$REPO_URL/releases/tag/$VERSION" \
+             '{ id, release: { version, manifest: $manifest, notes: $notes, compatibility } }' \
+             module.json > payload.json
+          curl -sS --fail-with-body -X POST https://foundryvtt.com/_api/packages/release_version/ \
+            -H "Content-Type: application/json" -H "Authorization: $FOUNDRY_TOKEN" \
+            --data @payload.json
 
       - name: Update latest release links
         run: |
