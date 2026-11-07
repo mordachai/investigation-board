@@ -477,6 +477,23 @@ export class CustomDrawing extends Drawing {
       };
       menu.appendChild(addConnOption);
 
+      // Reset Pin — only shown when the pin was moved (Shift-drag) or resized (Alt-drag)
+      if (noteData.type !== "pin" && (noteData.pinOffsetX || noteData.pinOffsetY || (noteData.pinScale ?? 1) !== 1)) {
+        const resetPinOption = document.createElement('div');
+        resetPinOption.innerHTML = '<i class="fas fa-rotate-left"></i> Reset Pin';
+        resetPinOption.classList.add('ib-context-menu-item');
+        resetPinOption.onclick = async (e) => {
+          e.stopPropagation();
+          menu.remove();
+          await collaborativeUpdate(noteId, {
+            [`flags.${MODULE_ID}.pinOffsetX`]: 0,
+            [`flags.${MODULE_ID}.pinOffsetY`]: 0,
+            [`flags.${MODULE_ID}.pinScale`]: 1,
+          });
+        };
+        menu.appendChild(resetPinOption);
+      }
+
       // Remove All Connections (only shown when there are some)
       if (connections.length > 0) {
         const removeAllOption = document.createElement('div');
@@ -1672,15 +1689,16 @@ export class CustomDrawing extends Drawing {
 
     if (noteData.type === "handout") {
       return {
-        x: x + noteWidth / 2,
-        y: y + noteHeight * 0.05 + 20
+        x: x + noteWidth / 2 + (noteData.pinOffsetX ?? 0),
+        y: y + noteHeight * 0.05 + 20 + (noteData.pinOffsetY ?? 0)
       };
     }
 
     // sticky, photo, index, media — pin is centered horizontally, near the top
+    // (per-note pinOffsetX/Y shift it; set by Shift-dragging the pin)
     return {
-      x: x + noteWidth / 2,
-      y: y + 23
+      x: x + noteWidth / 2 + (noteData.pinOffsetX ?? 0),
+      y: y + 23 + (noteData.pinOffsetY ?? 0)
     };
   }
 

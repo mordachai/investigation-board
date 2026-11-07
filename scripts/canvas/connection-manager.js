@@ -474,8 +474,9 @@ export function updatePins() {
         // truth for the pin's center — offset by half the sprite size for its top-left.
         const noteWidth = drawing.document.shape.width || 200;
         const noteHeight = drawing.document.shape.height || 200;
-        const pinW = noteData.type === "pin" ? noteWidth : 40;
-        const pinH = noteData.type === "pin" ? noteHeight : 40;
+        const pinSize = 40 * (noteData.pinScale ?? 1);
+        const pinW = noteData.type === "pin" ? noteWidth : pinSize;
+        const pinH = noteData.type === "pin" ? noteHeight : pinSize;
         const center = drawing._getPinPosition ? drawing._getPinPosition() : { x: drawing.document.x + pinW / 2, y: drawing.document.y + pinH / 2 };
         const pinX = center.x - pinW / 2;
         const pinY = center.y - pinH / 2;
@@ -1149,9 +1150,22 @@ function onPinPointerDown(event, drawing) {
     return;
   }
 
-  // Start drag tracking — will resolve to drag or click on pointerup
+  // Start drag tracking — will resolve to drag or click on pointerup.
+  // Shift-drag moves the pin on its note, Alt-drag resizes it; plain drag moves the note.
   const worldPos = event.getLocalPosition(canvas.stage);
+  const pinMode = noteData.type === "pin" ? "move"
+    : (event.shiftKey ? "offset" : (event.altKey ? "size" : "move"));
+  const startCenter = drawing._getPinPosition();
   pinDragState = {
+    mode: pinMode,
+    startOffX: noteData.pinOffsetX ?? 0,
+    startOffY: noteData.pinOffsetY ?? 0,
+    baseX: startCenter.x - (noteData.pinOffsetX ?? 0),
+    baseY: startCenter.y - (noteData.pinOffsetY ?? 0),
+    startScale: noteData.pinScale ?? 1,
+    currentOffX: noteData.pinOffsetX ?? 0,
+    currentOffY: noteData.pinOffsetY ?? 0,
+    currentScale: noteData.pinScale ?? 1,
     drawing,
     startMouseX: worldPos.x,
     startMouseY: worldPos.y,
@@ -1181,6 +1195,25 @@ function onPinDragMove(event) {
   if (!pinDragState.isDragging && Math.sqrt(dx * dx + dy * dy) > PIN_DRAG_THRESHOLD) {
     pinDragState.isDragging = true;
     document.body.style.cursor = 'grabbing';
+  }
+
+  if (pinDragState.isDragging && pinDragState.mode !== "move") {
+    const s = pinDragState;
+    const sprite = s.drawing.pinSprite;
+    if (s.mode === "offset") {
+      s.currentOffX = s.startOffX + dx;
+      s.currentOffY = s.startOffY + dy;
+    } else {
+      s.currentScale = Math.min(3, Math.max(0.4, s.startScale + dx / 100));
+    }
+    if (sprite && !sprite.destroyed) {
+      const size = 40 * s.currentScale;
+      sprite.width = size;
+      sprite.height = size;
+      sprite.x = s.baseX + s.currentOffX - size / 2;
+      sprite.y = s.baseY + s.currentOffY - size / 2;
+    }
+    return;
   }
 
   if (pinDragState.isDragging) {
@@ -1219,7 +1252,16 @@ async function onPinPointerUp(event) {
   const state = pinDragState;
   pinDragState = null;
 
-  if (state.isDragging) {
+  if (state.isDragging && state.mode === "offset") {
+    await collaborativeUpdate(state.drawing.document.id, {
+      [`flags.${MODULE_ID}.pinOffsetX`]: Math.round(state.currentOffX),
+      [`flags.${MODULE_ID}.pinOffsetY`]: Math.round(state.currentOffY),
+    });
+  } else if (state.isDragging && state.mode === "size") {
+    await collaborativeUpdate(state.drawing.document.id, {
+      [`flags.${MODULE_ID}.pinScale`]: Math.round(state.currentScale * 100) / 100,
+    });
+  } else if (state.isDragging) {
     // Commit new position — hooks will redraw connections and reposition pins
     await collaborativeUpdate(state.drawing.document.id, {
       x: state.currentX,
