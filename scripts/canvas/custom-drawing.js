@@ -1,8 +1,9 @@
 import { MODULE_ID, SOCKET_NAME, VIDEO_EXTENSIONS, DEFAULT_STAMP_TINT, FONTS } from "../config.js";
 import { InvestigationBoardState } from "../state.js";
 import { collaborativeUpdate, collaborativeDelete, socket, activeGlobalSounds, activeVideoBroadcasts } from "../utils/socket-handler.js";
-import { truncateText, resolvePinImage, getAvailablePinFiles, pickPinFileForDrawing, resolveStampImage, getAvailableStampFiles, getActiveTheme } from "../utils/helpers.js";
+import { truncateText, resolvePinImage, getAvailablePinFiles, pickPinFileForDrawing, resolveStampImage, getAvailableStampFiles, getActiveTheme, resolveInk } from "../utils/helpers.js";
 import { NotePreviewer } from "../apps/note-previewer.js";
+import { getEntry } from "../utils/case-files.js";
 import { VideoPlayer } from "../apps/video-player.js";
 import { drawAllConnectionLines, beginConnectionFrom, resetPinConnectionState, updateIncomingConnections } from "./connection-manager.js";
 
@@ -17,6 +18,44 @@ function warnTextureLoadFailedOnce(label, path, err) {
   if (_loggedTextureFailures.has(path)) return;
   _loggedTextureFailures.add(path);
   console.error(`Investigation Board: Failed to load ${label}: ${path}`, err);
+}
+
+// The "Open" menu item only shows for the GM and for players Foundry already lets
+// open the linked document (Limited or higher). Compendium index entries have no
+// permission method; for those the click handler does the real check.
+function canOpenLinked(uuid) {
+  if (game.user.isGM) return true;
+  const doc = fromUuidSync(uuid, { strict: false });
+  if (!doc) return false;
+  if (typeof doc.testUserPermission !== "function") return true;
+  return doc.testUserPermission(game.user, "LIMITED");
+}
+
+// The document a note's "Open" item opens: its linked object, or — for a note made from
+// a Case Files image/text entry, which carries no link — the entry's journal page.
+// (Not actor/item/scene entries: opening those could show a name the GM withholds.)
+function openableUuid(noteData) {
+  const linked = noteData.linkedObject?.match(/\[([^\]]+)\]/)?.[1];
+  if (linked) return linked;
+  const entry = noteData.revealId ? getEntry(noteData.revealId) : null;
+  return entry && (entry.kind === "image" || entry.kind === "text") ? entry.sourceUuid : null;
+}
+
+// Open a document's sheet; a journal page opens inside its journal, on that page.
+async function openLinkedDocument(uuid) {
+  try {
+    const doc = await fromUuid(uuid);
+    if (!doc) return ui.notifications.warn("Could not find linked document.");
+    if (!doc.testUserPermission(game.user, "LIMITED")) {
+      return ui.notifications.warn("You do not have permission to view this document.");
+    }
+    if (doc.documentName === "JournalEntryPage" && doc.parent?.sheet) {
+      return doc.parent.sheet.render(true, { pageId: doc.id });
+    }
+    doc.sheet.render(true);
+  } catch (err) {
+    console.error("Investigation Board: Error opening linked document from menu", err);
+  }
 }
 
 // PIXI.BlurFilter is a GPU-backed object — avoid allocating a fresh one on every
@@ -323,27 +362,16 @@ export class CustomDrawing extends Drawing {
       const noteId = this.document.id;
 
       // --- Linked object "Open" option ---
-      if (noteData.linkedObject) {
-        const linkMatch = noteData.linkedObject.match(/\[([^\]]+)\]/);
-        if (linkMatch) {
-          const uuid = linkMatch[1];
+      {
+        const uuid = openableUuid(noteData);
+        if (uuid && canOpenLinked(uuid)) {
           const linkOption = document.createElement('div');
           linkOption.innerHTML = `<i class="fas fa-link"></i> Open`;
           linkOption.classList.add('ib-context-menu-item');
           linkOption.onclick = async (e) => {
             e.stopPropagation();
             menu.remove();
-            try {
-              const doc = await fromUuid(uuid);
-              if (doc) {
-                if (doc.testUserPermission(game.user, "LIMITED")) doc.sheet.render(true);
-                else ui.notifications.warn("You do not have permission to view this document.");
-              } else {
-                ui.notifications.warn("Could not find linked document.");
-              }
-            } catch (err) {
-              console.error("Investigation Board: Error opening linked document from menu", err);
-            }
+            await openLinkedDocument(uuid);
           };
           menu.appendChild(linkOption);
 
@@ -759,32 +787,16 @@ export class CustomDrawing extends Drawing {
     }
 
     // Linked Object Option
-    if (noteData.linkedObject) {
-      const linkMatch = noteData.linkedObject.match(/\[([^\]]+)\]/);
-      if (linkMatch) {
-        const uuid = linkMatch[1];
-
+    {
+      const uuid = openableUuid(noteData);
+      if (uuid && canOpenLinked(uuid)) {
         const linkOption = document.createElement('div');
         linkOption.innerHTML = `<i class="fas fa-link"></i> Open`;
         linkOption.classList.add('ib-context-menu-item');
         linkOption.onclick = async (e) => {
           e.stopPropagation();
           menu.remove();
-          
-          try {
-            const doc = await fromUuid(uuid);
-            if (doc) {
-              if (doc.testUserPermission(game.user, "LIMITED")) {
-                doc.sheet.render(true);
-              } else {
-                ui.notifications.warn(`You do not have permission to view ${doc.name}.`);
-              }
-            } else {
-              ui.notifications.warn(`Could not find linked document.`);
-            }
-          } catch (err) {
-            console.error("Investigation Board: Error opening linked document from menu", err);
-          }
+          await openLinkedDocument(uuid);
         };
         menu.appendChild(linkOption);
       }
@@ -1179,7 +1191,7 @@ export class CustomDrawing extends Drawing {
         const textStyle = new PIXI.TextStyle({
           fontFamily: font,
           fontSize,
-          fill: noteData.textColor || getActiveTheme().defaultInk,
+          fill: resolveInk(noteData.textColor),
           wordWrap: true,
           wordWrapWidth: wrapWidth,
           align: "center",
@@ -1259,7 +1271,7 @@ export class CustomDrawing extends Drawing {
 
       // Text setup
       const font = noteData.font || game.settings.get(MODULE_ID, "font");
-      const textColor = noteData.textColor || getActiveTheme().defaultInk;
+      const textColor = resolveInk(noteData.textColor);
       const titleFontSize = Math.round((docW / 595) * 28);
       const bodyFontSize = Math.round((docW / 595) * Math.max(8, noteData.fontSize || 14));
       const titleAreaHeight = titleFontSize * 3; // space reserved for the title zone
@@ -1642,7 +1654,7 @@ export class CustomDrawing extends Drawing {
     const textStyle = new PIXI.TextStyle({
       fontFamily: font,
       fontSize: fontSize,
-      fill: noteData.textColor || getActiveTheme().defaultInk,
+      fill: resolveInk(noteData.textColor),
       wordWrap: true,
       wordWrapWidth: width - 2, // Uses document shape width — scaling adds more wrap space
       align: "center",

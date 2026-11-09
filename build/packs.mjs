@@ -12,6 +12,7 @@ import { execSync } from 'child_process';
 import { readFileSync, mkdirSync, existsSync } from 'fs';
 import { resolve, dirname } from 'path';
 import { fileURLToPath } from 'url';
+import { checkAssets } from './check-assets.mjs';
 
 const rootDir = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const moduleJson = JSON.parse(readFileSync(resolve(rootDir, 'module.json'), 'utf8'));
@@ -61,5 +62,8 @@ for (const pack of moduleJson.packs) {
     );
   }
 }
+
+// Guard against broken/stale thumbnail and background references in the pack source.
+if (!checkAssets()) process.exit(1);
 
 console.log(`\nDone: ${action}`);

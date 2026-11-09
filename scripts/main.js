@@ -16,7 +16,11 @@ import {
 } from "./canvas/connection-manager.js";
 import { initSocket, socket, collaborativeUpdate } from "./utils/socket-handler.js";
 import { SetupWarningDialog } from "./apps/setup-warning.js";
+import { CaseFiles, CASE_ENTRY_DRAG } from "./apps/case-files.js";
+import { registerCaseHooks, reconcileCaseFiles, getEntry, findEntryBySource } from "./utils/case-files.js";
 import { BatchEditDialog } from "./apps/batch-edit-dialog.js";
+import { registerApi } from "./api.js";
+import { getActorDisplayName, getDefaultInk } from "./utils/helpers.js";
 import { 
   createNote,
   createPhotoNoteFromActor,
@@ -27,6 +31,7 @@ import {
   createDocNoteFromPage,
   createMediaNoteFromSound,
   createHandoutNoteFromImage,
+  createNoteFromEntry,
   importFolderAsNotes,
   importPlaylistAsNotes
 } from "./utils/creation-utils.js";
@@ -156,6 +161,16 @@ Hooks.on("getSceneControlButtons", (controls) => {
   // Add Investigation Board tools to the existing drawings control
   if (controls.drawings && controls.drawings.tools) {
     // Add a separator for visual grouping (optional)
+    // GM / Assistant GM organizer — see apps/case-files.js
+    controls.drawings.tools.caseFiles = {
+      name: "caseFiles",
+      title: "Case Files",
+      icon: "fa-solid fa-box-archive",
+      visible: game.user.isGM,
+      onChange: () => CaseFiles.open(),
+      button: true
+    };
+
     controls.drawings.tools.createStickyNote = {
       name: "createStickyNote",
       title: "Create Sticky Note",
@@ -250,8 +265,42 @@ async function _createNoteFromPage(page, at) {
   ui.notifications.warn("Investigation Board: only image and text pages can become notes.");
 }
 
+// Actor dropped onto a photo note: confirm, then take over its photo, name and link.
+// A note showing "???" stays "???" — dropping an actor only puts a face to it.
+async function _replacePhotoNoteWithActor(note, actor) {
+  const ok = await foundry.applications.api.DialogV2.confirm({
+    window: { title: "Replace Photo Note" },
+    content: "<p>Replace this note's photo and name with the dropped actor?</p>",
+    classes: ["investigation-board-dialog"],
+    rejectClose: false,
+  });
+  if (!ok) return;
+
+  const flags = note.flags[MODULE_ID];
+  // Also "???" while the actor is only partially discovered in Case Files.
+  const unknown = flags.text === "???" || !!findEntryBySource(actor.uuid)?.unnamed;
+  const name = unknown ? "???" : getActorDisplayName(actor);
+  await collaborativeUpdate(note.id, {
+    [`flags.${MODULE_ID}.image`]: actor.img || flags.image,
+    [`flags.${MODULE_ID}.text`]: name,
+    [`flags.${MODULE_ID}.linkedObject`]: `@UUID[${actor.uuid}]{${name}}`,
+  });
+}
+
 // Hook to handle dragging objects onto notes directly
 Hooks.on("dropCanvasData", (canvas, data) => {
+  // A row dragged out of Case Files → note at the drop point (hidden unless revealed).
+  if (data.type === CASE_ENTRY_DRAG) {
+    const entry = game.user.isGM && getEntry(data.entryId);
+    if (entry) {
+      createNoteFromEntry(entry, { x: data.x, y: data.y }).catch(err => {
+        console.error("Investigation Board: drop failed", err);
+        ui.notifications.warn("Investigation Board: could not create a note from that entry.");
+      });
+    }
+    return false;
+  }
+
   const drawingsToolActive = ui.controls?.control?.name === "drawings";
   if (!InvestigationBoardState.isActive && !drawingsToolActive) return true;
   if (!data.uuid) return true;
@@ -279,6 +328,13 @@ Hooks.on("dropCanvasData", (canvas, data) => {
   if (result) {
     (async () => {
       const doc = await fromUuid(data.uuid);
+
+      // Actor dropped on a photo note → offer to replace its photo and name.
+      const noteFlags = result.document.flags[MODULE_ID];
+      if (doc?.documentName === "Actor" && noteFlags?.type === "photo") {
+        return _replacePhotoNoteWithActor(result.document, doc);
+      }
+
       const link = doc ? `@UUID[${doc.uuid}]{${doc.name}}` : `@UUID[${data.uuid}]`;
       
       await collaborativeUpdate(result.document.id, {
@@ -306,6 +362,8 @@ Hooks.once("init", () => {
   MODULE_FONTS.forEach(f => document.fonts.load(`1em "${f}"`).catch(() => {}));
 
   registerSettings();
+  registerCaseHooks();
+  registerApi(); // investigationBoard.* / game.modules.get("investigation-board").api
   CONFIG.Drawing.objectClass = CustomDrawing;
 
   DocumentSheetConfig.registerSheet(DrawingDocument, "investigation-board", CustomDrawingSheet, {
@@ -345,6 +403,13 @@ Hooks.once("ready", async () => {
 
   initSocket();
 
+  // defaultInkColor is client-scoped and only follows a theme change on clients that were
+  // online then; a stale one (e.g. Sci-Fi's white ink on Classic) is reset to the theme's.
+  const ink = getDefaultInk();
+  if (game.settings.get(MODULE_ID, "defaultInkColor") !== ink) {
+    game.settings.set(MODULE_ID, "defaultInkColor", ink).catch(() => {});
+  }
+
   // Migrate legacy pinColor setting — old system stored colour names ("red",
   // "blue", "yellow", "green") that were used to build filenames at render time.
   // The new system only uses "random" / "none"; anything else becomes "random".
@@ -358,16 +423,15 @@ Hooks.once("ready", async () => {
   }
 
   // Show setup warning to GM if enabled
-  if (game.user.isGM && game.settings.get(MODULE_ID, "showSetupWarning")) {
-    const users = game.users.filter(u => !u.isGM);
-    const playerRoles = [...new Set(users.map(u => u.role))];
-    if (playerRoles.length === 0) playerRoles.push(1);
+  // Catch up on source edits made while no GM was online (Case Files entries stay hot).
+  reconcileCaseFiles().catch(err => console.error("Investigation Board: case files reconcile failed", err));
 
-    const drawingPerm = playerRoles.every(role => game.permissions.DRAWING_CREATE.includes(role));
-    const browsePerm = playerRoles.every(role => game.permissions.FILES_BROWSE.includes(role));
-    const uploadPerm = playerRoles.every(role => game.permissions.FILES_UPLOAD.includes(role));
-    
-    if (!drawingPerm || !browsePerm || !uploadPerm) {
+  // Only "Use Drawing Tools" is required; Browse/Upload are optional and don't trigger it.
+  if (game.user.isGM) {
+    // First run: auto-apply the recommended permissions and show the dialog once.
+    if (await SetupWarningDialog.firstRunSetup()) {
+      new SetupWarningDialog().render(true);
+    } else if (game.settings.get(MODULE_ID, "showSetupWarning") && SetupWarningDialog.needsAttention()) {
       new SetupWarningDialog().render(true);
     }
   }
@@ -482,6 +546,23 @@ Hooks.once("ready", async () => {
  * @param {string} [prefix] - Filename prefix, e.g. "pasted" or "dropped"
  * @returns {Promise<string|null>}
  */
+const _ensuredFolders = new Map();
+/**
+ * Creates modules/<id>/storage/<sub> on the server if missing. Errors (e.g. "already
+ * exists") are ignored; the upload right after reports any real problem.
+ */
+function _ensureStorageFolder(sub) {
+  if (!_ensuredFolders.has(sub)) {
+    const base = `modules/${MODULE_ID}/storage`;
+    _ensuredFolders.set(sub, (async () => {
+      for (const dir of [base, `${base}/${sub}`]) {
+        try { await FilePicker.createDirectory("data", dir, { notify: false }); } catch { /* exists */ }
+      }
+    })());
+  }
+  return _ensuredFolders.get(sub);
+}
+
 async function _uploadImageHandout(file, prefix = "handout") {
   const timestamp = Date.now();
   const uniqueId = foundry.utils.randomID();
@@ -496,6 +577,8 @@ async function _uploadImageHandout(file, prefix = "handout") {
   // uploadPersistent stores under modules/investigation-board/storage/ib-handouts via
   // whatever storage source/bucket is actually active (Forge, S3, local) instead of a
   // hardcoded "data" source write to the world-root assets/ folder.
+  // Foundry's upload doesn't create missing folders, so make sure they exist first.
+  await _ensureStorageFolder("ib-handouts");
   const response = await FilePicker.uploadPersistent(MODULE_ID, "ib-handouts", renamedFile, {}, { notify: false });
   return response.path || null;
 }
@@ -727,81 +810,12 @@ async function _resolveDocumentFromLi(li, collection) {
   return null;
 }
 
-// Context menu hook for Actor directory
-Hooks.on("getActorContextOptions", (app, entryOptions) => {
-  entryOptions.push(
-    {
-      label: "Photo Note from Actor",
-      icon: "fa-solid fa-camera-polaroid",
-      onClick: async (event, li) => {
-        const actor = await _resolveDocumentFromLi(li, game.actors);
-        if (actor) await createPhotoNoteFromActor(actor, false);
-        else ui.notifications.warn("Investigation Board: Could not resolve Actor.");
-      }
-    },
-    {
-      label: "Unknown Photo Note from Actor",
-      icon: "fa-solid fa-camera-polaroid",
-      onClick: async (event, li) => {
-        const actor = await _resolveDocumentFromLi(li, game.actors);
-        if (actor) await createPhotoNoteFromActor(actor, true);
-        else ui.notifications.warn("Investigation Board: Could not resolve Actor.");
-      }
-    }
-  );
-});
-
-// Context menu hook for Item directory
-Hooks.on("getItemContextOptions", (app, entryOptions) => {
-  entryOptions.push({
-    label: "Photo Note from Item",
-    icon: "fa-solid fa-camera-polaroid",
-    onClick: async (event, li) => {
-      const item = await _resolveDocumentFromLi(li, game.items);
-      if (item) await createPhotoNoteFromItem(item);
-      else ui.notifications.warn("Investigation Board: Could not resolve Item.");
-    }
-  });
-});
-
-// Context menu hook for Scene directory and Scene Navigation (both fire getSceneContextOptions in v14)
-Hooks.on("getSceneContextOptions", (app, entryOptions) => {
-  entryOptions.push({
-    label: "Photo Note from Scene",
-    icon: "fa-solid fa-camera-polaroid",
-    onClick: async (event, li) => {
-      const scene = await _resolveDocumentFromLi(li, game.scenes);
-      if (scene) await createPhotoNoteFromScene(scene);
-      else ui.notifications.warn("Investigation Board: Could not resolve Scene.");
-    }
-  });
-});
+// Item/Scene "Photo Note from …" and journal page "Create Handout Note" / "Text to Index
+// Card" menu items were removed: Case Files covers them (drop in, then drag a row onto
+// the board), and dragging the document itself onto the canvas still creates the note.
 
 // Context menu hook for Journal pages
 Hooks.on("getJournalEntryPageContextOptions", (app, entryOptions) => {
-  // Image pages → Handout Note
-  entryOptions.push({
-    label: "Create Handout Note",
-    icon: "fas fa-file-image",
-    onClick: async (event, li) => {
-      const page = _getJournalPageFromLi(li);
-      if (page?.type === "image") await createHandoutNoteFromPage(page);
-      else ui.notifications.warn("Only image-type journal pages can be turned into handouts.");
-    },
-    visible: (li) => _getJournalPageFromLi(li)?.type === "image",
-  });
-
-  // Text pages → Index Card
-  entryOptions.push({
-    label: "Text to Index Card",
-    icon: "fa-regular fa-subtitles",
-    onClick: async (event, li) => {
-      const page = _getJournalPageFromLi(li);
-      if (page) await createTextIndexFromPage(page);
-    },
-    visible: (li) => _getJournalPageFromLi(li)?.type === "text",
-  });
-
   // Text pages → Document Note (background picker via small dialog)
   entryOptions.push({
     label: "Text to Document Note",

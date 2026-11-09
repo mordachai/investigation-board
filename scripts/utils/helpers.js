@@ -17,6 +17,30 @@ export function getActiveTheme() {
   return THEME_ASSETS[key] || THEME_ASSETS[DEFAULT_BOARD_THEME];
 }
 
+const isThemeInk = (theme, color) =>
+  typeof color === "string" && Object.values(theme.inkColors).some(c => c.toLowerCase() === color.toLowerCase());
+
+/**
+ * Ink color to render with: the note's own color if it belongs to the active theme,
+ * otherwise the theme's default. A color left over from another theme (e.g. Sci-Fi's
+ * near-white ink on Classic's white polaroid) would be unreadable. Render-time only —
+ * the stored flag is untouched, so switching back to that theme restores it.
+ * @param {string} [color]
+ */
+export function resolveInk(color) {
+  const theme = getActiveTheme();
+  return isThemeInk(theme, color) ? color : theme.defaultInk;
+}
+
+/**
+ * Ink color to store on a new note: this client's `defaultInkColor` if it belongs to the
+ * active theme, else the theme default. The setting is client-scoped and only follows a
+ * theme change on clients that were online at the time, so it can be stale.
+ */
+export function getDefaultInk() {
+  return resolveInk(game.settings.get(MODULE_ID, "defaultInkColor"));
+}
+
 // ---------------------------------------------------------------------------
 // Folder-backed image sources (pins, stamps) — a GM-configurable world setting
 // points at a folder; bare filenames stored in flags are resolved against it at

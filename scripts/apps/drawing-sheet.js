@@ -5,7 +5,7 @@ import {
   DEFAULT_CONNECTION_LINE_WIDTH,
   NOTE_TYPE_LABELS,
 } from '../config.js';
-import { getAvailablePinFiles, getActiveTheme } from '../utils/helpers.js';
+import { getAvailablePinFiles, getActiveTheme, resolveInk } from '../utils/helpers.js';
 import { collaborativeUpdate } from '../utils/socket-handler.js';
 import { applyTapeEffectToSound } from '../utils/audio-utils.js';
 import {
@@ -207,7 +207,7 @@ export class CustomDrawingSheet extends DrawingConfig {
       font: ibFlags.font || game.settings.get(MODULE_ID, 'font'),
       fontSize: ibFlags.fontSize || defaultFontSize,
       tint: ibFlags.tint || '#ffffff',
-      textColor: ibFlags.textColor || getActiveTheme().defaultInk,
+      textColor: resolveInk(ibFlags.textColor),
       stickyTints: getActiveTheme().stickyTints,
       inkColors: getActiveTheme().inkColors,
       connections: formattedConnections,

@@ -43,6 +43,7 @@ The `ib-scenes` compendium (`packs/ib-scenes/`) is a LevelDB database — binary
 ```text
 scripts/
 ├── main.js              # Entry point — all Foundry hooks, IB mode activation/deactivation
+├── api.js               # Public API: globalThis.investigationBoard = game.modules.get(id).api (open.*, caseFiles.*)
 ├── config.js            # Constants: MODULE_ID, SOCKET_NAME, DEFAULT_PIN_FOLDER, PIN_COLORS, DEFAULT_STAMP_FOLDER, STAMP_IMAGES, DEFAULT_STAMP_TINT, DEFAULT_CONNECTION_LINE_WIDTH, FONTS, MODULE_FONTS, STICKY_TINTS, INK_COLORS, CASSETTE_IMAGES, VIDEO_IMAGES, VIDEO_EXTENSIONS, DOC_BACKGROUNDS, EFFECT_DEFAULTS, VIDEO_FORMATS
 ├── state.js             # Singleton: InvestigationBoardState { isActive }
 ├── settings.js          # Settings registration
@@ -53,7 +54,8 @@ scripts/
 │   ├── setup-warning.js      # SetupWarningDialog — GM permission setup prompt
 │   ├── appearance-dialog.js  # AppearanceDialog — font/color/connection/pin settings
 │   ├── note-defaults-dialog.js # NoteDefaultsDialog — dimensions and default text
-│   └── video-player.js       # VideoPlayer — ApplicationV2 video playback with broadcast sync
+│   ├── video-player.js       # VideoPlayer — ApplicationV2 video playback with broadcast sync
+│   └── case-files.js         # CaseFiles — GM-only asset organizer (groups, comments, discovery toggles)
 ├── canvas/
 │   ├── custom-drawing.js    # CustomDrawing — PIXI sprite rendering, permission overrides
 │   └── connection-manager.js# All connection line logic, pins, preview, animations
@@ -61,7 +63,8 @@ scripts/
     ├── creation-utils.js    # createNote(), all "create from X" helpers, getNoteDimensions()/buildNoteCreateData()/postCreateFixup() (shared skeleton), getRandomCassetteImage(), getRandomVideoImage()
     ├── helpers.js           # makeFolderImageSource() factory (pins/stamps), truncateText, getEffectiveScale, resolvePinImage/getAvailablePinFiles, resolveStampImage/getAvailableStampFiles
     ├── socket-handler.js    # collaborativeUpdate/Create/Delete, socket listener
-    └── audio-utils.js       # Tape effect for media notes
+    ├── audio-utils.js       # Tape effect for media notes
+    └── case-files.js        # Case Files data layer: entries/groups setting, reveal → note visibility, hot sync, markers
 assets/
 ├── pins/                # Built-in pin images (redPin, bluePin, yellowPin, greenPin .webp)
 │                        # GM can point pinImagesFolder at any folder to replace the entire set
@@ -73,7 +76,8 @@ templates/
 ├── setup-warning.html        # GM setup warning template
 ├── appearance-dialog.html    # Appearance settings dialog
 ├── note-defaults-dialog.html # Note Defaults settings dialog
-└── video-player.html         # VideoPlayer window (ApplicationV2)
+├── video-player.html         # VideoPlayer window (ApplicationV2)
+└── case-files.html           # Case Files window (GM only)
 ```
 
 > **Removed:** `InvestigationBoardHUD` (`apps/hud.js`, `templates/hud.html`) was dead code — never imported anywhere — and was deleted rather than wired up.
@@ -84,7 +88,7 @@ Registers all Foundry hooks and manages Investigation Board mode:
 
 - `Hooks.once("init")` — register settings, set `CONFIG.Drawing.objectClass = CustomDrawing`, register sheet (makeDefault: false), register the `cancelConnection` keybinding (Escape — cancels an in-progress yarn connection; returns `false`/unconsumed when not in connection mode so core Escape behavior still fires)
 - `Hooks.once("ready")` — init socket, force-load fonts via `document.fonts.load()`, migrate legacy `pinColor` setting values, show setup warning to GM if permissions missing
-- `Hooks.on("getSceneControlButtons")` — add 7 tools to `controls.drawings.tools`: 6 note-type creation tools (sticky/photo/index/handout/media/pin) + `batchEditNotes` (opens `BatchEditDialog`)
+- `Hooks.on("getSceneControlButtons")` — add 7 tools to `controls.drawings.tools`: 6 note-type creation tools (sticky/photo/index/handout/media/pin) + `batchEditNotes` (opens `BatchEditDialog`) + `caseFiles` (GM only, opens `CaseFiles`)
 - `Hooks.on("renderSceneControls")` — activate/deactivate IB mode when drawings control is selected
 - `Hooks.on("preCreateDrawing")` — clear connections and suppress auto-open on paste/duplicate
 - `Hooks.on("createDrawing")` — open edit dialog for creator, refresh interactivity/pins
@@ -95,7 +99,7 @@ Registers all Foundry hooks and manages Investigation Board mode:
 - `Hooks.on("canvasReady")` — cleanup containers, reset state, redraw all connections
 - `Hooks.on("dropCanvasData")` — link Foundry document to note on drag-drop
 - `ready` hook `dragover`/`drop` listeners — create handout notes from desktop image files or image URLs dropped on the canvas (`#board` element); priority: image file > `text/uri-list` URL with known image extension
-- Various context menu hooks for creating notes from other document types
+- Context menu hooks: Playlist sound → Media Note, Playlist → import as notes, Folder → import as notes, text page → Document Note. **Removed** (Case Files + drag-to-canvas cover them): Actor/Item/Scene "Photo Note from …", page "Create Handout Note" / "Text to Index Card". `createPhotoNoteFromItem`/`…Scene`/`createHandoutNoteFromPage`/`createTextIndexFromPage` stay, used by `_createNoteFromDrop()` (sidebar document dropped on empty canvas)
 
 ### Note Types and Rendering
 
@@ -172,6 +176,8 @@ flags['investigation-board'] = {
 ```
 
 > **Note:** Flag fields `tint` and `textColor` are the canonical names in flags; `inkColor` may appear in older code as an alias. Always write `textColor` for ink color.
+>
+> **Ink is theme-checked.** New notes store `getDefaultInk()` (the client's `defaultInkColor` if it's one of the active theme's `inkColors`, else `theme.defaultInk`), and every render path uses `resolveInk(textColor)` (same check, render-time only — the flag is never rewritten). `defaultInkColor` is client-scoped and only follows a `boardTheme` change on clients online at that moment, so it can go stale (Sci-Fi's `#eafcff` on Classic's white polaroid = invisible captions); `ready` resets a stale value. Never read `defaultInkColor` directly when creating a note.
 
 ### Connection Lines
 
@@ -457,9 +463,7 @@ Key exported functions beyond `createNote`:
 Beyond the directory context menus documented above, these hooks extend creation:
 
 - `getHeaderControlsImagePopout` — adds "Create Handout Note" to the Image Popout header controls via `onClick` + `app.options.src` (v14 pattern; the old `renderImagePopout` + `menu.controls-dropdown` approach no longer works)
-- `getJournalEntryPageSheetHeaderButtons` (or equivalent v14 hook) — journal page context options:
-  - **Image pages** → "Create Handout Note" via `createHandoutNoteFromPage(page)`
-  - **Text pages** → "Text to Index Card" via `createTextIndexFromPage(page)` — strips HTML, prefixes page title, opens edit dialog
+- `getJournalEntryPageContextOptions` — journal page context options:
   - **Text pages** → "Text to Document Note" via `createDocNoteFromPage(page, background)` — prompts for background (parchment/old paper/white paper) then creates a document note with PIXI.HTMLText-safe markup
 
 > **v14 note:** `renderJournalSheet` / `renderJournalPageSheet` + `app.contextMenus` was the v13 approach for journal image context menus. In v14, `JournalEntrySheet` is AppV2 and has no public `contextMenus` array — that feature is currently absent. Use `getHeaderControlsJournalEntrySheet` hook if re-implementing.
@@ -496,6 +500,29 @@ Beyond the directory context menus documented above, these hooks extend creation
 - "Reset effects" button applies the current format's `defaultEffects` to all effect checkboxes without saving.
 - "Preview Video" button opens a `VideoPlayer` for the note inline.
 - Foundry AppV2 intercepts bubbled `change` events in capture phase — attach listeners directly to checkboxes/radios (target-phase) to reliably receive them.
+
+### Case Files (GM organizer) — `utils/case-files.js`, `apps/case-files.js`, `templates/case-files.html`
+
+A GM / Assistant GM-only window (scene tool "Case Files", `visible: game.user.isGM`) for staging and tracking investigation assets. Players have no UI for it; they only ever see notes on the board. Replaced the earlier player-facing "Discovered" gallery.
+
+- **Data:** world setting `caseFiles` = `{ entries: { [id]: { id, kind: "image"|"text"|"actor"|"item"|"scene", sourceUuid, label, image?, text?, portrait?, sourceKey, comment, revealed, groupId, sort, addedAt, by } }, groups: { [id]: { id, name, comment, collapsed, sort } } }`. All writes go through `mutate()`, which serializes read-modify-write on the setting. World-readable like any setting: **GM comments are UI-hidden, not secret** (readable from the console).
+- **Adding:** drop Actors, Items, Scenes, Journals, journal pages or Folders on the window (or on a group). There is no "Add to Case Files" menu item; discovering a document from a context menu (below) adds it quietly if it isn't in yet. A Journal expands to its image/text pages, and a Folder to its contents. Either becomes a new group when it yields more than one entry. Duplicates (same `sourceUuid`) are skipped. One click, no prompt. The default `label` is the actor's display name (`characterNameKey`) or the document name, and it is editable inline.
+- **`revealed` (row discovery icon, group `n/m` badge)**: the row icon uses the directory-marker symbology and cycle (`markerInfo()` + `cycleDiscovery()`: actors hidden → partial → full, others hidden ↔ full), centered at ~half the row height; the group badge reveals all, or hides all once all are revealed, via `setRevealed()` (so partial actors keep their name withheld). `setRevealed()` sets `hidden` on every IB note made from the entry (`flags.revealId`) **or** linked to its source (`flags.linkedObject` UUID), across all scenes. New entries start revealed only if they already have notes on the board and all of them are visible.
+- **Page access (`syncPageAccess`)**: revealing an image/text entry also sets its journal page's `ownership.default` to Observer (hiding sets None), so the page shows in the player's Journal sidebar and the note's "Open" item works. The sidebar only lists a journal at Observer, so when the journal must be raised, its other inheriting pages are first pinned to the old level, the old level is stored in the journal's `flags.investigation-board.priorDefault`, and it's restored once no page is visible. A `preCreateJournalEntryPage` hook makes pages added to a raised journal start at that stored level, not Observer. Only `default` is touched; compendium pages are skipped. Import only grants, never hides. Actor/Item/Scene ownership is never changed (it would expose sheets and withheld names). Notes made from an image/text entry (`revealId`, no `linkedObject`) get "Open" via the entry's `sourceUuid` (`openableUuid()` in `custom-drawing.js`); pages open inside their journal at that page.
+- **Discovery levels** (`discoveryOf(entry)` → `"hidden"` | `"partial"` | `"full"`): `revealed` = notes visible; actor entries also carry `unnamed` (partial = revealed + unnamed: face shown, every photo note reads `???`, link label relabelled `{???}`). `setDiscovery(ids, level)` writes names first, then visibility (a partial reveal never flashes the name). `setNameHidden(id, bool)` (API/internal only — the window no longer has a separate name toggle) flips `unnamed` alone. `syncNoteNames()` writes `???` or the label into **all** the actor's photo notes, including ones already reading `???`: a full reveal is when players learn the name. While `unnamed`, name sync is off both ways (`namedNotes()` → `[]`, `labelFromText()` → null), so neither a GM rename nor a player's guess crosses over. New actor entries start `unnamed` if all their existing photo notes read `???`.
+- **Context menus (GM only, one click):** Item/Scene directories, journal page TOC and Journal directory get "Discovered by Players" / "Hide from Players"; the Actor directory gets "Partially Discovered" / "Fully Discovered" / "Hide from Players" (`discoveryMenu()`). Each item is hidden when it would change nothing. A Journal acts on all its image/text pages (mixed levels show both items). Removing an entry is done from the window only.
+- **GM-created notes follow their entry:** a `preCreateDrawing` hook (GM creator only, incl. not socket-routed player requests) sets `hidden = !revealed` when the payload has no `hidden`, and `???` for photo notes of an unnamed actor — so dragging a partially discovered actor onto the board doesn't leak its name.
+- **Notes from an entry** (`createNoteFromEntry()` in `creation-utils.js`): drag a row's thumbnail onto the canvas (`dropCanvasData` with `data.type === "IBCaseEntry"`) or click "Add to board". The note type follows the kind: image → handout, text → index (`composeEntryText()`), actor/item/scene → photo. The note starts with `hidden = !entry.revealed` and carries `flags.revealId`, with no `linkedObject`.
+- **Name sync (both ways):** renaming an entry (`updateEntry`) writes the label into its "named notes" (`pushLabel`, update option `ibCaseLabel`). Named notes are those made from the entry or linked to its source, of the matching type: photo for actor/item/scene, index for text, where an index card's first paragraph is the name and the body is kept. Editing a named note's text, by anyone (player edits arrive through the GM socket), is picked up by the active GM's `updateDrawing` hook (`onNoteTextEdited`), which adopts it as the label and pushes it to the other notes. Notes reading `???` are never synced either way, so a rename can't leak a name. Edits made while no GM was online are adopted on `ready` (`adoptOfflineLabel`): the most recent note edit (`_stats.modifiedTime`) after the entry's `labelAt` wins.
+- **Groups:** inline-renamed (a new group is created as "New Group" with its name field focused), collapsible, with a GM comment and a clickable `n/m` reveal-all badge. Rows can be dragged between groups or reordered (drop on a row = insert before it). Deleting a group moves its entries to "Ungrouped".
+- **Sort within groups** (toolbar segmented control, client setting `caseFilesView`, per GM): `manual` (default, the GM's drag order), `kind` (actor → item → scene → image → text, then A–Z) or `alpha` (A–Z, locale-aware, numeric). Groups always stay, in the GM's order, with all their controls; only the row order inside each group changes. In `kind`/`alpha` rows can still be dragged to another group (they land at the end of its manual order), but a drop inside the same group does nothing, so the stored manual order is never disturbed.
+- **Public API** (`scripts/api.js`, registered in `init` via `registerApi()`; fires `investigationBoard.apiReady`): `investigationBoard.open.caseFiles()` / `.open.batchEdit()`, and `investigationBoard.caseFiles.{open, close, entries, entry, groups, status, add, remove, discover(targets, level="full"), hide, place, export, import}`. A target is an entry, entry id, Document or UUID (arrays OK); `entryOf()` resolves a string as an entry id first, then a source UUID. Read calls return deep clones (never the setting's cached objects). Writes go through the same `case-files.js` functions as the UI, so they stay GM-only; `discover()` on a Document/UUID not yet in Case Files adds it first (`discoverDocuments()`, same as the sidebar menu). Both API objects are frozen; keep the surface additive — macros depend on it.
+- **Export / import:** toolbar buttons. `exportCaseFiles()` downloads `{format: "investigation-board.case-files", version: 1, groups, entries}` as JSON (`foundry.utils.saveDataToFile`). Import picks the JSON with Foundry's FilePicker (`type: "text"`, any browsable source) and fetches it. `importCaseFiles(json)` **merges, never overwrites**: entries whose `sourceUuid` is already present are skipped (re-importing is harmless), id clashes get a fresh id, groups are reused by id or created. Imported entries then apply their state to this world's notes (`syncNoteNames` → `syncNoteVisibility`) and refresh from their sources (`syncEntry`). Notes themselves are not exported (they live in scenes); in another world, sources resolve only if the UUIDs exist there (e.g. compendium imports keep cached label/image/text and show "Source deleted" otherwise).
+- **Window details:** client-side filter (label + comment); a re-render keeps focus, caret and in-progress text (`_preRender`/`_onRender`); scroll is kept via `PARTS.scrollable`. The note-count badge pans to the entry's notes, cycling through them and switching scene if needed. The window re-renders (debounced) on note create/delete/hidden changes.
+- **Hot sync (active GM client only):** `updateJournalEntryPage` (src/text), `updateActor` (img/prototypeToken), `updateItem` (img), `updateScene` (thumb/background), plus a `reconcileCaseFiles()` pass on `ready`, refresh the entry and `propagate()` into notes with that `revealId`. The label never comes from the source document; it only syncs with the notes, as described above. `reconcileCaseFiles()` also migrates the legacy `revealedAssets` setting (old Discovered entries arrive as revealed and ungrouped).
+- **Markers (GM only):** an archive icon (not discovered), amber user-secret icon (partially discovered actor) or eye icon (discovered) next to Actors, Items and Scenes in the directories and next to pages in the journal TOC, plus an `n/m` pages badge on journals. Markers are one-click toggles (`asToggle()`, which stops click/dblclick propagation so the row's sheet doesn't open): actors cycle hidden → partial → full → hidden (`nextLevel()`), others toggle hidden ↔ full; the journal badge discovers all its Case Files pages, or hides them all when every one is already revealed. Documents not in Case Files have no marker; they're added via the context menu or by dropping them on the window.
+- **Actor photo notes:** no Actor context-menu create items. Dragging an actor to empty canvas creates a linked photo note. Dropping one onto an existing photo note asks to confirm, then replaces its image/name/link (`_replacePhotoNoteWithActor()` in `main.js`; a note reading "???", or an `unnamed` actor, keeps "???"). The note's "Open" menu item is shown only to the GM or users with Limited+ on the linked document (`canOpenLinked()` in `custom-drawing.js`).
+- **Unverified in a live Foundry client** — written against the v14 core source only.
 
 ### Image Import (Clipboard and Drag-and-Drop)
 

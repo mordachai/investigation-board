@@ -1,0 +1,82 @@
+<div class="ib-case-files">
+    <div class="ib-case-toolbar">
+        <input type="search" class="ib-case-filter" placeholder="Filter" value="{{filter}}" data-focus-key="filter" aria-label="Filter">
+        <div class="ib-case-views" role="group" aria-label="Sort within groups">
+            {{#each sorts}}
+            <button type="button" class="ib-case-icon-btn {{#if this.active}}active{{/if}}" data-action="setSort" data-mode="{{this.id}}" data-tooltip="{{this.tooltip}}" aria-label="{{this.tooltip}}" aria-pressed="{{#if this.active}}true{{else}}false{{/if}}">
+                <i class="fa-solid {{this.icon}}"></i>
+            </button>
+            {{/each}}
+        </div>
+        <button type="button" class="ib-case-icon-btn" data-action="addGroup" data-tooltip="New group" aria-label="New group">
+            <i class="fa-solid fa-folder-plus"></i>
+        </button>
+        <button type="button" class="ib-case-icon-btn" data-action="exportFiles" data-tooltip="Export Case Files" aria-label="Export Case Files">
+            <i class="fa-solid fa-arrow-up-from-bracket"></i>
+        </button>
+        <button type="button" class="ib-case-icon-btn" data-action="importFiles" data-tooltip="Import Case Files (merges, never overwrites)" aria-label="Import Case Files">
+            <i class="fa-solid fa-arrow-down-from-bracket"></i>
+        </button>
+    </div>
+
+    <div class="ib-case-body">
+        {{#if empty}}
+        <div class="ib-case-empty">
+            <i class="fa-solid fa-box-archive"></i>
+            <span>Drop Actors, Items, Scenes or Journals here</span>
+        </div>
+        {{/if}}
+
+        {{#each sections}}
+        <section class="ib-case-group {{#if this.collapsed}}collapsed{{/if}}" data-group-id="{{this.id}}">
+            <header class="ib-case-group-header">
+                <a class="ib-case-chevron" data-action="toggleCollapse" aria-label="Collapse"><i class="fa-solid fa-chevron-down"></i></a>
+                {{#if this.ungrouped}}
+                <span class="ib-case-group-name">{{this.name}}</span>
+                {{else}}
+                <input type="text" class="ib-case-group-name" name="groupName" value="{{this.name}}" data-focus-key="gname:{{this.id}}" aria-label="Group name">
+                {{/if}}
+                {{#if this.count}}
+                <a class="ib-case-count ib-case-toggle{{#if this.allRevealed}} is-revealed{{else if this.revealedCount}} is-partial{{/if}}" data-action="toggleGroupDiscovery" data-tooltip="{{this.revealedCount}} of {{this.count}} revealed · click to {{#if this.allRevealed}}hide them all{{else}}reveal them all{{/if}}"><i class="fa-solid {{#if this.allRevealed}}fa-eye{{else}}fa-box-archive{{/if}}"></i> {{this.revealedCount}}/{{this.count}}</a>
+                {{/if}}
+                {{#unless this.ungrouped}}
+                <a class="ib-case-tool {{#if this.comment}}active{{/if}}" data-action="toggleComment" data-tooltip="GM comment"><i class="fa-solid fa-feather-pointed"></i></a>
+                <a class="ib-case-tool ib-case-hover" data-action="removeGroup" data-tooltip="Delete group (keeps its entries)"><i class="fa-solid fa-trash"></i></a>
+                {{/unless}}
+            </header>
+            {{#if this.showComment}}
+            <textarea name="groupComment" rows="1" placeholder="GM comment" data-focus-key="gcomment:{{this.id}}">{{this.comment}}</textarea>
+            {{/if}}
+
+            <ol class="ib-case-entries">
+                {{#each this.entries}}
+                <li class="ib-case-entry {{#if this.revealed}}is-revealed{{/if}} {{#if this.partial}}is-partial{{/if}} {{#if this.missing}}is-missing{{/if}}" data-entry-id="{{this.id}}" data-search="{{this.search}}">
+                    <div class="ib-case-thumb" draggable="true" data-tooltip="Drag onto the board or another group">
+                        {{#if this.image}}<img src="{{this.image}}" alt="" draggable="false" loading="lazy">{{else}}<i class="fa-solid {{this.icon}}"></i>{{/if}}
+                        <span class="ib-case-kind"><i class="fa-solid {{this.icon}}"></i></span>
+                    </div>
+                    <div class="ib-case-main">
+                        <input type="text" class="ib-case-label" name="label" value="{{this.label}}" data-focus-key="label:{{this.id}}" aria-label="Name">
+                        {{#if this.missing}}<small class="ib-case-warning"><i class="fa-solid fa-triangle-exclamation"></i> Source deleted</small>{{/if}}
+                        {{#if this.showComment}}
+                        <textarea name="comment" rows="1" placeholder="GM comment" data-focus-key="comment:{{this.id}}">{{this.comment}}</textarea>
+                        {{/if}}
+                    </div>
+                    <div class="ib-case-tools">
+                        <a class="ib-case-tool ib-case-hover" data-action="removeEntry" data-tooltip="Remove from Case Files"><i class="fa-solid fa-xmark"></i></a>
+                        {{#if this.noteCount}}
+                        <a class="ib-case-notes" data-action="panTo" data-tooltip="Notes on the board — click to find"><i class="fa-solid fa-thumbtack"></i>{{this.noteCount}}</a>
+                        {{/if}}
+                        <a class="ib-case-tool {{#if this.comment}}active{{else}}ib-case-hover{{/if}}" data-action="toggleComment" data-tooltip="GM comment"><i class="fa-solid fa-feather-pointed"></i></a>
+                        <a class="ib-case-tool ib-case-hover" data-action="placeEntry" data-tooltip="Add to board"><i class="fa-solid fa-square-plus"></i></a>
+                        {{#unless this.missing}}<a class="ib-case-tool ib-case-hover" data-action="openSource" data-tooltip="Open source"><i class="fa-solid fa-up-right-from-square"></i></a>{{/unless}}
+                    </div>
+                    <a class="ib-case-discovery{{this.marker.cls}}" data-action="cycleDiscovery" data-tooltip="{{this.marker.hint}}" aria-label="{{this.marker.hint}}"><i class="fa-solid {{this.marker.icon}}"></i></a>
+                </li>
+                {{/each}}
+            </ol>
+            {{#unless this.count}}<div class="ib-case-drop-hint">Drop here</div>{{/unless}}
+        </section>
+        {{/each}}
+    </div>
+</div>

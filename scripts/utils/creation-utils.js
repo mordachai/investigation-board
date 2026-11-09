@@ -1,6 +1,6 @@
 import { MODULE_ID, FONTS, NOTE_TYPE_LABELS } from "../config.js";
 import { InvestigationBoardState } from "../state.js";
-import { getActorDisplayName, getEffectiveScale, getActiveTheme } from "./helpers.js";
+import { getActorDisplayName, getEffectiveScale, getActiveTheme, getDefaultInk } from "./helpers.js";
 import { collaborativeCreate, collaborativeCreateMany } from "./socket-handler.js";
 
 /**
@@ -9,7 +9,7 @@ import { collaborativeCreate, collaborativeCreateMany } from "./socket-handler.j
  * @param {string} html
  * @returns {string}
  */
-function stripHtml(html) {
+export function stripHtml(html) {
   const withBreaks = html
     .replace(/<\/p>\s*<p[^>]*>/gi, '\n\n')
     .replace(/<br\s*\/?>/gi, '\n')
@@ -202,7 +202,7 @@ export async function createNote(noteType, { x = null, y = null } = {}) {
     if (noteType !== "document") {
       extraFlags.tint = game.settings.get(MODULE_ID, "defaultNoteColor") || "#ffffff";
     }
-    extraFlags.textColor = game.settings.get(MODULE_ID, "defaultInkColor") || "#000000";
+    extraFlags.textColor = getDefaultInk();
   }
 
   // Set default font size to 9 for index cards
@@ -275,8 +275,7 @@ export async function createPhotoNoteFromActor(actor, isUnknown = false, { x: dr
   const imagePath = actor.img || "modules/investigation-board/assets/placeholder.webp";
   const extraFlags = {
     image: imagePath,
-    textColor: game.settings.get(MODULE_ID, "defaultInkColor") || "#000000",
-    ...(isUnknown ? { unknown: true } : {})
+    textColor: getDefaultInk(),
   };
 
   const { width: photoW, height } = getNoteDimensions("photo");
@@ -325,7 +324,7 @@ export async function createPhotoNoteFromScene(targetScene, { x: dropX = null, y
 
   const extraFlags = {
     image: imagePath,
-    textColor: game.settings.get(MODULE_ID, "defaultInkColor") || "#000000"
+    textColor: getDefaultInk()
   };
 
   const created = await collaborativeCreate(buildNoteCreateData({
@@ -464,7 +463,7 @@ export async function createPhotoNoteFromItem(item, { x: dropX = null, y: dropY 
 
   const extraFlags = {
     image: imagePath,
-    textColor: game.settings.get(MODULE_ID, "defaultInkColor") || "#000000"
+    textColor: getDefaultInk()
   };
 
   const created = await collaborativeCreate(buildNoteCreateData({
@@ -575,7 +574,7 @@ export async function importFolderAsNotes(folder) {
     const y = startY + row * (height + spacing);
 
     let noteData = null;
-    const defaultInk = game.settings.get(MODULE_ID, "defaultInkColor") || "#000000";
+    const defaultInk = getDefaultInk();
 
     if (type === "Actor") {
       const displayName = getActorDisplayName(doc);
@@ -695,7 +694,7 @@ export async function importPlaylistAsNotes(playlist) {
   const spacing = 40;
 
   const createDataArray = [];
-  const defaultInk = game.settings.get(MODULE_ID, "defaultInkColor") || "#000000";
+  const defaultInk = getDefaultInk();
 
   for (let i = 0; i < documents.length; i++) {
     const doc = documents[i];
@@ -826,7 +825,7 @@ export async function createTextIndexFromPage(page) {
       text,
       fontSize: 9,
       tint: game.settings.get(MODULE_ID, "defaultNoteColor") || "#ffffff",
-      textColor: game.settings.get(MODULE_ID, "defaultInkColor") || "#000000",
+      textColor: getDefaultInk(),
       linkedObject: `@UUID[${page.uuid}]{${page.name}}`,
     },
   }));
@@ -1003,7 +1002,7 @@ export async function createDocNoteFromPage(page, background = "parchment") {
   const { width: docW, height: docH } = getNoteDimensions("document");
   const fontSize = 14;
   const titleStr = page.name || "";
-  const textColor = game.settings.get(MODULE_ID, "defaultInkColor") || "#000000";
+  const textColor = getDefaultInk();
   // Notes created here don't set a per-note font override, so they render with
   // whatever the global default is — the pagination budget needs to match that.
   const font = game.settings.get(MODULE_ID, "font");
@@ -1063,3 +1062,91 @@ export async function createDocNoteFromPage(page, background = "parchment") {
 }
 
 
+
+/**
+ * Text shown on an index card made from a Case Files text page: the GM-chosen label
+ * (never the source page name) followed by the live body.
+ * @param {{label?: string, text?: string}} entry
+ */
+export function composeEntryText(entry) {
+  return entry.label ? `${entry.label}
+
+${entry.text ?? ""}` : (entry.text ?? "");
+}
+
+/**
+ * Creates a note from a Case Files entry. The note stores the image path / snapshot
+ * text plus `revealId`, and starts hidden unless the entry is revealed. The active GM
+ * client keeps these notes in sync when the source changes (see case-files.js).
+ * @param {object} entry - An entry from the caseFiles setting
+ * @param {{x?: number, y?: number}} [at] - World-space drop point (defaults to view centre)
+ */
+export async function createNoteFromEntry(entry, { x: dropX = null, y: dropY = null } = {}) {
+  if (!canvas.scene) {
+    ui.notifications.error("Cannot create note: No active scene.");
+    return;
+  }
+
+  const sceneScale = getEffectiveScale();
+  const centre = canvas.stage.pivot;
+  const place = (w, h) => ({
+    x: (dropX ?? centre.x) - (w * sceneScale) / 2,
+    y: (dropY ?? centre.y) - (h * sceneScale) / 2,
+  });
+  const ink = getDefaultInk();
+  let data;
+
+  if (entry.kind === "image") {
+    let { width, height } = getNoteDimensions("handout");
+    try {
+      const texture = await PIXI.Assets.load(entry.image);
+      if (texture) {
+        const cap = Math.min(1, 500 / texture.width, 500 / texture.height);
+        width = Math.round(texture.width * cap);
+        height = Math.round(texture.height * cap);
+      }
+    } catch (err) {
+      console.error("Investigation Board: Failed to get image dimensions", err);
+    }
+    data = buildNoteCreateData({
+      ...place(width, height), width, height,
+      fillColor: "#000000", fillAlpha: 0.001,
+      flags: { type: "handout", text: "", linkedObject: "", image: entry.image, revealId: entry.id },
+    });
+  } else if (entry.kind === "text") {
+    const { width, height } = getNoteDimensions("index");
+    data = buildNoteCreateData({
+      ...place(width, height), width, height,
+      fillColor: "#ffffff", fillAlpha: 1,
+      flags: {
+        type: "index",
+        text: composeEntryText(entry),
+        fontSize: 9,
+        tint: game.settings.get(MODULE_ID, "defaultNoteColor") || "#ffffff",
+        textColor: ink,
+        linkedObject: "",
+        revealId: entry.id,
+      },
+    });
+  } else if (["actor", "item", "scene"].includes(entry.kind)) {
+    const { width, height } = getNoteDimensions("photo");
+    data = buildNoteCreateData({
+      ...place(width, height), width, height,
+      fillColor: "#ffffff", fillAlpha: 1,
+      flags: {
+        type: "photo",
+        text: entry.unnamed ? "???" : entry.label, // partially discovered actor: face only
+        image: entry.image || "modules/investigation-board/assets/placeholder.webp",
+        textColor: ink,
+        linkedObject: "",
+        revealId: entry.id,
+      },
+    });
+  }
+  if (!data) return;
+
+  data.hidden = !entry.revealed;
+  const created = await collaborativeCreate(data, { skipAutoOpen: true });
+  postCreateFixup(created);
+  return created?.[0];
+}

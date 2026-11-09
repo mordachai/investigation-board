@@ -19,8 +19,31 @@ https://github.com/mordachai/investigation-board/releases/download/v4.10.1/modul
 
 A Foundry VTT module that lets everyone create, edit, and move sticky and photo notes on the scene. A must-have for investigative games like City of Mist, Call of Cthulhu, and all your conspiracy adventures.
 
-## NEW FEATURE >> Move & Resize Pins
+## NEW FEATURE >> Case Files (GM)
 
+A GM-only folder for the clues your players can find. Open it with the **Case Files** button in the Drawing Tools.
+
+- **Drop in** Actors, Items, Scenes, Journals or journal pages.
+- **Organize** them in groups, with private GM comments.
+- **Drag** an entry onto the board to make a note.
+- **Reveal** it with one click on its icon when the players find it: its notes appear for them (archive = hidden, eye = discovered). Actors cycle through three states: hidden, **partially discovered** (face only, name shows "???") and **fully discovered**. The same icons sit next to each document in the sidebars and next to each page in a journal, and work the same way; a journal's `n/m` badge reveals all its pages at once. Right-click in the sidebar works too.
+- **Revealed journal pages** also show up in the players' Journal sidebar, and the note's **Open** item opens them. Only the revealed pages are visible, not the rest of the journal.
+- **Export / import** to back it up or move it to another world.
+
+### Macros & API
+
+Use `investigationBoard` in a macro (or `game.modules.get("investigation-board").api` from another module):
+
+```js
+investigationBoard.open.caseFiles();                 // open Case Files
+investigationBoard.caseFiles.discover(actor);         // fully discovered
+investigationBoard.caseFiles.discover(actor, "partial");
+investigationBoard.caseFiles.hide(actor);
+```
+
+Also available: `add`, `remove`, `status`, `place`, `entries`, `groups`, `export`, `import`. You can pass a document or its UUID. Only the GM can make changes.
+
+## NEW FEATURE >> Move & Resize Pins
 
 **SHIFT + LEFT MOUSE BUTTON DRAG** = Move pin  //  **ALT + LEFT MOUSE BUTTON DRAG** = Resize pin
 
@@ -115,7 +138,7 @@ Sticky notes now have color options. You can also choose the ink color for any n
 
 ## FEATURE >> Handout Notes from Images in Journals:
 
-Journals, specially the ones containing adventures can be full of images. Now instead of just showing the pretty images to the players you can pass them around as handout notes.
+Journals, specially the ones containing adventures can be full of images. Now instead of just showing the pretty images to the players you can pass them around as handout notes: drag an image page onto the board (in Drawing Tools), or drop it in Case Files and place it from there.
 
 <img width="900" height="692" alt="image" src="https://github.com/user-attachments/assets/d752e887-e9be-4c37-b50a-1c6b6b7c4d1a" />
 
@@ -163,7 +186,7 @@ You can now create photo notes from all items on a folder. It ignores subfolders
 
 ## FEATURE >> Notes From Items:
 
-You can now create photo notes from items too. They will be automatically linked to them.
+You can now create photo notes from items too: drag an item onto the board (in Drawing Tools), or drop it in Case Files and place it from there. They will be automatically linked to them.
 
 <img width="600" height="468" alt="image" src="https://github.com/user-attachments/assets/c6b6715c-0bbe-4706-8c07-91cfb2530d0e" />
 
@@ -227,17 +250,22 @@ Don't have a scene? Don't worry, you can use this corkboard scene for starters. 
 
 ### Directory Integration
 
-You can quickly create notes directly from your Foundry sidebars by right-clicking documents:
+You can quickly create notes straight from your Foundry sidebars. With the Drawing Tools active, **drag a document onto the board**:
 
-<img width="800" height="385" alt="image" src="https://github.com/user-attachments/assets/84e46265-a879-40d2-b387-129ffe5a9670" />
+- **Actors**: a Photo Note with the actor's portrait and name. Drop an actor onto an existing Photo Note to replace its photo and name (a note showing "???" keeps "???").
+- **Items** and **Scenes**: a Photo Note with the thumbnail and name.
+- **Journal pages**: an image page becomes a **Handout**, a text page an **Index Card**.
 
-- **Actors**: Create a Photo Note using the actor's portrait. You can choose to use the actor's name or create an "Unknown" version.
-- **Scenes**: Create a Photo Note using the scene's thumbnail.
-- **Items**: Create a Photo Note using the item name and thumbnail.
-- **Playlists**: Right-click a sound to create a **Media Note** pre-linked to that audio file.
-- **Journals**: Right-click any **Image Page** within a journal to transform it into a **Handout**.
+All of them are linked to the original document. For anything you want to stage, track or reveal later, drop it in **Case Files** instead (see above).
 
-> **Note for Players:** If the GM has granted you drawing and file upload permissions, you can autonomously create Handout notes from Image Pages in the Journal directory to share evidence with the group!
+Right-click menus:
+
+- **Actors, Items, Scenes, Journals, journal pages** (GM): **Discovered by Players** / **Hide from Players**, and for Actors **Partially Discovered** / **Fully Discovered**. See Case Files.
+- **Journal text pages**: **Text to Document Note**.
+- **Playlists**: right-click a sound to create a **Media Note** pre-linked to that audio file, or a whole playlist to import it as notes.
+- **Folders** (GM): import every document in the folder as notes.
+
+> **Note for Players:** you can drag Image Pages from journals you can see onto the board to create Handout notes and share evidence with the group!
 
 #### **Permissions Note**: Only the GM can assign images to photo notes from the file system unless players are given browser file permissions.
 

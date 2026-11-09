@@ -2,6 +2,8 @@ import { MODULE_ID, DEFAULT_PIN_FOLDER, DEFAULT_STAMP_FOLDER, DEFAULT_CONNECTION
 import { invalidatePinFilesCache, invalidateStampFilesCache } from "./utils/helpers.js";
 import { NoteDefaultsDialog } from "./apps/note-defaults-dialog.js";
 import { AppearanceDialog } from "./apps/appearance-dialog.js";
+import { SetupWarningDialog } from "./apps/setup-warning.js";
+import { refreshCaseUI } from "./utils/case-files.js";
 
 export const registerSettings = function() {
 
@@ -25,6 +27,15 @@ export const registerSettings = function() {
     icon: "fas fa-palette",
     type: AppearanceDialog,
     restricted: false
+  });
+
+  game.settings.registerMenu(MODULE_ID, "playerSetup", {
+    name: "Player Setup",
+    label: "Configure Player Permissions",
+    hint: "Choose what players can do with the board (drawing tools, file browse/upload) without opening World Permissions.",
+    icon: "fas fa-user-lock",
+    type: SetupWarningDialog,
+    restricted: true
   });
 
   game.settings.registerMenu(MODULE_ID, "noteDefaults", {
@@ -224,6 +235,40 @@ export const registerSettings = function() {
     config: true,
     default: "prototypeToken.name",
     type: String,
+  });
+
+  // Case Files — GM organizer (entries + groups). See utils/case-files.js.
+  game.settings.register(MODULE_ID, "caseFiles", {
+    scope: "world",
+    config: false,
+    type: Object,
+    default: { entries: {}, groups: {} },
+    onChange: () => refreshCaseUI()
+  });
+
+  // Case Files row order inside each group, per GM: "manual" (GM order) | "kind" | "alpha".
+  game.settings.register(MODULE_ID, "caseFilesView", {
+    scope: "client",
+    config: false,
+    type: String,
+    default: "manual",
+    onChange: () => foundry.applications.instances.get("ib-case-files")?.render()
+  });
+
+  // Legacy "Discovered" entries; migrated into caseFiles on the active GM's first ready.
+  game.settings.register(MODULE_ID, "revealedAssets", {
+    scope: "world",
+    config: false,
+    type: Object,
+    default: {}
+  });
+
+  // True once the recommended player permissions were auto-applied on first run.
+  game.settings.register(MODULE_ID, "setupInitialized", {
+    scope: "world",
+    config: false,
+    type: Boolean,
+    default: false
   });
 
   game.settings.register(MODULE_ID, "showSetupWarning", {

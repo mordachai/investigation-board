@@ -1286,6 +1286,129 @@ body.investigation-board-mode .drawing:not([data-investigation-note='true']) {
   color: #e57373;
 }
 
+.ib-permission-switches {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin: 15px 0;
+}
+
+.ib-permission-switch {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 10px;
+  border-radius: 4px;
+  border-left: 4px solid #d32f2f;
+  background: rgba(0, 0, 0, 0.05);
+  cursor: pointer;
+}
+
+.theme-dark .ib-permission-switch {
+  background: rgba(255, 255, 255, 0.05);
+  border-left-color: #e57373;
+}
+
+.ib-permission-switch.is-on {
+  border-left-color: #2e7d32;
+}
+
+.theme-dark .ib-permission-switch.is-on {
+  border-left-color: #81c784;
+}
+
+.ib-permission-switch input[type="checkbox"] {
+  appearance: none;
+  -webkit-appearance: none;
+  flex: 0 0 auto;
+  position: relative;
+  width: 36px;
+  height: 20px;
+  margin: 2px 0 0;
+  border: none;
+  border-radius: 10px;
+  background: rgba(128, 128, 128, 0.5);
+  cursor: pointer;
+  transition: background 0.15s;
+}
+
+/* Foundry paints its own checkmark on checked boxes — hide it, the knob is the state. */
+.ib-permission-switch input[type="checkbox"]::after {
+  content: none !important;
+  display: none !important;
+}
+
+.ib-permission-switch input[type="checkbox"]::before {
+  content: "";
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: #fff;
+  transition: transform 0.15s;
+}
+
+.ib-permission-switch input[type="checkbox"]:checked {
+  background: #2e7d32;
+}
+
+.ib-permission-switch input[type="checkbox"]:checked::before {
+  transform: translateX(16px);
+}
+
+.ib-switch-text {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  font-size: 14px;
+}
+
+.ib-switch-title {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.ib-switch-title .ib-badge {
+  margin-left: 0;
+  flex: 0 0 auto;
+  align-self: center;
+}
+
+.ib-switch-text small {
+  font-size: 12px;
+  opacity: 0.8;
+}
+
+.ib-badge {
+  display: inline-block;
+  margin-left: 6px;
+  padding: 0 6px;
+  border-radius: 8px;
+  font-size: 11px;
+  font-weight: normal;
+}
+
+.ib-badge.recommended {
+  background: rgba(46, 125, 50, 0.2);
+  color: #2e7d32;
+}
+
+.theme-dark .ib-badge.recommended {
+  background: rgba(129, 199, 132, 0.2);
+  color: #81c784;
+}
+
+.ib-badge.optional {
+  background: rgba(0, 0, 0, 0.1);
+}
+
+.theme-dark .ib-badge.optional {
+  background: rgba(255, 255, 255, 0.1);
+}
+
 .permission-explanation {
   background: rgba(46, 125, 50, 0.1);
   border-left: 4px solid #2e7d32;
@@ -2312,3 +2435,290 @@ body.investigation-board-mode .drawing:not([data-investigation-note='true']) {
 .ib-batch-apply-btn:hover {
   background: #1a4a73;
 }
+
+/* ========================= */
+/* Case Files (GM organizer) */
+/* ========================= */
+
+.ib-case-marker {
+  margin-left: 6px;
+  font-size: 11px;
+  opacity: 0.6;
+}
+.ib-case-marker.is-revealed { color: #2e7d32; opacity: 1; }
+.theme-dark .ib-case-marker.is-revealed { color: #81c784; }
+.ib-case-marker.is-partial { color: #b26a00; opacity: 1; }
+.theme-dark .ib-case-marker.is-partial { color: #ffb74d; }
+
+.ib-case-count {
+  margin-left: 6px;
+  padding: 0 6px;
+  border-radius: 8px;
+  font-size: 11px;
+  background: rgba(128, 128, 128, 0.2);
+  white-space: nowrap;
+}
+
+/* Directory / journal-TOC markers are one-click discovery toggles */
+.ib-case-toggle { cursor: pointer; transition: opacity 0.15s, transform 0.15s; }
+.ib-case-toggle:hover { opacity: 1; transform: scale(1.2); }
+.ib-case-count.ib-case-toggle:hover { transform: none; background: rgba(128, 128, 128, 0.35); }
+.ib-case-count.is-revealed { color: #2e7d32; }
+.theme-dark .ib-case-count.is-revealed { color: #81c784; }
+.ib-case-count.is-partial { color: #b26a00; }
+.theme-dark .ib-case-count.is-partial { color: #ffb74d; }
+
+.ib-case-files-app .window-content { padding: 0; }
+
+.ib-case-files {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  font-family: 'Signika', sans-serif;
+  --ib-case-row: rgba(0, 0, 0, 0.05);
+  --ib-case-accent: #2e7d32;
+  --ib-case-partial: #b26a00;
+  --ib-case-drop: #3f51b5;
+}
+.theme-dark .ib-case-files {
+  --ib-case-row: rgba(255, 255, 255, 0.05);
+  --ib-case-accent: #81c784;
+  --ib-case-partial: #ffb74d;
+  --ib-case-drop: #7986cb;
+}
+
+.ib-case-toolbar {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+  padding: 8px;
+  border-bottom: 1px solid rgba(128, 128, 128, 0.3);
+}
+.ib-case-filter { flex: 1; height: 26px; }
+.ib-case-icon-btn {
+  flex: 0 0 auto;
+  width: 30px;
+  height: 26px;
+  padding: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+/* Sort-within-groups switcher: one segmented control */
+.ib-case-views { display: flex; flex: 0 0 auto; }
+.ib-case-views .ib-case-icon-btn { margin: 0; border-radius: 0; }
+.ib-case-views .ib-case-icon-btn:first-child { border-radius: 4px 0 0 4px; }
+.ib-case-views .ib-case-icon-btn:last-child { border-radius: 0 4px 4px 0; }
+.ib-case-views .ib-case-icon-btn + .ib-case-icon-btn { border-left-width: 0; }
+.ib-case-views .ib-case-icon-btn.active {
+  background: var(--ib-case-accent);
+  border-color: var(--ib-case-accent);
+  color: #fff;
+}
+.theme-dark .ib-case-views .ib-case-icon-btn.active { color: #1b1b1b; }
+
+.ib-case-body {
+  flex: 1;
+  overflow-y: auto;
+  padding: 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  border: 2px dashed transparent;
+}
+.ib-case-body.is-drop-target { border-color: var(--ib-case-drop); }
+
+.ib-case-empty {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  opacity: 0.6;
+  text-align: center;
+}
+.ib-case-empty i { font-size: 32px; }
+
+.ib-case-group {
+  border-radius: 4px;
+  border: 2px solid transparent;
+}
+.ib-case-group.is-drop-target { border-color: var(--ib-case-drop); }
+.ib-case-group.is-filtered-out { display: none; }
+
+.ib-case-group-header {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 2px 2px 4px;
+  border-bottom: 1px solid rgba(128, 128, 128, 0.3);
+}
+.ib-case-chevron { width: 14px; text-align: center; font-size: 11px; }
+.ib-case-chevron i { transition: transform 0.15s; }
+.ib-case-group.collapsed .ib-case-chevron i { transform: rotate(-90deg); }
+.ib-case-group.collapsed .ib-case-entries,
+.ib-case-group.collapsed > textarea,
+.ib-case-group.collapsed .ib-case-drop-hint { display: none; }
+
+span.ib-case-group-name,
+input.ib-case-group-name {
+  flex: 1;
+  min-width: 0;
+  font-weight: 700;
+  font-size: 13px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+.ib-case-group-header .ib-case-count { margin-left: 0; }
+
+/* Inline-editable text: looks like plain text until hovered/focused */
+.ib-case-files input.ib-case-group-name,
+.ib-case-files input.ib-case-label {
+  height: 22px;
+  padding: 0 4px;
+  border: 1px solid transparent;
+  background: transparent;
+  box-shadow: none;
+}
+.ib-case-files input.ib-case-group-name:hover,
+.ib-case-files input.ib-case-label:hover { border-color: rgba(128, 128, 128, 0.35); }
+.ib-case-files input.ib-case-group-name:focus,
+.ib-case-files input.ib-case-label:focus {
+  border-color: rgba(128, 128, 128, 0.6);
+  background: rgba(128, 128, 128, 0.1);
+}
+
+.ib-case-files textarea {
+  width: 100%;
+  min-height: 24px;
+  resize: none;
+  overflow: hidden;
+  font-size: 12px;
+  font-style: italic;
+  padding: 3px 5px;
+  margin-top: 3px;
+}
+
+.ib-case-entries {
+  list-style: none;
+  margin: 4px 0 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.ib-case-entry {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  padding: 4px;
+  border-radius: 4px;
+  background: var(--ib-case-row);
+  border-left: 3px solid transparent;
+  border-top: 2px solid transparent;
+}
+.ib-case-entry.is-revealed { border-left-color: var(--ib-case-accent); }
+.ib-case-entry.is-partial { border-left-color: var(--ib-case-partial); }
+.ib-case-entry.is-missing .ib-case-thumb { opacity: 0.4; }
+.ib-case-entry.is-drop-target { border-top-color: var(--ib-case-drop); }
+
+.ib-case-thumb {
+  position: relative;
+  flex: 0 0 40px;
+  height: 40px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 3px;
+  background: rgba(0, 0, 0, 0.15);
+  font-size: 18px;
+  cursor: grab;
+}
+.ib-case-thumb img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  border: none;
+  border-radius: 3px;
+  pointer-events: none;
+}
+.ib-case-kind {
+  position: absolute;
+  right: -3px;
+  bottom: -3px;
+  width: 16px;
+  height: 16px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  font-size: 8px;
+  background: #333;
+  color: #fff;
+}
+
+.ib-case-main {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+}
+.ib-case-files input.ib-case-label { width: 100%; font-size: 15px; font-weight: 600; }
+.ib-case-warning { font-size: 11px; color: #c62828; padding-left: 4px; }
+
+.ib-case-tools {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  height: 22px;
+  font-size: 12px;
+}
+.ib-case-tool { opacity: 0.6; }
+.ib-case-tool:hover, .ib-case-tool.active { opacity: 1; }
+.ib-case-tool.active { color: var(--ib-case-accent); }
+/* Hover-only tools keep their slot (visibility, not display): showing them must never
+   shift the icons around them, or a destructive one lands under the pointer mid-click. */
+.ib-case-hover { visibility: hidden; }
+.ib-case-entry:hover .ib-case-hover,
+.ib-case-group-header:hover .ib-case-hover { visibility: visible; }
+
+.ib-case-notes {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  padding: 0 5px;
+  border-radius: 8px;
+  font-size: 11px;
+  background: rgba(128, 128, 128, 0.2);
+}
+
+.ib-case-drop-hint {
+  padding: 8px;
+  text-align: center;
+  font-size: 11px;
+  opacity: 0.5;
+  border: 1px dashed rgba(128, 128, 128, 0.5);
+  border-radius: 4px;
+  margin-top: 4px;
+}
+
+/* Discovery toggle — same icons/colors as the directory markers; ~half the row height */
+.ib-case-discovery {
+  flex: 0 0 28px;
+  align-self: center;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 22px;
+  line-height: 1;
+  opacity: 0.45;
+  cursor: pointer;
+  transition: opacity 0.15s, transform 0.15s;
+}
+.ib-case-discovery:hover { opacity: 1; transform: scale(1.1); }
+.ib-case-discovery.is-revealed { color: var(--ib-case-accent); opacity: 1; }
+.ib-case-discovery.is-partial { color: var(--ib-case-partial); opacity: 1; }

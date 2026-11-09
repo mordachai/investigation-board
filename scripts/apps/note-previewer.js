@@ -1,7 +1,7 @@
 import { MODULE_ID, SOCKET_NAME } from "../config.js";
 import { socket, activeGlobalSounds, collaborativeUpdate } from "../utils/socket-handler.js";
 import { applyTapeEffectToElement, applyTapeEffectToSound } from "../utils/audio-utils.js";
-import { getActiveTheme } from "../utils/helpers.js";
+import { getActiveTheme, resolveInk } from "../utils/helpers.js";
 
 // v13 namespaced imports
 const ApplicationV2 = foundry.applications.api.ApplicationV2;
@@ -89,7 +89,7 @@ export class NotePreviewer extends HandlebarsApplicationMixin(ApplicationV2) {
       previewFontSize: (noteData?.fontSize || game.settings.get(MODULE_ID, "baseFontSize")) * 2.5 * fontBoost,
       showSeparateText: showSeparateText,
       tint: noteData?.tint || "#ffffff",
-      textColor: noteData?.textColor || getActiveTheme().defaultInk,
+      textColor: resolveInk(noteData?.textColor),
       isVideoDisplay: isVideoDisplay,
       mediaLabelFontSize: mediaLabelFontSize,
       isGM: game.user.isGM,
@@ -261,7 +261,7 @@ export class NotePreviewer extends HandlebarsApplicationMixin(ApplicationV2) {
               if (doc.testUserPermission(game.user, "LIMITED")) {
                 doc.sheet.render(true);
               } else {
-                ui.notifications.warn(`You do not have permission to view ${doc.name}.`);
+                ui.notifications.warn("You do not have permission to view this document.");
               }
             }
           } catch (err) {
